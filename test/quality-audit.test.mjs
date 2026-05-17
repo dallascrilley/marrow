@@ -146,6 +146,8 @@ test("quality audit ranks summary defects and deletion readiness", async () => {
       assert.equal(report.issue_counts.no_files_of_interest, 1);
       assert.equal(report.issue_counts.no_project_learnings, 1);
       assert.equal(report.issue_counts.blocked_deletion, 1);
+      assert.equal(report.recommendations[0].issue, "blocked_deletion");
+      assert.equal(report.recommendations[0].affected_sessions, 1);
       assert.deepEqual(report.sessions.find((session) => session.session_id === "good-session").knowledge_artifacts, {
         project: true,
         user: false

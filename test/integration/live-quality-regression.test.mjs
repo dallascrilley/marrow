@@ -44,6 +44,30 @@ const fixtureSessions = [
     relativeTarget: "17070617-45b1-4a0d-ab57-e218f45e6fc9/17070617-45b1-4a0d-ab57-e218f45e6fc9.jsonl"
   },
   {
+    fixtureName: "2477b32c-27f6-4c56-b81c-75ab3e6938d8.jsonl",
+    sessionId: "2477b32c-27f6-4c56-b81c-75ab3e6938d8",
+    slug: "Users-dallascrilley-Code-studio-tools",
+    relativeTarget: "2477b32c-27f6-4c56-b81c-75ab3e6938d8/2477b32c-27f6-4c56-b81c-75ab3e6938d8.jsonl"
+  },
+  {
+    fixtureName: "2dc7df27-6993-4113-9ad0-d27d5e2c2143.jsonl",
+    sessionId: "2dc7df27-6993-4113-9ad0-d27d5e2c2143",
+    slug: "Users-dallascrilley-Code-studio-tools",
+    relativeTarget: "2dc7df27-6993-4113-9ad0-d27d5e2c2143/2dc7df27-6993-4113-9ad0-d27d5e2c2143.jsonl"
+  },
+  {
+    fixtureName: "58d2e1f7-50af-4cd5-921c-962c1b061d9d.jsonl",
+    sessionId: "58d2e1f7-50af-4cd5-921c-962c1b061d9d",
+    slug: "Users-dallascrilley-Code-studio-tools",
+    relativeTarget: "58d2e1f7-50af-4cd5-921c-962c1b061d9d/58d2e1f7-50af-4cd5-921c-962c1b061d9d.jsonl"
+  },
+  {
+    fixtureName: "9c6686c3-7663-495b-bd35-8e31b5a231df.jsonl",
+    sessionId: "9c6686c3-7663-495b-bd35-8e31b5a231df",
+    slug: "Users-dallascrilley-Code-studio-tools",
+    relativeTarget: "9c6686c3-7663-495b-bd35-8e31b5a231df/9c6686c3-7663-495b-bd35-8e31b5a231df.jsonl"
+  },
+  {
     fixtureName: "d2d8b0e7-3fae-4506-927b-8f80a301ccb0.jsonl",
     sessionId: "d2d8b0e7-3fae-4506-927b-8f80a301ccb0",
     slug: "Users-dallascrilley-Code-studio-tools",
@@ -155,6 +179,19 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
       assert.ok(blockedCandidate);
       assert.equal(blockedCandidate.candidate_state, "pending_artifacts");
       assert.match(blockedCandidate.reason, /summary_low_signal/);
+
+      for (const sessionId of [
+        "2477b32c-27f6-4c56-b81c-75ab3e6938d8",
+        "2dc7df27-6993-4113-9ad0-d27d5e2c2143",
+        "58d2e1f7-50af-4cd5-921c-962c1b061d9d",
+        "9c6686c3-7663-495b-bd35-8e31b5a231df",
+        "d2d8b0e7-3fae-4506-927b-8f80a301ccb0"
+      ]) {
+        const learnedCandidate = getDeletionCandidateBySessionId(database, sessionId);
+        assert.ok(learnedCandidate, `expected deletion candidate for ${sessionId}`);
+        assert.equal(learnedCandidate.candidate_state, "ready", sessionId);
+        assert.equal(learnedCandidate.safe_to_delete, 1, sessionId);
+      }
 
       const subagentSession = getSourceSessionBySessionId(
         database,

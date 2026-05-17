@@ -50,6 +50,11 @@ export type QualityAuditReport = {
     ready: number;
   };
   issue_counts: Record<QualityIssueCode, number>;
+  recommendations: Array<{
+    affected_sessions: number;
+    issue: QualityIssueCode;
+    suggested_next_extraction_category: string;
+  }>;
   sessions: QualityAuditSession[];
   totals: {
     audited: number;
@@ -107,6 +112,7 @@ export async function auditQuality(database: DatabaseSync, options: { limit?: nu
     blocked_reasons: blockedReasons,
     deletion_readiness: deletionReadiness,
     issue_counts: issueCounts,
+    recommendations: buildRecommendations(issueCounts),
     sessions,
     totals: {
       audited: sessions.length,
@@ -122,6 +128,43 @@ export async function auditQuality(database: DatabaseSync, options: { limit?: nu
       })
       .slice(0, 10)
   };
+}
+
+function buildRecommendations(issueCounts: Record<QualityIssueCode, number>): QualityAuditReport["recommendations"] {
+  return Object.entries(issueCounts)
+    .filter((entry): entry is [QualityIssueCode, number] => entry[1] > 0)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 3)
+    .map(([issue, affectedSessions]) => ({
+      affected_sessions: affectedSessions,
+      issue,
+      suggested_next_extraction_category: recommendationForIssue(issue)
+    }));
+}
+
+function recommendationForIssue(issue: QualityIssueCode): string {
+  switch (issue) {
+    case "no_project_learnings":
+      return "Add project-learning promotion for verified fixes, error resolutions, repo workflows, or file-scoped outcomes.";
+    case "no_useful_commands":
+      return "Improve command extraction from tool input, inline executable commands, and verification evidence.";
+    case "no_files_of_interest":
+      return "Improve file extraction/ranking from event payloads, source refs, and project-relative paths.";
+    case "summary_low_signal":
+      return "Improve summary synthesis for short sessions or classify them as intentionally low-signal.";
+    case "process_chatter":
+      return "Suppress assistant process chatter before summary and learning promotion.";
+    case "blocked_deletion":
+      return "Inspect blocked reasons; most require summary signal or durable learning artifacts before deletion.";
+    case "completion_as_next_step":
+      return "Tighten next-step selection to reject completed verified outcomes.";
+    case "wrapper_tags":
+      return "Keep attachment/code-selection wrappers in provenance payloads, not summary text.";
+    case "summary_invalid":
+      return "Repair or regenerate invalid summary artifacts.";
+    case "summary_missing":
+      return "Rerun summarization for sessions missing summary artifacts.";
+  }
 }
 
 type SummaryReadResult =

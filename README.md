@@ -145,8 +145,9 @@ node dist/cli.js quality audit
 node dist/cli.js quality audit --limit 100
 ```
 
-The audit reports deletion-readiness counts, blocked reasons, issue counts, and
-the worst sessions by deterministic output-quality checks.
+The audit reports deletion-readiness counts, blocked reasons, issue counts,
+recommendations, knowledge artifact presence, and the worst sessions by
+deterministic output-quality checks.
 
 ## Retention Model
 

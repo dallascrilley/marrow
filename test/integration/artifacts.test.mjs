@@ -187,7 +187,10 @@ test("retention blocks deletion until summary, learnings, manifest, and receipt 
         userLearnings: learnings.user
       });
 
-      assert.equal(learnings.project.length, 2);
+      assert.deepEqual(
+        learnings.project.map((learning) => learning.kind),
+        ["decision", "verification_rule", "pattern"]
+      );
       assert.equal(learnings.user.length, 2);
 
       const summaryResult = await writeSessionSummary(summary);
@@ -281,7 +284,10 @@ test("retention blocks deletion until summary, learnings, manifest, and receipt 
         .trim()
         .split("\n")
         .map((line) => JSON.parse(line));
-      assert.equal(projectKnowledgeLines.length, 2);
+      assert.deepEqual(
+        projectKnowledgeLines.map((entry) => entry.kind),
+        ["decision", "verification_rule", "pattern"]
+      );
       assert.ok(projectKnowledgeLines.every((entry) => entry.confidence !== "low"));
       assert.ok(
         projectKnowledgeLines.some((entry) => entry.statement === "Run npm test when verifying changes in agent-session-distillery.")
@@ -301,7 +307,7 @@ test("retention blocks deletion until summary, learnings, manifest, and receipt 
 
       const parsedSummary = JSON.parse(await readFile(summaryResult.summaryPath, "utf8"));
       assert.equal(parsedSummary.next_step, "Next step is wiring the batch retention report into the CLI.");
-      assert.equal(parsedSummary.project_learnings.length, 2);
+      assert.equal(parsedSummary.project_learnings.length, 3);
       assert.equal(parsedSummary.user_learnings.length, 2);
 
       const parsedManifest = JSON.parse(await readFile(manifestResult.path, "utf8"));
