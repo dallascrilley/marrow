@@ -206,3 +206,72 @@ test("tolerates missing fields, redacted content, and partial tool metadata", as
     ]);
   });
 });
+
+test("prefers user_query content over attachment wrappers and avoids prose-only command extraction", async () => {
+  const transcriptContent = [
+    JSON.stringify({
+      role: "user",
+      message: {
+        content: [
+          {
+            type: "text",
+            text: [
+              "<attached_files>",
+              '<code_selection path="/tmp/plan.md" lines="1-40">1| make sure to add corresponding DROP VIEW statements</code_selection>',
+              "</attached_files>",
+              "<user_query>",
+              "Implement the plan as specified.",
+              "Run `uv run pytest -v` when verification is needed.",
+              "</user_query>"
+            ].join("\n")
+          }
+        ]
+      }
+    }),
+    JSON.stringify({
+      role: "assistant",
+      message: {
+        content: [
+          {
+            type: "text",
+            text: "surely we can make these tests go faster"
+          }
+        ]
+      }
+    })
+  ].join("\n");
+
+  await withTranscript(transcriptContent, async (transcriptPath) => {
+    const parsed = await parseCursorTranscript({
+      sourceHash: "sha256:fixture-transcript-user-query",
+      sourcePath: transcriptPath
+    });
+
+    assert.deepEqual(parsed.records.map(summarize), [
+      {
+        kind: "user_message",
+        rawType: "user",
+        lineNumber: 1,
+        timestampHint: null,
+        messageText: "Implement the plan as specified.\nRun `uv run pytest -v` when verification is needed.",
+        contentRedacted: false,
+        commandStrings: ["uv run pytest -v"],
+        filePaths: [],
+        toolName: null,
+        toolCallId: null
+      },
+      {
+        kind: "assistant_message",
+        rawType: "assistant",
+        lineNumber: 2,
+        timestampHint: null,
+        messageText: "surely we can make these tests go faster",
+        contentRedacted: false,
+        commandStrings: [],
+        filePaths: [],
+        toolName: null,
+        toolCallId: null
+      }
+    ]);
+  });
+});

@@ -11,9 +11,17 @@ import type {
 
 const commandStarterPattern =
   /\b(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b(?: [^`"\n,.;:!?]+)*/g;
+const commandLinePattern =
+  /^(?:[-*]\s*)?(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b/i;
+const runCommandPattern =
+  /\brun\s+((?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b[^`\n,.;:!?]*)/gi;
 const inlineCodePattern = /`([^`\n]+)`/g;
 const posixPathPattern = /\/(?:Users|home|tmp|var|opt|private|Volumes)\/[^\s"'`]+/g;
 const windowsPathPattern = /[A-Za-z]:\\[^\s"'`]+/g;
+const attachedFilesPattern = /<attached_files>[\s\S]*?<\/attached_files>/gi;
+const codeSelectionPattern = /<code_selection\b[^>]*>[\s\S]*?<\/code_selection>/gi;
+const pluginInfoPattern = /<plugin_info\b[^>]*>[\s\S]*?<\/plugin_info>/gi;
+const xmlTagPattern = /<\/?[a-z_:-]+(?:\s+[^>]*)?>/gi;
 
 export async function parseCursorTranscript(
   options: ParseCursorTranscriptOptions
@@ -96,8 +104,12 @@ function normalizeTranscriptRecord(
   const kind = classifyRecordKind(rawType);
   const contentRedacted = detectRedaction(parsedLine);
   const messageText = contentRedacted ? null : extractMessageText(parsedLine, kind);
-  const filePaths = uniquePreservingOrder(extractFilePaths(parsedLine));
-  const commandStrings = uniquePreservingOrder(extractCommandStrings(parsedLine));
+  const toolInputText =
+    kind === "tool_use_stub" || kind === "tool_result_stub" ? extractToolInputText(parsedLine) : null;
+  const filePaths = uniquePreservingOrder(extractFilePaths(parsedLine, messageText, toolInputText));
+  const commandStrings = uniquePreservingOrder(
+    extractCommandStrings(parsedLine, messageText, toolInputText)
+  );
 
   return {
     commandStrings,
@@ -117,7 +129,7 @@ function normalizeTranscriptRecord(
       kind === "tool_use_stub" || kind === "tool_result_stub"
         ? {
             callId: pickFirstString(parsedLine, [["id"], ["callId"], ["toolCallId"]]),
-            inputText: extractToolInputText(parsedLine),
+            inputText: toolInputText,
             name: pickFirstString(parsedLine, [["name"], ["toolName"], ["tool", "name"]]),
             status: pickFirstString(parsedLine, [["status"], ["state"], ["tool", "status"]])
           }
@@ -174,7 +186,7 @@ function extractMessageText(
 
   for (const path of candidates) {
     const candidate = readValueAtPath(parsedLine, path);
-    const normalized = extractNormalizedText(candidate);
+    const normalized = sanitizeExtractedText(extractNormalizedText(candidate), kind);
 
     if (normalized !== null && !looksRedacted(normalized)) {
       return normalized;
@@ -238,6 +250,43 @@ function extractNormalizedText(value: JsonValue | undefined): string | null {
   return null;
 }
 
+function sanitizeExtractedText(
+  value: string | null,
+  kind: CursorTranscriptRecordKind
+): string | null {
+  if (value === null) {
+    return null;
+  }
+
+  const userQuery = extractTaggedSection(value, "user_query");
+
+  if (kind === "user_message" && userQuery !== null) {
+    return normalizeFreeformText(userQuery);
+  }
+
+  return normalizeFreeformText(value);
+}
+
+function extractTaggedSection(value: string, tagName: string): string | null {
+  const pattern = new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`, "i");
+  const match = value.match(pattern);
+  return match?.[1]?.trim() || null;
+}
+
+function normalizeFreeformText(value: string): string | null {
+  const stripped = value
+    .replace(pluginInfoPattern, " ")
+    .replace(attachedFilesPattern, " ")
+    .replace(codeSelectionPattern, " ")
+    .replace(xmlTagPattern, " ")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return stripped.length > 0 ? stripped : null;
+}
+
 function extractToolInputText(parsedLine: JsonRecord): string | null {
   const candidate = pickFirstString(parsedLine, [
     ["arguments", "command"],
@@ -264,10 +313,14 @@ function extractTimestampHint(parsedLine: JsonRecord): string | null {
   );
 }
 
-function extractFilePaths(parsedLine: JsonRecord): string[] {
+function extractFilePaths(
+  parsedLine: JsonRecord,
+  messageText: string | null,
+  toolInputText: string | null
+): string[] {
   const paths: string[] = [];
 
-  for (const value of iterateStrings(parsedLine)) {
+  for (const value of collectFocusedStringSources(parsedLine, messageText, toolInputText)) {
     paths.push(...value.match(posixPathPattern) ?? []);
     paths.push(...value.match(windowsPathPattern) ?? []);
   }
@@ -275,13 +328,53 @@ function extractFilePaths(parsedLine: JsonRecord): string[] {
   return paths;
 }
 
-function extractCommandStrings(parsedLine: JsonRecord): string[] {
+function extractCommandStrings(
+  parsedLine: JsonRecord,
+  messageText: string | null,
+  toolInputText: string | null
+): string[] {
   const commands: string[] = [];
 
-  for (const value of iterateStrings(parsedLine)) {
-    commands.push(...matchInlineCommands(value));
+  if (toolInputText !== null) {
+    if (commandLinePattern.test(toolInputText.trim())) {
+      commands.push(toolInputText);
+    }
+  }
 
-    for (const command of value.match(commandStarterPattern) ?? []) {
+  for (const value of collectFocusedStringSources(parsedLine, messageText, null)) {
+    commands.push(...matchInlineCommands(value));
+    commands.push(...matchShellCommandLines(value));
+    commands.push(...matchRunCommands(value));
+  }
+
+  return commands;
+}
+
+function matchInlineCommands(value: string): string[] {
+  const commands: string[] = [];
+
+  for (const match of value.matchAll(inlineCodePattern)) {
+    const command = match[1]?.trim();
+
+    if (command) {
+      commands.push(command);
+    }
+  }
+
+  return commands;
+}
+
+function matchShellCommandLines(value: string): string[] {
+  const commands: string[] = [];
+
+  for (const line of value.split(/\r?\n+/)) {
+    const normalizedLine = line.trim();
+
+    if (!commandLinePattern.test(normalizedLine)) {
+      continue;
+    }
+
+    for (const command of normalizedLine.match(commandStarterPattern) ?? []) {
       const normalized = command.trim();
 
       if (normalized.length > 0) {
@@ -293,10 +386,10 @@ function extractCommandStrings(parsedLine: JsonRecord): string[] {
   return commands;
 }
 
-function matchInlineCommands(value: string): string[] {
+function matchRunCommands(value: string): string[] {
   const commands: string[] = [];
 
-  for (const match of value.matchAll(inlineCodePattern)) {
+  for (const match of value.matchAll(runCommandPattern)) {
     const command = match[1]?.trim();
 
     if (command) {
@@ -379,6 +472,39 @@ function* iterateStrings(value: JsonValue): Generator<string> {
       yield* iterateStrings(entry);
     }
   }
+}
+
+function collectFocusedStringSources(
+  parsedLine: JsonRecord,
+  messageText: string | null,
+  toolInputText: string | null
+): string[] {
+  const sources: string[] = [];
+
+  if (messageText !== null) {
+    sources.push(messageText);
+  }
+
+  if (toolInputText !== null) {
+    sources.push(toolInputText);
+  }
+
+  for (const path of [
+    ["arguments", "path"],
+    ["arguments", "cwd"],
+    ["metadata", "path"],
+    ["metadata", "cwd"],
+    ["path"],
+    ["cwd"]
+  ] satisfies ReadonlyArray<ReadonlyArray<string>>) {
+    const candidate = pickFirstString(parsedLine, [path]);
+
+    if (candidate !== null) {
+      sources.push(candidate);
+    }
+  }
+
+  return sources;
 }
 
 function uniquePreservingOrder(values: string[]): string[] {

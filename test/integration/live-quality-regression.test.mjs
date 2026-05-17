@@ -114,7 +114,13 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
     );
     assert.ok(richSession);
     assert.ok(richSession.turns >= 3);
-    assert.equal(richSession.archived.safeToDelete, true);
+    assert.equal(richSession.archived.safeToDelete, false);
+
+    const readySession = ingestSummary.sessions.find(
+      (session) => session.session_id === "0fc0a884-3413-44fa-bdd4-77984f40e413"
+    );
+    assert.ok(readySession);
+    assert.equal(readySession.archived.safeToDelete, true);
 
     const shortSession = ingestSummary.sessions.find(
       (session) => session.session_id === "6edabde1-32b9-47cb-b4e8-0e5884f98a14"
@@ -128,7 +134,7 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
     try {
       const readyCandidate = getDeletionCandidateBySessionId(
         database,
-        "6e8197bb-269e-43a8-bc58-e965468c3f82"
+        "0fc0a884-3413-44fa-bdd4-77984f40e413"
       );
       assert.ok(readyCandidate);
       assert.equal(readyCandidate.candidate_state, "ready");
@@ -163,6 +169,7 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
     );
     assert.match(summaryMarkdown, /PR #71 Review/);
     assert.doesNotMatch(summaryMarkdown, /## What Worked\n- None noted\./);
+    assert.doesNotMatch(summaryMarkdown, /<attached_files>|<code_selection/);
 
     const explainBlocked = runCli(["explain", "6edabde1-32b9-47cb-b4e8-0e5884f98a14"], {
       HOME: homeDir,
