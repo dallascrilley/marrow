@@ -1,8 +1,8 @@
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 
 import type { DeletionCandidateInput, LifecycleState } from "../db/queries.js";
-import type { RetentionReceipt, SourceSession } from "../models/canonical.js";
-import { retentionReceiptSchema } from "../models/canonical.js";
+import type { RetentionReceipt, SourceSession, Summary } from "../models/canonical.js";
+import { retentionReceiptSchema, summarySchema } from "../models/canonical.js";
 import { defaultUserScopeKey } from "./extract.js";
 import { getSessionManifestPath } from "../writers/manifest-writer.js";
 import {
@@ -38,6 +38,7 @@ export async function evaluateRetentionReadiness(input: {
   const projectKey = input.projectKey ?? input.sourceSession.project_key;
   const userScopeKey = input.userScopeKey ?? defaultUserScopeKey;
   const summaryWritten = await hasSummaryArtifacts(sessionId);
+  const summary = summaryWritten ? await readSummary(sessionId) : null;
   const projectLearningsWritten = await fileExists(getProjectKnowledgeSessionPath(projectKey, sessionId));
   const userLearningsWritten = await fileExists(getUserKnowledgeSessionPath(userScopeKey, sessionId));
   const manifestWritten = await fileExists(getSessionManifestPath(sessionId));
@@ -52,6 +53,7 @@ export async function evaluateRetentionReadiness(input: {
     manifestWritten,
     projectLearningsWritten,
     receiptWritten,
+    summary,
     summaryWritten,
     userLearningsWritten
   });
@@ -103,26 +105,61 @@ function determineBlockedReason(input: {
   manifestWritten: boolean;
   projectLearningsWritten: boolean;
   receiptWritten: boolean;
+  summary: Summary | null;
   summaryWritten: boolean;
   userLearningsWritten: boolean;
 }): string {
   if (!input.summaryWritten) {
-    return "Summary artifacts have not been written yet.";
+    return "summary_missing: Summary artifacts have not been written yet.";
+  }
+
+  if (input.summary !== null && isLowSignalSummary(input.summary)) {
+    return "summary_low_signal: Summary captured no durable signal yet.";
   }
 
   if (!input.projectLearningsWritten && !input.userLearningsWritten) {
-    return "No project or user learnings have been written yet.";
+    return "no_durable_learnings: No project or user learnings have been written yet.";
   }
 
   if (!input.manifestWritten) {
-    return "Immutable provenance manifest has not been written yet.";
+    return "manifest_missing: Immutable provenance manifest has not been written yet.";
   }
 
   if (!input.receiptWritten) {
-    return "Retention receipt has not been written yet.";
+    return "receipt_missing: Retention receipt has not been written yet.";
   }
 
   return "";
+}
+
+async function readSummary(sessionId: string): Promise<Summary | null> {
+  try {
+    const contents = await readFile(getSessionSummaryJsonPath(sessionId), "utf8");
+    return summarySchema.parse(JSON.parse(contents));
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function isLowSignalSummary(summary: Summary): boolean {
+  const hasSignal =
+    summary.what_worked.length > 0 ||
+    summary.what_failed.length > 0 ||
+    summary.what_was_decided.length > 0 ||
+    summary.useful_commands.length > 0 ||
+    summary.files_of_interest.length > 0 ||
+    summary.project_learnings.length > 0 ||
+    summary.user_learnings.length > 0;
+
+  if (hasSignal) {
+    return false;
+  }
+
+  return summary.next_step === "No explicit next step recorded.";
 }
 
 async function fileExists(path: string): Promise<boolean> {

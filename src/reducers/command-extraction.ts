@@ -4,6 +4,7 @@ import type { GroupedTurn } from "./turn-grouping.js";
 const commandStarterPattern =
   /^(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b/i;
 const trailingPunctuationPattern = /[.,;:!?]+$/;
+const disallowedBareCommands = new Set(["node", "python", "python3"]);
 
 export type ExtractedCommand = {
   command: string;
@@ -80,6 +81,10 @@ function normalizeCommand(value: string): string | null {
     .replace(trailingPunctuationPattern, "");
 
   if (trimmed.length === 0 || !commandStarterPattern.test(trimmed) || trimmed.includes("\n")) {
+    return null;
+  }
+
+  if (!trimmed.includes(" ") && disallowedBareCommands.has(trimmed.toLowerCase())) {
     return null;
   }
 

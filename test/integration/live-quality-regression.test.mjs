@@ -146,7 +146,7 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
       );
       assert.ok(blockedCandidate);
       assert.equal(blockedCandidate.candidate_state, "pending_artifacts");
-      assert.match(blockedCandidate.reason, /No project or user learnings/);
+      assert.match(blockedCandidate.reason, /summary_low_signal/);
 
       const subagentSession = getSourceSessionBySessionId(
         database,
@@ -176,7 +176,15 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
       [runtimeOverrideEnvVar]: runtimeRoot
     });
     assert.equal(explainBlocked.status, 0, explainBlocked.stderr);
-    assert.match(explainBlocked.stdout, /No project or user learnings/);
+    assert.match(explainBlocked.stdout, /summary_low_signal/);
+
+    const statsResult = runCli(["stats"], {
+      HOME: homeDir,
+      [runtimeOverrideEnvVar]: runtimeRoot
+    });
+    assert.equal(statsResult.status, 0, statsResult.stderr);
+    assert.match(statsResult.stdout, /blockedReasons/);
+    assert.match(statsResult.stdout, /summary_low_signal/);
   } finally {
     if (previousHome === undefined) {
       delete process.env.HOME;
