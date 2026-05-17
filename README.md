@@ -138,6 +138,16 @@ High-level runtime stats:
 node dist/cli.js stats
 ```
 
+Audit summary and deletion-readiness quality across already-ingested sessions:
+
+```bash
+node dist/cli.js quality audit
+node dist/cli.js quality audit --limit 100
+```
+
+The audit reports deletion-readiness counts, blocked reasons, issue counts, and
+the worst sessions by deterministic output-quality checks.
+
 ## Retention Model
 
 The current lifecycle is:

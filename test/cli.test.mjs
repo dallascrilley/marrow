@@ -31,6 +31,7 @@ test("asd --help lists every Task 1 command", () => {
   const expectedCommands = [
     "ingest backfill",
     "ingest sync",
+    "quality audit",
     "review queue",
     "review show",
     "archive run",

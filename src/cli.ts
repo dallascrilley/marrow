@@ -8,6 +8,7 @@ import { executeDeleteCandidates } from "./commands/delete-candidates.js";
 import { executeExplain } from "./commands/explain.js";
 import { executeIngestBackfill } from "./commands/ingest-backfill.js";
 import { executeIngestSync } from "./commands/ingest-sync.js";
+import { executeQualityAudit } from "./commands/quality-audit.js";
 import { executeReviewQueue } from "./commands/review-queue.js";
 import { executeReviewShow } from "./commands/review-show.js";
 import { executeStats } from "./commands/stats.js";
@@ -55,6 +56,15 @@ const commandTree: Record<string, CommandDefinition> = {
       show: {
         description: "Show one review queue entry by session id.",
         execute: async (context) => withLedger(context, executeReviewShow)
+      }
+    }
+  },
+  quality: {
+    description: "Audit distilled output quality across stored sessions.",
+    subcommands: {
+      audit: {
+        description: "Score summaries, learnings, and deletion readiness across existing runtime artifacts.",
+        execute: async (context) => withLedger(context, executeQualityAudit)
       }
     }
   },
