@@ -244,3 +244,54 @@ test("prunes bulky payloads, dedupes useful commands, and tags only explicit sig
     ]
   );
 });
+
+test("does not promote user prompts or wrapper blobs into failures or next steps", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 30,
+      messageText: "Fix the following issues. Verify each finding against the current code and only fix it if needed."
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 31,
+      messageText: "<attached_files>\n<code_selection path=\"/tmp/plan.md\">1| remaining follow-up items</code_selection>\n</attached_files>"
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 32,
+      messageText: "Next step is wiring the reducer into the pipeline."
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 33,
+      messageText: "The command failed with ENOENT while loading the fixture."
+    })
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-789"
+  });
+  const taggedEvents = tagTurnEvents(turns);
+
+  assert.deepEqual(
+    taggedEvents.map((event) => ({
+      line: event.source_offsets.start_line,
+      summary: event.summary,
+      type: event.type
+    })),
+    [
+      {
+        line: 32,
+        summary: "Next step is wiring the reducer into the pipeline.",
+        type: "next_step"
+      },
+      {
+        line: 33,
+        summary: "The command failed with ENOENT while loading the fixture.",
+        type: "failure"
+      }
+    ]
+  );
+});

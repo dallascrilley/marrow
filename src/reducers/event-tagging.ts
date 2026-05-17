@@ -49,6 +49,11 @@ const verificationTextPatterns = [
   /\bbuild succeeded\b/i,
   /\ball checks passed\b/i
 ] as const;
+const noisyWrapperPatterns = [
+  /<attached_files>/i,
+  /<code_selection\b/i,
+  /<plugin_info\b/i
+] as const;
 
 export function tagTurnEvents(turns: GroupedTurn[]): Event[] {
   const events: Event[] = [];
@@ -128,11 +133,23 @@ function createPatternEvent(
     return null;
   }
 
-  if (type === "decision" && record.kind !== "assistant_message") {
+  if (noisyWrapperPatterns.some((pattern) => pattern.test(text))) {
     return null;
   }
 
-  if (type === "verification" && record.kind !== "assistant_message") {
+  if (
+    (type === "decision" || type === "fix" || type === "next_step" || type === "verification") &&
+    record.kind !== "assistant_message"
+  ) {
+    return null;
+  }
+
+  if (
+    type === "failure" &&
+    record.kind !== "assistant_message" &&
+    record.kind !== "tool_result_stub" &&
+    record.kind !== "tool_use_stub"
+  ) {
     return null;
   }
 

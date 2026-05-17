@@ -116,11 +116,11 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
     assert.ok(richSession.turns >= 3);
     assert.equal(richSession.archived.safeToDelete, false);
 
-    const readySession = ingestSummary.sessions.find(
+    const reviewSession = ingestSummary.sessions.find(
       (session) => session.session_id === "0fc0a884-3413-44fa-bdd4-77984f40e413"
     );
-    assert.ok(readySession);
-    assert.equal(readySession.archived.safeToDelete, true);
+    assert.ok(reviewSession);
+    assert.equal(reviewSession.archived.safeToDelete, false);
 
     const shortSession = ingestSummary.sessions.find(
       (session) => session.session_id === "6edabde1-32b9-47cb-b4e8-0e5884f98a14"
@@ -132,13 +132,13 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
     const database = await createLedger();
 
     try {
-      const readyCandidate = getDeletionCandidateBySessionId(
+      const reviewCandidate = getDeletionCandidateBySessionId(
         database,
         "0fc0a884-3413-44fa-bdd4-77984f40e413"
       );
-      assert.ok(readyCandidate);
-      assert.equal(readyCandidate.candidate_state, "ready");
-      assert.equal(readyCandidate.safe_to_delete, 1);
+      assert.ok(reviewCandidate);
+      assert.equal(reviewCandidate.candidate_state, "pending_artifacts");
+      assert.equal(reviewCandidate.safe_to_delete, 0);
 
       const blockedCandidate = getDeletionCandidateBySessionId(
         database,
