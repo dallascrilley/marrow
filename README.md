@@ -78,6 +78,13 @@ Important directories:
 - `deletes/tombstones/` — explicit deletion apply tombstones
 - `reports/` — retention readiness reports
 
+## Real Regression Fixtures
+
+The repo also carries a small real-session regression corpus under
+`test/fixtures/cursor/live-regression/`. These fixtures are copied from actual
+local Cursor transcript files so parser and summary regressions can be judged
+against production-shaped data instead of synthetic-only fixtures.
+
 ## Command Examples
 
 Initial backfill of all local Cursor transcripts:

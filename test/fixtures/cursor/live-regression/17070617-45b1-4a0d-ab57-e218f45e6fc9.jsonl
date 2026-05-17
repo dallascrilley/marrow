@@ -1,0 +1,6 @@
+{"role":"user","message":{"content":[{"type":"text","text":"<user_query>\n\ncreate an examples folder + convert @events_2026-02-20.jsonl  into an example file. gitignore other jsonl files\n</user_query>"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"Creating the examples folder, adding the example file, and updating `.gitignore`."}]}}
+{"role":"user","message":{"content":[{"type":"text","text":"<user_query>\n\nyou dont need to replicate the whole thing by hand - just ensure it is decently representative of the original input file\n</user_query>"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"Creating a shorter example file that shows the main event types and structure."}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"Adding `overlay_off` and `recording_stop` so the example includes the full lifecycle:"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"Summary:\n\n- **`examples/events_example.jsonl`** – 13 lines covering:\n  - `recording_start` (with `recording_path`)\n  - `program_change`, `preview_change`\n  - Video `start` / `stop`\n  - `overlay_on` (with `overlay_text`)\n  - Capture inputs, `recording_stop`\n\n- **`.gitignore`** – Ignores `events_*.jsonl` and `*.jsonl`, but keeps `examples/events_example.jsonl` tracked."}]}}
