@@ -97,6 +97,18 @@ function toProjectEventCandidate(sourceSession: SourceSession, event: Event): Pr
     return null;
   }
 
+  if (isProcessText(event.summary)) {
+    return null;
+  }
+
+  if (event.type === "failure" && looksLikeCompletionNotFailure(event.summary)) {
+    return null;
+  }
+
+  if (event.type === "decision" && looksLikeExplanationNotDecision(event.summary)) {
+    return null;
+  }
+
   const completionStatement = toVerifiedCompletionStatement(event);
   if (completionStatement !== null) {
     return {
@@ -267,6 +279,76 @@ function toProjectTurnCandidates(input: {
       sourceRefs: sourceRefsForEvents(input.sourceSession, [fix]),
       statement,
       title: `File update: ${truncateInline(statement, 60)}`
+    });
+  }
+
+  const prReviewCommand = selectPrReviewCommand(commands, input.turn.user_prompt);
+  if (prReviewCommand !== null) {
+    const statement = `Use ${formatCommand(prReviewCommand)} for PR review in ${input.sourceSession.project_key}.`;
+    candidates.push({
+      confidence: "medium",
+      dedupeKey: `pr-review:${statement.toLowerCase()}`,
+      evidence: [input.turn.user_prompt, prReviewCommand],
+      kind: "workflow",
+      learningId: `${input.sourceSession.session_id}:project:pr-review:${input.index}`,
+      promotionBasis: "Derived from PR review command usage in the reduced turn.",
+      sourceRefs: [createSourceRef(input.sourceSession, {
+        turnId: input.turn.turn_id
+      })],
+      statement,
+      title: `PR review: ${truncateInline(statement, 60)}`
+    });
+  }
+
+  const forkSyncCommand = selectForkSyncCommand(commands, input.turn.user_prompt);
+  if (forkSyncCommand !== null) {
+    const statement = `Use ${formatCommand(forkSyncCommand)} to maintain private fork with upstream in ${input.sourceSession.project_key}.`;
+    candidates.push({
+      confidence: "medium",
+      dedupeKey: `fork-sync:${statement.toLowerCase()}`,
+      evidence: [input.turn.user_prompt, forkSyncCommand],
+      kind: "workflow",
+      learningId: `${input.sourceSession.session_id}:project:fork-sync:${input.index}`,
+      promotionBasis: "Derived from fork maintenance command usage in the reduced turn.",
+      sourceRefs: [createSourceRef(input.sourceSession, {
+        turnId: input.turn.turn_id
+      })],
+      statement,
+      title: `Fork sync: ${truncateInline(statement, 60)}`
+    });
+  }
+
+  const crashDiagnostic = extractCrashDiagnostic(input.turn, commands, files);
+  if (crashDiagnostic !== null) {
+    candidates.push({
+      confidence: "medium",
+      dedupeKey: `crash:${crashDiagnostic.statement.toLowerCase()}`,
+      evidence: crashDiagnostic.evidence,
+      kind: "failure_mode",
+      learningId: `${input.sourceSession.session_id}:project:crash:${input.index}`,
+      promotionBasis: "Derived from crash diagnostic evidence in the reduced turn.",
+      sourceRefs: [createSourceRef(input.sourceSession, {
+        turnId: input.turn.turn_id
+      })],
+      statement: crashDiagnostic.statement,
+      title: `Crash: ${truncateInline(crashDiagnostic.statement, 60)}`
+    });
+  }
+
+  const specDecision = extractSpecDecision(input.turn, files);
+  if (specDecision !== null) {
+    candidates.push({
+      confidence: "medium",
+      dedupeKey: `spec:${specDecision.statement.toLowerCase()}`,
+      evidence: specDecision.evidence,
+      kind: "decision",
+      learningId: `${input.sourceSession.session_id}:project:spec:${input.index}`,
+      promotionBasis: "Derived from spec or architecture discussion in the reduced turn.",
+      sourceRefs: [createSourceRef(input.sourceSession, {
+        turnId: input.turn.turn_id
+      })],
+      statement: specDecision.statement,
+      title: `Decision: ${truncateInline(specDecision.statement, 60)}`
     });
   }
 
@@ -524,6 +606,98 @@ function classifyWorkflowTarget(prompt: string): string {
   return "repo workflow";
 }
 
+function selectPrReviewCommand(commands: readonly string[], prompt: string): string | null {
+  if (!/\b(?:review|checkout)\b.*\bpr\b|\bpr\b.*\b(?:review|checkout)\b/i.test(prompt)) {
+    return null;
+  }
+
+  const worktreeCommand = commands.find((command) => /git worktree (?:add|remove)/i.test(command));
+  if (worktreeCommand !== undefined) {
+    return worktreeCommand;
+  }
+
+  const ghCommand = commands.find((command) => /^gh\b/i.test(command));
+  return ghCommand ?? null;
+}
+
+function selectForkSyncCommand(commands: readonly string[], prompt: string): string | null {
+  if (!/\b(?:private clone|upstream|fork|sync with upstream)\b/i.test(prompt)) {
+    return null;
+  }
+
+  const upstreamCommand = commands.find((command) => /git remote add upstream/i.test(command));
+  if (upstreamCommand !== undefined) {
+    return upstreamCommand;
+  }
+
+  const syncCommand = commands.find((command) => /git fetch upstream/i.test(command));
+  return syncCommand ?? null;
+}
+
+function extractCrashDiagnostic(turn: Turn, commands: readonly string[], files: readonly string[]): { statement: string; evidence: string[] } | null {
+  if (!/\b(?:fix|crash|error):|\b(?:debug|diagnose)\b/i.test(turn.user_prompt)) {
+    return null;
+  }
+
+  const diagnosticCommands = commands.filter((command) => /\b(?:bun -e|node -e|python3? -c|python3? -m pytest|npm test|bun test)\b/i.test(command));
+  const errorFiles = files.filter((file) => /\.(?:log|crash|err)$/i.test(file) || /(?:crash|error|debug|trace)/i.test(file));
+
+  if (diagnosticCommands.length === 0 && errorFiles.length === 0) {
+    return null;
+  }
+
+  const command = diagnosticCommands[0];
+  const file = errorFiles[0];
+  const evidence = uniqueStrings([...(command ? [command] : []), ...(file ? [file] : []), turn.user_prompt]);
+
+  if (command !== undefined && file !== undefined) {
+    return {
+      statement: `Diagnose crashes with ${formatCommand(command)}; check ${file} for error details.`,
+      evidence
+    };
+  }
+
+  if (command !== undefined) {
+    return {
+      statement: `Diagnose crashes with ${formatCommand(command)} in ${turn.user_prompt.split(/\r?\n/)[0] ?? "this project"}.`,
+      evidence
+    };
+  }
+
+  if (file !== undefined) {
+    return {
+      statement: `Check ${file} for crash diagnostics in ${turn.user_prompt.split(/\r?\n/)[0] ?? "this project"}.`,
+      evidence
+    };
+  }
+
+  return null;
+}
+
+function extractSpecDecision(turn: Turn, files: readonly string[]): { statement: string; evidence: string[] } | null {
+  if (!/\b(?:speckit|spec|architecture|roadmap|design doc|create a .+ wrapper|create a .+ spec)\b/i.test(turn.user_prompt)) {
+    return null;
+  }
+
+  const specFiles = files.filter((file) => /\/(?:specs?|docs?|design)\//i.test(file) || /\.(?:md|mdx)$/i.test(file));
+
+  if (specFiles.length === 0) {
+    return null;
+  }
+
+  const file = specFiles[0]!;
+  const topic = turn.user_prompt
+    .replace(/\/(?:speckit|speckit-specify)\b/gi, "")
+    .replace(/['"]/g, "")
+    .trim()
+    .split(/\r?\n/)[0] ?? "the specified design";
+
+  return {
+    statement: `Refer to ${file} for ${truncateInline(topic, 60)} architecture decisions.`,
+    evidence: [turn.user_prompt, file]
+  };
+}
+
 function selectTopic(prompt: string): string {
   const line = prompt
     .split(/\r?\n+/)
@@ -547,6 +721,115 @@ function lowercaseFirst(value: string): string {
   }
 
   return `${value[0]!.toLowerCase()}${value.slice(1)}`;
+}
+
+function isProcessText(summary: string): boolean {
+  const normalized = summary.trim().toLowerCase();
+
+  const processPrefixes = [
+    "let me ",
+    "i'll ",
+    "i will ",
+    "i'm ",
+    "i'll ",
+    "i'm ",
+    "exploring ",
+    "checking ",
+    "reading ",
+    "loading ",
+    "creating a ",
+    "implementing ",
+    "adding ",
+    "updating ",
+    "fixing ",
+    "now i have enough context",
+    "now i understand",
+    "now i see",
+    "first, the ",
+    "first, i'll ",
+    "first, i'm ",
+    "first, let me ",
+    "i see - there's",
+    "i see - the",
+    "i need to add",
+    "i need to update",
+    "i need to fix",
+    "rust compiles and",
+    "the toast infrastructure",
+    "the command infrastructure",
+    "--- ## "
+  ];
+
+  for (const prefix of processPrefixes) {
+    if (normalized.startsWith(prefix)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function looksLikeCompletionNotFailure(summary: string): boolean {
+  const normalized = summary.trim().toLowerCase();
+
+  if (normalized.startsWith("**done:**")) {
+    return true;
+  }
+
+  if (normalized.startsWith("## ") && !normalized.includes("error") && !normalized.includes("fail")) {
+    return true;
+  }
+
+  if (/\bverified\b.+(?:against|with|using)\b/i.test(normalized) && !/\b(?:error|fail|exception)\b/i.test(normalized)) {
+    return true;
+  }
+
+  if (normalized.startsWith("summary of what's done:") || normalized.startsWith("summary of what\u2019s done:")) {
+    return true;
+  }
+
+  if (normalized.startsWith("--- ## ") && /\bbatch \d+ complete\b/i.test(normalized)) {
+    return true;
+  }
+
+  return false;
+}
+
+function looksLikeExplanationNotDecision(summary: string): boolean {
+  const normalized = summary.trim().toLowerCase();
+
+  if (
+    normalized.startsWith("here's how ") ||
+    normalized.startsWith("here is how ") ||
+    normalized.startsWith("here\u2019s how ")
+  ) {
+    return true;
+  }
+
+  if (
+    normalized.startsWith("here's what ") ||
+    normalized.startsWith("here is what ") ||
+    normalized.startsWith("here\u2019s what ")
+  ) {
+    return true;
+  }
+
+  if (
+    (normalized.startsWith("here is a ") || normalized.startsWith("here's a ") || normalized.startsWith("here\u2019s a ")) &&
+    /\b(?:plan|summary|overview|guide|tutorial)\b/i.test(normalized)
+  ) {
+    return true;
+  }
+
+  if (normalized.startsWith("## diff review") || normalized.startsWith("### diff review")) {
+    return true;
+  }
+
+  if (normalized.startsWith("--- ## ")) {
+    return true;
+  }
+
+  return false;
 }
 
 function sourceRefsForEvents(sourceSession: SourceSession, events: readonly Event[]): SourceRef[] {

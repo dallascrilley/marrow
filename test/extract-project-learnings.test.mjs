@@ -187,3 +187,107 @@ test("does not promote process-only future verification text", () => {
 
   assert.deepEqual(learnings.project, []);
 });
+
+test("promotes PR review workflow from git worktree and gh commands", () => {
+  const source = sourceSession({ project_key: "tether-ntfy-ios" });
+  const firstTurn = turn({
+    commands_seen: ["git worktree add ../tether-ntfy-ios-review-pr16", "gh pr diff 16", "git worktree remove ../tether-ntfy-ios-review-pr16"],
+    user_prompt: "checkout and review pr 16 and 17"
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn]
+  });
+
+  assert.ok(
+    learnings.project.some((learning) =>
+      learning.kind === "workflow" &&
+      learning.statement.includes("git worktree") &&
+      learning.statement.includes("PR review")
+    )
+  );
+});
+
+test("promotes fork sync workflow from git remote add upstream", () => {
+  const source = sourceSession({ project_key: "openreel-video" });
+  const firstTurn = turn({
+    commands_seen: ["git remote add upstream https://github.com/original/repo.git", "git fetch upstream", "git merge upstream/main"],
+    user_prompt: "convert this into a private clone for me - keep upstream but push to a private repo"
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn]
+  });
+
+  assert.ok(
+    learnings.project.some((learning) =>
+      learning.kind === "workflow" &&
+      learning.statement.includes("git remote add upstream") &&
+      learning.statement.includes("private fork")
+    )
+  );
+});
+
+test("promotes crash diagnostic from fix prompt and diagnostic commands", () => {
+  const source = sourceSession({ project_key: "hub" });
+  const firstTurn = turn({
+    commands_seen: ["bun -e \"console.log(process.argv)\""],
+    files_touched: ["/Users/dallascrilley/.pi/agent/pi-crash.log"],
+    user_prompt: "fix: crash in pi tui at tui.js:974"
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn]
+  });
+
+  assert.ok(
+    learnings.project.some((learning) =>
+      learning.kind === "failure_mode" &&
+      learning.statement.includes("crash")
+    )
+  );
+});
+
+test("promotes spec decision from speckit prompt and spec files", () => {
+  const source = sourceSession({ project_key: "hub" });
+  const firstTurn = turn({
+    files_touched: ["/Users/dallascrilley/.hub/specs/004-hub-skills-cli-wrapper/spec.md"],
+    user_prompt: "/speckit-specify create a hub wrapper around the skills cli"
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn]
+  });
+
+  assert.ok(
+    learnings.project.some((learning) =>
+      learning.kind === "decision" &&
+      learning.statement.includes("spec.md") &&
+      learning.statement.includes("architecture")
+    )
+  );
+});
+
+test("does not promote basic git init as project learning", () => {
+  const source = sourceSession({ project_key: "warp-remote-dev" });
+  const firstTurn = turn({
+    commands_seen: ["git add --all && git commit -m", "git push -u origin main"],
+    user_prompt: "git add --all && git commit -m \"chore: initial commit\" && gh repo create"
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn]
+  });
+
+  assert.deepEqual(learnings.project, []);
+});

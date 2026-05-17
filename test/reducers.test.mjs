@@ -323,3 +323,120 @@ test("does not classify completed verification summaries as next steps", () => {
     ["verification"]
   );
 });
+
+test("tags recommendation and evaluation language as decision events", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "search for a pi extension manager extension"
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 2,
+      messageText: "Here is a tight comparison from READMEs, package.json, stars, last push, and pi-search traffic. ### 1. `pi-extmgr` (ayagmar) — **best default** - **Why:** Most complete surface: unified TUI, staged enable/disable + save, per-package extension entrypoint config, remote install/browse, bulk update, auto-update wizard, history with filters, cache clear, non-interactive /extensions subset, explicit RPC / no-UI behavior."
+    }),
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 3,
+      messageText: "review each. which looks the best"
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 4,
+      messageText: "### Ranking 1. `pi-extmgr` (ayagmar) — winner. 2. `@vanillagreen/pi-extension-manager` — runner-up. I recommend pi-extmgr for new projects."
+    })
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-eval"
+  });
+  const taggedEvents = tagTurnEvents(turns);
+  const decisions = taggedEvents.filter((event) => event.type === "decision");
+
+  assert.equal(decisions.length, 2);
+  assert.ok(decisions[0].summary.includes("best default"));
+  assert.ok(decisions[1].summary.includes("winner") || decisions[1].summary.includes("recommend"));
+});
+
+test("tags architecture and roadmap language as decision events", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 10,
+      messageText: "what should the v2 and v3 of this pi harness look like?"
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 11,
+      messageText: "Below is a delivery-shaped split: v2 epic tightens the current extension lane; v3 epic adds new wires and distance. v3 assumes v2 fundamentals so you do not debug transport and policy at the same time."
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 12,
+      messageText: "The approach is to keep Pi managed session + phone steer only for v2, then add opt-in steer memory and receipts MVP in v3."
+    })
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-roadmap"
+  });
+  const taggedEvents = tagTurnEvents(turns);
+  const decisions = taggedEvents.filter((event) => event.type === "decision");
+
+  assert.equal(decisions.length, 2);
+  assert.ok(decisions[0].summary.includes("v2 epic"));
+  assert.ok(decisions[1].summary.includes("approach is"));
+});
+
+test("tags spec and design decisions as decision events", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 20,
+      messageText: "/speckit-specify create a hub wrapper around the skills cli"
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 21,
+      messageText: "Architecture decision: the hub wrapper uses a thin CLI adapter that delegates to the skills CLI internally. The spec for the wrapper is in hub-spec.md."
+    })
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-spec"
+  });
+  const taggedEvents = tagTurnEvents(turns);
+  const decisions = taggedEvents.filter((event) => event.type === "decision");
+
+  assert.equal(decisions.length, 1);
+  assert.ok(decisions[0].summary.includes("Architecture decision"));
+});
+
+test("tags comparison and verdict language as decision events", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 29,
+      messageText: "Compare SQLite vs PostgreSQL for our local-first deployment."
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 30,
+      messageText: "Comparison: Option A uses SQLite, Option B uses PostgreSQL. Verdict: go with SQLite for local-first deployments."
+    })
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-verdict"
+  });
+  const taggedEvents = tagTurnEvents(turns);
+  const decisions = taggedEvents.filter((event) => event.type === "decision");
+
+  assert.equal(decisions.length, 1);
+  assert.ok(decisions[0].summary.includes("go with"));
+});
