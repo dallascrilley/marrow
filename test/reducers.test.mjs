@@ -295,3 +295,31 @@ test("does not promote user prompts or wrapper blobs into failures or next steps
     ]
   );
 });
+
+test("does not classify completed verification summaries as next steps", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 50,
+      messageText: "Implement the review fixes."
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 51,
+      messageText:
+        "**Done:** All 7 blocking fixes implemented and verified. **Verified:** `./scripts/qa` - 1247 passed, 2 skipped, 0 failures. Follow-up items are complete."
+    })
+  ];
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-complete"
+  });
+  const commandResult = extractCommandsByTurn(turns);
+  const taggedEvents = tagTurnEvents(turns);
+
+  assert.deepEqual(commandResult.allCommands, ["./scripts/qa"]);
+  assert.deepEqual(
+    taggedEvents.map((event) => event.type),
+    ["verification"]
+  );
+});

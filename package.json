@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test test/**/*.test.mjs",
+    "test": "npm run build && node --test $(find test -name '*.test.mjs' -print)",
     "test:smoke": "npm run build && node --test test/cli.test.mjs"
   },
   "devDependencies": {

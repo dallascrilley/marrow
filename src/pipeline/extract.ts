@@ -59,6 +59,26 @@ function toProjectLearning(sourceSession: SourceSession, event: Event): Learning
     return null;
   }
 
+  const completionStatement = toVerifiedCompletionStatement(event);
+  if (completionStatement !== null) {
+    return createLearning({
+      confidence: event.confidence,
+      evidence: [event.summary],
+      kind: "workflow",
+      learningId: `${sourceSession.session_id}:project:completion:${event.event_id}`,
+      promotionBasis: "Derived from a verified completion outcome in the reduced transcript.",
+      scope: "project",
+      scopeKey: sourceSession.project_key,
+      sourceRef: createSourceRef(sourceSession, {
+        eventId: event.event_id,
+        line: event.source_offsets.start_line,
+        turnId: event.turn_id
+      }),
+      statement: completionStatement,
+      title: `Verified completion: ${truncateInline(completionStatement, 60)}`
+    });
+  }
+
   switch (event.type) {
     case "decision":
       return createLearning({
@@ -122,6 +142,31 @@ function toProjectLearning(sourceSession: SourceSession, event: Event): Learning
     default:
       return null;
   }
+}
+
+function toVerifiedCompletionStatement(event: Event): string | null {
+  if (event.type !== "verification") {
+    return null;
+  }
+
+  const stripped = stripEventPrefix(event.summary);
+  const doneMatch = stripped.match(/\*\*Done:\*\*\s*(.*?)(?:\s+\*\*Verified:\*\*\s*|$)(.*)$/i);
+
+  if (doneMatch === null) {
+    return null;
+  }
+
+  const doneText = doneMatch[1]?.trim();
+  const verifiedText = doneMatch[2]?.trim() ?? "";
+
+  if (doneText === undefined || doneText.length === 0) {
+    return null;
+  }
+
+  const command = extractCommandFromText(verifiedText) ?? readPayloadString(event, "verification_command");
+  const verifiedClause = command === null ? "verified" : `verified with ${formatCommand(command)}`;
+
+  return `Completed ${lowercaseFirst(stripTrailingPunctuation(doneText))}; ${verifiedClause}.`;
 }
 
 function extractUserPreferenceCandidates(prompt: string): Array<{
@@ -197,6 +242,41 @@ function splitPromptLines(prompt: string): string[] {
 function readPayloadString(event: Event, key: string): string | null {
   const value = event.payload_small[key];
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function stripEventPrefix(value: string): string {
+  return value.replace(/^Verification noted:\s*/i, "").trim();
+}
+
+function extractCommandFromText(value: string): string | null {
+  for (const match of value.matchAll(/`([^`\n]+)`/g)) {
+    const candidate = match[1]?.trim();
+
+    if (
+      candidate !== undefined &&
+      /^(?:\.\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b)/i.test(candidate)
+    ) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function formatCommand(command: string): string {
+  return command.startsWith("`") && command.endsWith("`") ? command : `\`${command}\``;
+}
+
+function stripTrailingPunctuation(value: string): string {
+  return value.replace(/[.!?]+$/g, "").trim();
+}
+
+function lowercaseFirst(value: string): string {
+  if (value.length === 0) {
+    return value;
+  }
+
+  return `${value[0]!.toLowerCase()}${value.slice(1)}`;
 }
 
 function createLearning(input: {

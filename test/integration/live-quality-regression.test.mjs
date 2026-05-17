@@ -114,7 +114,7 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
     );
     assert.ok(richSession);
     assert.ok(richSession.turns >= 3);
-    assert.equal(richSession.archived.safeToDelete, false);
+    assert.equal(richSession.archived.safeToDelete, true);
 
     const reviewSession = ingestSummary.sessions.find(
       (session) => session.session_id === "0fc0a884-3413-44fa-bdd4-77984f40e413"
@@ -139,6 +139,14 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
       assert.ok(reviewCandidate);
       assert.equal(reviewCandidate.candidate_state, "pending_artifacts");
       assert.equal(reviewCandidate.safe_to_delete, 0);
+
+      const richCandidate = getDeletionCandidateBySessionId(
+        database,
+        "6e8197bb-269e-43a8-bc58-e965468c3f82"
+      );
+      assert.ok(richCandidate);
+      assert.equal(richCandidate.candidate_state, "ready");
+      assert.equal(richCandidate.safe_to_delete, 1);
 
       const blockedCandidate = getDeletionCandidateBySessionId(
         database,
@@ -170,6 +178,9 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
     assert.match(summaryMarkdown, /PR #71 Review/);
     assert.doesNotMatch(summaryMarkdown, /## What Worked\n- None noted\./);
     assert.doesNotMatch(summaryMarkdown, /<attached_files>|<code_selection/);
+    assert.match(summaryMarkdown, /Completed all 7 blocking\/strongly-recommended fixes/);
+    assert.match(summaryMarkdown, /No open next step recorded\./);
+    assert.match(summaryMarkdown, /`\.\/scripts\/qa`/);
 
     const explainBlocked = runCli(["explain", "6edabde1-32b9-47cb-b4e8-0e5884f98a14"], {
       HOME: homeDir,

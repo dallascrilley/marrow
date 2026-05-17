@@ -2,7 +2,8 @@ import type { CursorTranscriptRecord } from "../adapters/cursor/intermediate.js"
 import type { GroupedTurn } from "./turn-grouping.js";
 
 const commandStarterPattern =
-  /^(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b/i;
+  /^(?:\.\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b)/i;
+const inlineCodePattern = /`([^`\n]+)`/g;
 const trailingPunctuationPattern = /[.,;:!?]+$/;
 const disallowedBareCommands = new Set(["node", "python", "python3"]);
 
@@ -63,11 +64,22 @@ export function extractCommandsByTurn(turns: GroupedTurn[]): CommandExtractionRe
 
 function collectCommandCandidates(record: CursorTranscriptRecord): string[] {
   const candidates = [...record.commandStrings];
+  const messageText = record.messageText;
 
   const toolInput = record.toolUse?.inputText;
 
   if (toolInput !== null && toolInput !== undefined) {
     candidates.push(toolInput);
+  }
+
+  if (messageText !== null) {
+    for (const match of messageText.matchAll(inlineCodePattern)) {
+      const command = match[1]?.trim();
+
+      if (command !== undefined) {
+        candidates.push(command);
+      }
+    }
   }
 
   return candidates;

@@ -10,11 +10,11 @@ import type {
 } from "./intermediate.js";
 
 const commandStarterPattern =
-  /\b(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b(?: [^`"\n,.;:!?]+)*/g;
+  /(?:^|\s)(\.\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b(?: [^`"\n,.;:!?]+)*)/g;
 const commandLinePattern =
-  /^(?:[-*]\s*)?(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b/i;
+  /^(?:[-*]\s*)?(?:\.\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b)/i;
 const runCommandPattern =
-  /\brun\s+((?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b[^`\n,.;:!?]*)/gi;
+  /\brun\s+(\.\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b[^`\n,.;:!?]*)/gi;
 const inlineCodePattern = /`([^`\n]+)`/g;
 const posixPathPattern = /\/(?:Users|home|tmp|var|opt|private|Volumes)\/[^\s"'`]+/g;
 const windowsPathPattern = /[A-Za-z]:\\[^\s"'`]+/g;

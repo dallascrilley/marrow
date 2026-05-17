@@ -100,7 +100,7 @@ test("runtime-path creation is isolated by the root override", async () => {
     assert.ok(reviewsStats.isDirectory());
 
     const runtimeEntries = await readdir(runtimeRoot);
-    assert.deepEqual(runtimeEntries, ["reviews"]);
+    assert.deepEqual(runtimeEntries, ["ledger", "reviews"]);
 
     const sandboxEntries = await readdir(sandboxBase);
     assert.deepEqual(sandboxEntries, ["runtime-root"]);

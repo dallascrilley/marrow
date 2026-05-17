@@ -35,13 +35,13 @@ const nextStepPatterns = [
   /\bnext step\b/i,
   /\bnext i(?:'|’)ll\b/i,
   /\bstill need to\b/i,
-  /\bremaining\b/i,
+  /\bremaining (?:work|task|issue|step|item)s?\b/i,
   /\bleft to do\b/i,
-  /\bfollow-?up\b/i
+  /\bfollow-?up (?:needed|required|is|will|task|item|step)s?\b/i
 ] as const;
 
 const verificationCommandPattern =
-  /^(?:npm(?: run)? build|npm test|pnpm(?: run)? build|pnpm test|yarn build|yarn test|bun test|cargo test|go test|python(?:3)? -m pytest|uv run pytest)\b/i;
+  /^(?:\.\/[\w./-]+|npm(?: run)? build|npm test|pnpm(?: run)? build|pnpm test|yarn build|yarn test|bun test|cargo test|go test|python(?:3)? -m pytest|uv run pytest)\b/i;
 const verificationTextPatterns = [
   /\bverified\b/i,
   /\bconfirmed\b/i,
@@ -144,6 +144,10 @@ function createPatternEvent(
     return null;
   }
 
+  if (type === "next_step" && looksLikeCompletedOutcome(text)) {
+    return null;
+  }
+
   if (
     type === "failure" &&
     record.kind !== "assistant_message" &&
@@ -223,11 +227,18 @@ function extractVerificationCommand(record: GroupedTurn["records"][number]): str
 function summarizeText(text: string): string {
   const normalized = text.replace(/\s+/g, " ").trim();
 
-  if (normalized.length <= 160) {
+  if (normalized.length <= 240) {
     return normalized;
   }
 
-  return `${normalized.slice(0, 157)}...`;
+  return `${normalized.slice(0, 237)}...`;
+}
+
+function looksLikeCompletedOutcome(text: string): boolean {
+  return (
+    /\b(?:done|completed|implemented|fixed|resolved|merged|pushed)\b/i.test(text) &&
+    /\b(?:verified|tests? pass(?:ed)?|all checks passed|0 failures)\b/i.test(text)
+  );
 }
 
 function inferConfidence(type: Event["type"]): Event["confidence"] {
