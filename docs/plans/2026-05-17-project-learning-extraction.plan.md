@@ -17,12 +17,14 @@
 
 **Primary weakness:** `src/pipeline/extract.ts` currently promotes only explicit decisions, failures, explicit verification commands, and `**Done:** ... **Verified:** ...` completion summaries. Real sessions often contain useful project knowledge as verified fixes, error resolutions, test/runtime improvements, repo workflow actions, and file-scoped implementation outcomes without matching that exact final-completion pattern.
 
-**Non-goals for this slice:**
+**Non-goals for this deterministic extraction slice:**
 
-- Do not add an LLM extraction stage yet.
+- Do not replace deterministic extraction with an LLM extraction stage.
 - Do not relax deletion readiness without evidence-backed learnings.
 - Do not promote generic user preferences into project scope.
 - Do not create new schema tables unless deterministic JSONL artifacts cannot express the result.
+
+**Later extension:** An OpenRouter LLM memory-lint sidecar now reviews deterministic project-learning candidates and applies durable keep/rewrite verdicts into `knowledge/projects-reviewed/` without mutating `knowledge/projects/`.
 
 ## Desired Outcome
 
@@ -240,13 +242,14 @@ node --test test/extract-project-learnings.test.mjs test/summarize.test.mjs
 
 ### Task 5: Extend quality audit before/after reporting
 
+**Status:** Partially implemented. `quality audit` reports project-learning distribution metrics. Reviewed-learning metrics are the next active edge and should account for `knowledge/projects-reviewed/` once finalization/promotion exists.
+
 **Files:**
 
 - Modify: `src/pipeline/quality-audit.ts`
 - Modify: `src/commands/quality-audit.ts`
 - Modify: `test/quality-audit.test.mjs`
 - Modify: `README.md`
-
 Steps:
 
 - [ ] Add optional `--jsonl` or `--issues no_project_learnings` filter only if needed for inspection.
@@ -293,10 +296,13 @@ AGENT_SESSION_DISTILLERY_ROOT=/tmp/asd-learning-after node dist/cli.js quality a
   - error resolution learning promotion
   - workflow/file-scoped learning promotion
   - process-only text rejection
-- Real 25-session audit shows `no_project_learnings` reduced from `10` to `<=6`, unless inspection proves those sessions truly lack durable project knowledge.
+  - same-turn verified-fix suppression
+  - priority-aware semantic deduplication for overlapping candidates
+  - OpenRouter review request/response validation
+  - gated review apply into `knowledge/projects-reviewed/`
+- A real high-count audit shows deterministic project learnings are reduced to a manageable distribution, then LLM review/apply reduces them further into high-precision durable statements.
+- No raw completion blocks, conversational scaffold prefixes, markdown-heavy summaries, or transient debug narration should appear in reviewed project learnings.
 - No increase in `process_chatter`, `wrapper_tags`, or `completion_as_next_step`.
-- `td` task logs before/after audit numbers and links changed files.
-
 ## Risks
 
 - False positives are worse than false negatives because they pollute project memory and make deletion look safer.

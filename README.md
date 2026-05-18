@@ -7,7 +7,7 @@ Standalone CLI for ingesting local Cursor agent transcripts into a durable runti
 - Node `22.x`
 - npm
 - Local Cursor transcript files on disk
-
+- Optional: `OPENROUTER_API_KEY` for LLM-gated project-learning review commands
 ## Install
 
 ```bash
@@ -69,15 +69,15 @@ Important directories:
 - `ledger/` — SQLite lifecycle state and operational history
 - `staging/<session-id>/` — parsed and reduced intermediates
 - `summaries/by-session/<session-id>/` — `summary.json` and `summary.md`
-- `knowledge/projects/<project-key>/` — project learning JSONL
+- `knowledge/projects/<project-key>/` — deterministic project-learning candidate JSONL
+- `knowledge/projects-reviewed/<project-key>/` — LLM-reviewed project learnings applied as a non-mutating sidecar
 - `knowledge/user/operator/` — user learning JSONL
 - `sources/manifests/` — immutable provenance manifests
 - `reviews/` — review queue runtime path
 - `archives/` — archive runtime path
 - `deletes/receipts/` — per-session retention receipts
 - `deletes/tombstones/` — explicit deletion apply tombstones
-- `reports/` — retention readiness reports
-
+- `reports/` — retention, audit, and LLM learning-review reports
 ## Real Regression Fixtures
 
 The repo also carries a small real-session regression corpus under
@@ -146,8 +146,25 @@ node dist/cli.js quality audit --limit 100
 ```
 
 The audit reports deletion-readiness counts, blocked reasons, issue counts,
-recommendations, knowledge artifact presence, and the worst sessions by
-deterministic output-quality checks.
+recommendations, deterministic project-learning distribution metrics, knowledge
+artifact presence, and the worst sessions by deterministic output-quality checks.
+
+Review deterministic project learnings with an OpenRouter memory-lint sidecar:
+
+```bash
+OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --model openai/gpt-5-nano
+OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --limit 25 --max-total-learnings 100
+```
+
+This writes `reports/llm-learning-review.jsonl`. Individual session failures are recorded as rejected review entries so a batch can continue.
+
+Apply the LLM review into a separate reviewed namespace:
+
+```bash
+node dist/cli.js quality apply-learning-review
+```
+
+This writes `knowledge/projects-reviewed/` and `reports/llm-learning-review-apply.json` without mutating `knowledge/projects/`. The apply step keeps only durable keep/rewrite verdicts that pass strict post-validation.
 
 ## Retention Model
 
