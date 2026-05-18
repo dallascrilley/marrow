@@ -106,3 +106,12 @@ retention workflows.
   status: validated
   validated_on: 2026-05-18
   proof: test/vault-push-unit.test.mjs and test/integration/vault-push.test.mjs
+
+- id: adapter-base-contract
+  feature: Generic adapter helpers live in src/adapters/_common/ (hash, fs, jsonl, text-extract) and the Cursor adapter rewires to import them with zero behaviour change.
+  test: Run `ingest backfill --source cursor` against the live-regression fixture on the refactored branch and on main; diff the runtime trees. Differences must be limited to wall-clock timestamps and fixture-HOME paths.
+  proof_required: Side-by-side diff of pre- and post-refactor runtime trees showing byte-identical summaries/knowledge content; `npm test` 97/97 passing.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-18
+  proof: /tmp/agent-session-distillery/2026-05-18_f1a-adapter-base-contract/SUMMARY.md
