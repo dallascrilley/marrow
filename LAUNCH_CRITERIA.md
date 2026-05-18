@@ -53,9 +53,9 @@ retention workflows.
   test: Run `node dist/cli.js quality audit --limit 100` against a sandbox with live-regression fixtures.
   proof_required: Audit output showing deletion-readiness counts, issue counts, recommendations, learning distribution metrics, and worst-session quality checks.
   proof_level: B
-  status: blocking
-  validated_on: null
-  proof: null
+  status: validated
+  validated_on: 2026-05-18
+  proof: /tmp/agent-session-distillery/2026-05-18_quality-audit/SUMMARY.md
 
 - id: memory-export-reviewed
   feature: Reviewed memory records can be exported for downstream wiki ingestion without mutating deterministic project-learning originals.
