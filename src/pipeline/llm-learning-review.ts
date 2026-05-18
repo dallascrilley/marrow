@@ -1,9 +1,16 @@
+import { createHash } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+
 import type { Learning } from "../models/canonical.js";
 import { learningSchema } from "../models/canonical.js";
 
 export const defaultOpenRouterLearningReviewModel = "openai/gpt-5-nano";
 export const openRouterApiKeyEnvVar = "OPENROUTER_API_KEY";
 export const openRouterModelEnvVar = "OPENROUTER_MODEL";
+export const learningReviewCacheSchemaVersion = "llm-learning-review-cache-v1";
+export const learningReviewPromptVersion = "llm-learning-review-prompt-v1";
+export const learningReviewValidatorVersion = "llm-learning-review-validator-v1";
 
 export type LearningReviewVerdict = "keep" | "reject" | "rewrite";
 export type LearningReviewDurability =
@@ -30,11 +37,40 @@ type FetchLike = typeof fetch;
 
 export async function reviewLearningWithOpenRouter(input: {
 	apiKey?: string | undefined;
+	cacheDir?: string | undefined;
 	fetchImpl?: FetchLike | undefined;
 	learning: Learning;
 	model?: string | undefined;
+	noCache?: boolean | undefined;
 	projectKey: string;
+	refreshLlm?: boolean | undefined;
 }): Promise<LearningReviewResult> {
+	const model =
+		input.model ??
+		process.env[openRouterModelEnvVar] ??
+		defaultOpenRouterLearningReviewModel;
+	const learning = learningSchema.parse(input.learning);
+	const cachePath =
+		input.cacheDir === undefined
+			? undefined
+			: getLearningReviewCachePath({
+					cacheDir: input.cacheDir,
+					learning,
+					model,
+					projectKey: input.projectKey,
+				});
+
+	if (
+		cachePath !== undefined &&
+		input.noCache !== true &&
+		input.refreshLlm !== true
+	) {
+		const cached = await readCachedLearningReview(cachePath);
+		if (cached !== undefined) {
+			return cached;
+		}
+	}
+
 	const apiKey = input.apiKey ?? process.env[openRouterApiKeyEnvVar];
 	if (apiKey === undefined || apiKey.trim().length === 0) {
 		throw new Error(
@@ -42,12 +78,7 @@ export async function reviewLearningWithOpenRouter(input: {
 		);
 	}
 
-	const model =
-		input.model ??
-		process.env[openRouterModelEnvVar] ??
-		defaultOpenRouterLearningReviewModel;
 	const fetchImpl = input.fetchImpl ?? fetch;
-	const learning = learningSchema.parse(input.learning);
 	const abortController = new AbortController();
 	const timeout = setTimeout(() => abortController.abort(), 30_000);
 	let response: Response;
@@ -105,15 +136,23 @@ export async function reviewLearningWithOpenRouter(input: {
 	};
 	const content = extractReviewContent(payload);
 
-	return parseLearningReview(content);
+	const review = parseLearningReview(content);
+	if (cachePath !== undefined && input.noCache !== true) {
+		await writeCachedLearningReview(cachePath, review);
+	}
+
+	return review;
 }
 
 export async function reviewProjectLearningsWithOpenRouter(input: {
 	apiKey?: string | undefined;
+	cacheDir?: string | undefined;
 	fetchImpl?: FetchLike | undefined;
 	learnings: readonly Learning[];
 	model?: string | undefined;
+	noCache?: boolean | undefined;
 	projectKey: string;
+	refreshLlm?: boolean | undefined;
 }): Promise<ReviewedLearning[]> {
 	const reviewed: ReviewedLearning[] = [];
 	for (const learning of input.learnings) {
@@ -121,10 +160,13 @@ export async function reviewProjectLearningsWithOpenRouter(input: {
 			learning,
 			review: await reviewLearningWithOpenRouter({
 				apiKey: input.apiKey,
+				cacheDir: input.cacheDir,
 				fetchImpl: input.fetchImpl,
 				learning,
 				model: input.model,
+				noCache: input.noCache,
 				projectKey: input.projectKey,
+				refreshLlm: input.refreshLlm,
 			}),
 		});
 	}
@@ -146,6 +188,78 @@ function buildLearningReviewSystemPrompt(): string {
 		"Reject generic completion summaries whose only durable fact is that work was completed or verified.",
 		"Use keep=false for reject; use keep=true for keep or rewrite.",
 	].join("\n");
+}
+
+export function buildLearningReviewCacheKey(input: {
+	learning: Learning;
+	model: string;
+	projectKey: string;
+}): string {
+	const learning = learningSchema.parse(input.learning);
+	return sha256Hex(
+		stableStringify({
+			cache_schema_version: learningReviewCacheSchemaVersion,
+			evidence: learning.evidence,
+			kind: learning.kind,
+			learning_id: learning.learning_id,
+			model: input.model,
+			project_key: input.projectKey,
+			prompt_version: learningReviewPromptVersion,
+			source_refs: learning.source_refs,
+			statement: learning.statement,
+			validator_version: learningReviewValidatorVersion,
+		}),
+	);
+}
+
+function getLearningReviewCachePath(input: {
+	cacheDir: string;
+	learning: Learning;
+	model: string;
+	projectKey: string;
+}): string {
+	return join(input.cacheDir, `${buildLearningReviewCacheKey(input)}.json`);
+}
+
+async function readCachedLearningReview(
+	cachePath: string,
+): Promise<LearningReviewResult | undefined> {
+	try {
+		const contents = await readFile(cachePath, "utf8");
+		return parseLearningReview(contents);
+	} catch {
+		return undefined;
+	}
+}
+
+async function writeCachedLearningReview(
+	cachePath: string,
+	review: LearningReviewResult,
+): Promise<void> {
+	await mkdir(dirname(cachePath), { recursive: true });
+	const tempPath = `${cachePath}.${process.pid}.${Date.now()}.tmp`;
+	await writeFile(tempPath, `${JSON.stringify(review, null, 2)}\n`, "utf8");
+	await rename(tempPath, cachePath);
+}
+
+function sha256Hex(input: string): string {
+	return createHash("sha256").update(input).digest("hex");
+}
+
+function stableStringify(value: unknown): string {
+	if (value === null || typeof value !== "object") {
+		return JSON.stringify(value);
+	}
+
+	if (Array.isArray(value)) {
+		return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
+	}
+
+	const record = value as Record<string, unknown>;
+	return `{${Object.keys(record)
+		.sort()
+		.map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+		.join(",")}}`;
 }
 
 function extractReviewContent(payload: {
