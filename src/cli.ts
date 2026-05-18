@@ -9,6 +9,7 @@ import { executeExplain } from "./commands/explain.js";
 import { executeIngestBackfill } from "./commands/ingest-backfill.js";
 import { executeIngestSync } from "./commands/ingest-sync.js";
 import { executeMemoryExportWiki } from "./commands/memory-export-wiki.js";
+import { executeMemoryPushWiki } from "./commands/memory-push-wiki.js";
 import { executeQualityAudit } from "./commands/quality-audit.js";
 import { executeQualityApplyLearningReview } from "./commands/quality-apply-learning-review.js";
 import { executeQualityReviewLearnings } from "./commands/quality-review-learnings.js";
@@ -116,6 +117,11 @@ const commandTree: Record<string, CommandDefinition> = {
 			"export-wiki": {
 				description: "Write reviewed-memory JSONL for the LLM wiki importer.",
 				execute: executeMemoryExportWiki,
+			},
+			"push-wiki": {
+				description:
+					"Push reviewed-memory records into the personal vault as Obsidian-shaped pages.",
+				execute: executeMemoryPushWiki,
 			},
 		},
 	},

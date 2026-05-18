@@ -97,3 +97,12 @@ retention workflows.
   status: validated
   validated_on: 2026-05-18
   proof: docs/research/vault-push-source-strategy.md
+
+- id: vault-push-phase-1
+  feature: asd can push reviewed-memory records into the personal vault as Obsidian-shaped pages, scoped to wiki/projects/<key>/asd-learnings/.
+  test: Against a fixture vault dir, run `node dist/cli.js memory push-wiki`. Verify (a) one page per unique record id, (b) rerun is a no-op via the manifest skip, (c) `--no-overwrite` preserves manual edits, (d) vault path missing exits 0 with a notice, (e) only the asd-learnings subtree is touched.
+  proof_required: Unit tests plus integration test suite passing under `npm test`; live end-to-end run against a fixture vault dir.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-18
+  proof: test/vault-push-unit.test.mjs and test/integration/vault-push.test.mjs
