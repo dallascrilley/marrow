@@ -124,3 +124,12 @@ retention workflows.
   status: validated
   validated_on: 2026-05-18
   proof: docs/research/claude-code-source-strategy.md
+
+- id: claude-code-adapter
+  feature: asd ingests local Claude Code transcripts via `ingest backfill --source claude-code` end-to-end through every pipeline phase.
+  test: Run `node dist/cli.js ingest backfill --source claude-code` against the smoke fixture at test/fixtures/claude-code/projects/. Verify at least one session is discovered, parsed, summarised, has a learning extracted, and is archived with a deletion candidate state.
+  proof_required: Unit tests (workspace-map, discover, parse) plus integration test (ingest-backfill via CLI subprocess) passing under `npm test`; live end-to-end run against the fixture HOME.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-18
+  proof: /tmp/agent-session-distillery/2026-05-18_f1c-claude-code-adapter/SUMMARY.md
