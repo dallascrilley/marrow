@@ -8,9 +8,10 @@ import { executeDeleteCandidates } from "./commands/delete-candidates.js";
 import { executeExplain } from "./commands/explain.js";
 import { executeIngestBackfill } from "./commands/ingest-backfill.js";
 import { executeIngestSync } from "./commands/ingest-sync.js";
+import { executeMemoryExportWiki } from "./commands/memory-export-wiki.js";
 import { executeQualityAudit } from "./commands/quality-audit.js";
-import { executeQualityReviewLearnings } from "./commands/quality-review-learnings.js";
 import { executeQualityApplyLearningReview } from "./commands/quality-apply-learning-review.js";
+import { executeQualityReviewLearnings } from "./commands/quality-review-learnings.js";
 import { executeReviewQueue } from "./commands/review-queue.js";
 import { executeReviewShow } from "./commands/review-show.js";
 import { executeStats } from "./commands/stats.js";
@@ -106,6 +107,15 @@ const commandTree: Record<string, CommandDefinition> = {
 				description:
 					"Dry-run deletion apply by default; pass --apply to mark candidates deleted.",
 				execute: async (context) => withLedger(context, executeDeleteApply),
+			},
+		},
+	},
+	memory: {
+		description: "Export reviewed memory records for downstream systems.",
+		subcommands: {
+			"export-wiki": {
+				description: "Write reviewed-memory JSONL for the LLM wiki importer.",
+				execute: executeMemoryExportWiki,
 			},
 		},
 	},

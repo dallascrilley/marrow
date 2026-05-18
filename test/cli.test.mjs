@@ -40,6 +40,7 @@ test("asd --help lists every Task 1 command", () => {
 		"delete candidates",
 		"delete apply",
 		"search",
+		"memory export-wiki",
 		"stats",
 		"explain",
 	];
