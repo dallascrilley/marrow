@@ -190,6 +190,46 @@ occurred, and the wiki export path.
 
 Wiki export contract: [`docs/wiki-memory-export-contract.md`](docs/wiki-memory-export-contract.md)
 
+## Push to Vault
+
+`memory push-wiki` reads the `asd.wiki_memory.v1` JSONL export and writes one
+Obsidian-shaped markdown page per record into a scoped subtree of the personal
+vault. Pages are atomic-written and tracked in a per-project manifest.
+
+```bash
+# Write to ~/vault (or $ASD_VAULT_ROOT) from the most recent JSONL export.
+node dist/cli.js memory push-wiki
+
+# Re-run export-wiki first, then push.
+node dist/cli.js memory push-wiki --refresh
+
+# Target a non-default vault.
+node dist/cli.js memory push-wiki --vault /path/to/vault
+
+# Preserve manual edits to asd-authored pages.
+node dist/cli.js memory push-wiki --no-overwrite
+```
+
+Output layout, per project:
+
+- `<vault>/wiki/projects/<project-key>/asd-learnings/<page-id>.md` — one page per record.
+- `<vault>/wiki/projects/<project-key>/asd-learnings/_asd-manifest.json` — asd-owned manifest.
+
+asd writes **only** into that subtree. It never touches `hot.md`, `index.md`,
+`log.md`, `wiki/sources/`, `wiki/entities/`, `wiki/concepts/`, any `_index.md`,
+or `.raw/.manifest.json`. The next vault session's normal autolink / lint flow
+picks up new pages through the same mechanism it uses for any other new file
+under `wiki/`.
+
+If the vault path does not exist, the command prints a "vault not present"
+notice and exits 0 — safe to schedule under launchd / cron.
+
+Design and contract:
+
+- [`docs/plans/2026-05-18-vault-push-integration.md`](docs/plans/2026-05-18-vault-push-integration.md)
+- [`docs/research/vault-push-source-strategy.md`](docs/research/vault-push-source-strategy.md)
+- [`docs/claude-md-amendment-draft.md`](docs/claude-md-amendment-draft.md) — the global CLAUDE.md carve-out that this command relies on.
+
 ## Retention Model
 
 The current lifecycle is:
