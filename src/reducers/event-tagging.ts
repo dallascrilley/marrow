@@ -7,12 +7,29 @@ const decisionPatterns = [
   /\bchose to\b/i,
   /\bgoing with\b/i,
   /\bopted to\b/i,
-  /\bkept\b.+\bfor now\b/i
+  /\bkept\b.+\bfor now\b/i,
+  /\brecommend(?:ed|ation)?\b/i,
+  /\bbest (?:default|choice|option|approach)\b/i,
+  /\btop (?:pick|choice|recommendation|candidate)\b/i,
+  /\b(?:winner|preferred|favored)\b/i,
+  /\b(?:chose|selected|picked)\b.+\bover\b/i,
+  /\bgo with\b/i,
+  /\b(?:should use|prefer)\b.+\bfor\b/i,
+  /\barchitecture decision\b/i,
+  /\bwe (?:will|should|could) use\b/i,
+  /\bthe approach (?:is|will be)\b/i,
+  /\b(?:v\d|version \d).+\b(?:epic|roadmap|milestone|plan)\b/i,
+  /\b(?:create|write|draft|produce)\b.+\bspec(?:ification)?\b/i,
+  /\b(?:design|approach).+\bfor\b.+\bis\b/i,
+  /\bconclusion:?\b/i,
+  /\b(?:verdict|outcome|result).+\b(?:is|was)\b/i,
+  /\b(?:ranking|comparison|versus|vs\.?)\b/i
 ] as const;
 
 const failurePatterns = [
   /\bfailed\b/i,
-  /\berror\b/i,
+  /\berror\b.+(?:\b(?:occurred|thrown|returned|found|detected|encountered|prevented|stopped|blocked|caused|in)\b|:\s*\w+)/i,
+  /\b(?:fatal|critical|uncaught)\s+error\b/i,
   /\bexception\b/i,
   /\btimed out\b/i,
   /\bunable to\b/i,
@@ -35,19 +52,24 @@ const nextStepPatterns = [
   /\bnext step\b/i,
   /\bnext i(?:'|’)ll\b/i,
   /\bstill need to\b/i,
-  /\bremaining\b/i,
+  /\bremaining (?:work|task|issue|step|item)s?\b/i,
   /\bleft to do\b/i,
-  /\bfollow-?up\b/i
+  /\bfollow-?up (?:needed|required|is|will|task|item|step)s?\b/i
 ] as const;
 
 const verificationCommandPattern =
-  /^(?:npm(?: run)? build|npm test|pnpm(?: run)? build|pnpm test|yarn build|yarn test|bun test|cargo test|go test|python(?:3)? -m pytest|uv run pytest)\b/i;
+  /^(?:\.\/[\w./-]+|npm(?: run)? build|npm test|pnpm(?: run)? build|pnpm test|yarn build|yarn test|bun test|cargo test|go test|python(?:3)? -m pytest|uv run pytest)\b/i;
 const verificationTextPatterns = [
   /\bverified\b/i,
   /\bconfirmed\b/i,
   /\btests? pass(?:ed)?\b/i,
   /\bbuild succeeded\b/i,
   /\ball checks passed\b/i
+] as const;
+const noisyWrapperPatterns = [
+  /<attached_files>/i,
+  /<code_selection\b/i,
+  /<plugin_info\b/i
 ] as const;
 
 export function tagTurnEvents(turns: GroupedTurn[]): Event[] {
@@ -128,11 +150,27 @@ function createPatternEvent(
     return null;
   }
 
-  if (type === "decision" && record.kind !== "assistant_message") {
+  if (noisyWrapperPatterns.some((pattern) => pattern.test(text))) {
     return null;
   }
 
-  if (type === "verification" && record.kind !== "assistant_message") {
+  if (
+    (type === "decision" || type === "fix" || type === "next_step" || type === "verification") &&
+    record.kind !== "assistant_message"
+  ) {
+    return null;
+  }
+
+  if (type === "next_step" && looksLikeCompletedOutcome(text)) {
+    return null;
+  }
+
+  if (
+    type === "failure" &&
+    record.kind !== "assistant_message" &&
+    record.kind !== "tool_result_stub" &&
+    record.kind !== "tool_use_stub"
+  ) {
     return null;
   }
 
@@ -206,11 +244,18 @@ function extractVerificationCommand(record: GroupedTurn["records"][number]): str
 function summarizeText(text: string): string {
   const normalized = text.replace(/\s+/g, " ").trim();
 
-  if (normalized.length <= 160) {
+  if (normalized.length <= 240) {
     return normalized;
   }
 
-  return `${normalized.slice(0, 157)}...`;
+  return `${normalized.slice(0, 237)}...`;
+}
+
+function looksLikeCompletedOutcome(text: string): boolean {
+  return (
+    /\b(?:done|completed|implemented|fixed|resolved|merged|pushed)\b/i.test(text) &&
+    /\b(?:verified|tests? pass(?:ed)?|all checks passed|0 failures)\b/i.test(text)
+  );
 }
 
 function inferConfidence(type: Event["type"]): Event["confidence"] {

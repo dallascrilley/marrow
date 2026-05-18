@@ -749,6 +749,7 @@ export function listRunHistory(
 }
 
 export function getOperationalStats(database: DatabaseSync): {
+  blockedReasons: Record<string, number>;
   deletionCandidates: Record<string, number>;
   reviewQueue: Record<string, number>;
   sessionsByLifecycle: Record<string, number>;
@@ -775,8 +776,17 @@ export function getOperationalStats(database: DatabaseSync): {
        GROUP BY candidate_state`
     )
     .all() as Array<Record<string, unknown>>;
+  const blockedReasonRows = database
+    .prepare(
+      `SELECT reason AS state, COUNT(*) AS total
+       FROM deletion_candidates
+       WHERE safe_to_delete = 0
+       GROUP BY reason`
+    )
+    .all() as Array<Record<string, unknown>>;
 
   return {
+    blockedReasons: toCountMap(blockedReasonRows),
     deletionCandidates: toCountMap(deletionRows),
     reviewQueue: toCountMap(reviewRows),
     sessionsByLifecycle: toCountMap(lifecycleRows),
