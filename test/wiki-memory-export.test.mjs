@@ -114,3 +114,90 @@ test("memory export-wiki writes stable reviewed-memory JSONL from project learni
 		await rm(sandbox, { force: true, recursive: true });
 	}
 });
+
+test("memory export-wiki prefers reviewed project learnings when present", async () => {
+	const sandbox = await mkdtemp(join(tmpdir(), "asd-wiki-reviewed-export-"));
+	const runtimeRoot = join(sandbox, "runtime-root");
+
+	try {
+		const deterministicDir = join(
+			runtimeRoot,
+			"knowledge",
+			"projects",
+			"agent-session-distillery",
+		);
+		const reviewedDir = join(
+			runtimeRoot,
+			"knowledge",
+			"projects-reviewed",
+			"agent-session-distillery",
+		);
+		await mkdir(deterministicDir, { recursive: true });
+		await mkdir(reviewedDir, { recursive: true });
+		const baseLearning = {
+			learning_id: "session-1:project:decision:event-1",
+			scope: "project",
+			scope_key: "agent-session-distillery",
+			kind: "decision",
+			title: "Keep the wiki import boundary narrow",
+			statement: "Use deterministic project learning only as fallback.",
+			evidence: [
+				"The integration design selected a hybrid export/import boundary.",
+			],
+			confidence: "high",
+			promotion_basis:
+				"Explicit implementation decision captured during integration planning.",
+			source_refs: [
+				{
+					source_path: "/tmp/session-1.jsonl",
+					source_hash: "sha256:session-1",
+					session_id: "session-1",
+					turn_id: "turn-1",
+					event_id: "event-1",
+					line: 42,
+				},
+			],
+		};
+		await writeFile(
+			join(deterministicDir, "session-1.jsonl"),
+			`${JSON.stringify(baseLearning)}\n`,
+			"utf8",
+		);
+		await writeFile(
+			join(reviewedDir, "session-1.jsonl"),
+			`${JSON.stringify({
+				...baseLearning,
+				statement:
+					"Use reviewed project learnings for wiki export when they exist.",
+				promotion_basis:
+					"Explicit implementation decision captured during integration planning. LLM-reviewed with rewrite verdict.",
+			})}\n`,
+			"utf8",
+		);
+
+		const result = runCli(["memory", "export-wiki"], {
+			[runtimeOverrideEnvVar]: runtimeRoot,
+		});
+
+		assert.equal(result.status, 0, result.stderr);
+		const exportPath = join(
+			runtimeRoot,
+			"exports",
+			"wiki-memory",
+			"reviewed-memory.jsonl",
+		);
+		const [line] = (await readFile(exportPath, "utf8")).trim().split("\n");
+		const record = JSON.parse(line);
+		assert.equal(
+			record.body,
+			"Use reviewed project learnings for wiki export when they exist.",
+		);
+		assert.deepEqual(record.review, {
+			verdict: "keep",
+			confidence: "high",
+			source: "reviewed-export",
+		});
+	} finally {
+		await rm(sandbox, { force: true, recursive: true });
+	}
+});

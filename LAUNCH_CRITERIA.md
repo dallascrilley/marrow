@@ -62,9 +62,9 @@ retention workflows.
   test: Run `node dist/cli.js quality apply-learning-review`, then `node dist/cli.js memory export-wiki` against a sandbox with reviewed project learnings.
   proof_required: Command output plus generated `knowledge/projects-reviewed/` and wiki export JSONL artifact paths.
   proof_level: B
-  status: blocking
-  validated_on: null
-  proof: null
+  status: validated
+  validated_on: 2026-05-18
+  proof: /tmp/agent-session-distillery/2026-05-18_reviewed-memory-export/SUMMARY.md
 
 ## P1 - Launch-week polish
 

@@ -27,7 +27,7 @@ export type WikiMemoryRecord = {
 	review: {
 		verdict: "keep";
 		confidence: Learning["confidence"];
-		source: "deterministic-export";
+		source: "deterministic-export" | "reviewed-export";
 	};
 	created_at: string;
 };
@@ -54,9 +54,13 @@ export async function executeMemoryExportWiki(
 }
 
 export async function buildWikiMemoryExport(): Promise<WikiMemoryRecord[]> {
-	const projectRoot = getRuntimePath("knowledgeProjects");
+	const reviewedRoot = join(getRuntimePath("root"), "knowledge", "projects-reviewed");
+	const projectRoot =
+		(await directoryExists(reviewedRoot)) ? reviewedRoot : getRuntimePath("knowledgeProjects");
 	const projectDirs = await readDirectoryNames(projectRoot);
 	const records: WikiMemoryRecord[] = [];
+	const reviewSource =
+		projectRoot === reviewedRoot ? "reviewed-export" : "deterministic-export";
 
 	for (const projectKey of projectDirs.sort()) {
 		const projectDir = join(projectRoot, projectKey);
@@ -69,7 +73,7 @@ export async function buildWikiMemoryExport(): Promise<WikiMemoryRecord[]> {
 			for (const value of lines) {
 				const learning = learningSchema.parse(value);
 				if (learning.scope !== "project") continue;
-				records.push(toWikiMemoryRecord(learning));
+				records.push(toWikiMemoryRecord(learning, reviewSource));
 			}
 		}
 	}
@@ -78,7 +82,10 @@ export async function buildWikiMemoryExport(): Promise<WikiMemoryRecord[]> {
 	return records;
 }
 
-function toWikiMemoryRecord(learning: Learning): WikiMemoryRecord {
+function toWikiMemoryRecord(
+	learning: Learning,
+	reviewSource: WikiMemoryRecord["review"]["source"],
+): WikiMemoryRecord {
 	return {
 		schema_version: wikiMemorySchemaVersion,
 		id: stableRecordId(learning),
@@ -98,7 +105,7 @@ function toWikiMemoryRecord(learning: Learning): WikiMemoryRecord {
 		review: {
 			verdict: "keep",
 			confidence: learning.confidence,
-			source: "deterministic-export",
+			source: reviewSource,
 		},
 		created_at: inferCreatedAt(learning),
 	};
@@ -128,6 +135,16 @@ async function readDirectoryNames(path: string): Promise<string[]> {
 		return await readdir(path);
 	} catch (error) {
 		if (isNodeError(error) && error.code === "ENOENT") return [];
+		throw error;
+	}
+}
+
+async function directoryExists(path: string): Promise<boolean> {
+	try {
+		const entries = await readdir(path);
+		return entries.length > 0;
+	} catch (error) {
+		if (isNodeError(error) && error.code === "ENOENT") return false;
 		throw error;
 	}
 }
