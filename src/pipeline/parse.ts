@@ -2,7 +2,13 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 
+import { parseClaudeCodeTranscript } from "../adapters/claude-code/parse-transcript.js";
 import { parseCursorTranscript } from "../adapters/cursor/parse-transcript.js";
+import type {
+  ParseTranscriptOptions,
+  ParseTranscriptResult,
+  TranscriptRecord
+} from "../adapters/_common/intermediate.js";
 import type { CursorTranscriptRecord } from "../adapters/cursor/intermediate.js";
 import {
   getPhaseCheckpoint,
@@ -43,7 +49,7 @@ export async function runParsePhase(input: {
   }
 
   try {
-    const parsed = await parseCursorTranscript({
+    const parsed = await parseBySourceTool(input.sourceSession.source_tool, {
       sourceHash: input.sourceSession.source_hash,
       sourcePath: input.sourceSession.source_path
     });
@@ -129,4 +135,18 @@ function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {
     "code" in error &&
     (error as NodeJS.ErrnoException).code === "ENOENT"
   );
+}
+
+async function parseBySourceTool(
+  sourceTool: string,
+  options: ParseTranscriptOptions
+): Promise<ParseTranscriptResult> {
+  switch (sourceTool) {
+    case "cursor":
+      return parseCursorTranscript(options);
+    case "claude-code":
+      return parseClaudeCodeTranscript(options);
+    default:
+      throw new Error(`Unsupported source_tool: ${sourceTool}`);
+  }
 }

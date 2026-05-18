@@ -1,11 +1,14 @@
 import type { DatabaseSync } from "node:sqlite";
 import { basename, extname } from "node:path";
 
+import { discoverClaudeCodeInputs } from "../adapters/claude-code/discover.js";
 import { discoverCursorInputs } from "../adapters/cursor/discover.js";
+import type { TranscriptDiscovery } from "../adapters/_common/intermediate.js";
 import { upsertSourceSession, type UpsertSourceSessionResult } from "../db/ledger.js";
 import type { SourceSession } from "../models/canonical.js";
 
-export type SupportedSource = "cursor";
+export const supportedSources = ["cursor", "claude-code"] as const;
+export type SupportedSource = (typeof supportedSources)[number];
 
 export type DiscoverPhaseInput = {
   database: DatabaseSync;
@@ -16,7 +19,7 @@ export type DiscoverPhaseInput = {
 };
 
 export type DiscoveredSourceSession = {
-  discovery: Awaited<ReturnType<typeof discoverCursorInputs>>["transcripts"][number];
+  discovery: TranscriptDiscovery;
   ledger: UpsertSourceSessionResult;
 };
 
@@ -28,11 +31,7 @@ export type DiscoverPhaseResult = {
 };
 
 export async function runDiscoverPhase(input: DiscoverPhaseInput): Promise<DiscoverPhaseResult> {
-  if (input.source !== "cursor") {
-    throw new Error(`Unsupported source: ${input.source}`);
-  }
-
-  const discovery = await discoverCursorInputs();
+  const discovery = await runAdapterDiscovery(input.source);
   const sinceTimestamp = input.since ? Date.parse(input.since) : Number.NEGATIVE_INFINITY;
 
   if (Number.isNaN(sinceTimestamp)) {
@@ -49,7 +48,7 @@ export async function runDiscoverPhase(input: DiscoverPhaseInput): Promise<Disco
   const selected: DiscoveredSourceSession[] = [];
 
   for (const transcript of transcripts) {
-    const sourceSession = toSourceSession(transcript);
+    const sourceSession = toSourceSession(transcript, input.source);
     const ledger = upsertSourceSession(input.database, sourceSession);
 
     if (input.onlyNewOrChanged && !ledger.sourceChanged && ledger.sourceSession.content_revision > 1) {
@@ -83,9 +82,7 @@ export async function runDiscoverPhase(input: DiscoverPhaseInput): Promise<Disco
   };
 }
 
-function toSourceSession(
-  transcript: Awaited<ReturnType<typeof discoverCursorInputs>>["transcripts"][number]
-): SourceSession {
+function toSourceSession(transcript: TranscriptDiscovery, source: SupportedSource): SourceSession {
   const sessionId = basename(transcript.sourcePath, extname(transcript.sourcePath));
 
   return {
@@ -97,9 +94,27 @@ function toSourceSession(
     source_format: transcript.sourceFormat,
     source_hash: transcript.sourceHash,
     source_path: transcript.sourcePath,
-    source_tool: "cursor",
+    source_tool: source,
     started_at: transcript.modifiedAt,
     updated_at: transcript.modifiedAt,
     workspace_path: transcript.workspacePath ?? transcript.workspaceSlug
   };
+}
+
+async function runAdapterDiscovery(source: SupportedSource): Promise<{ transcripts: readonly TranscriptDiscovery[] }> {
+  switch (source) {
+    case "cursor": {
+      const result = await discoverCursorInputs();
+      return { transcripts: result.transcripts };
+    }
+    case "claude-code": {
+      const result = await discoverClaudeCodeInputs();
+      return { transcripts: result.transcripts };
+    }
+    default: {
+      // Exhaustiveness check
+      const _exhaustive: never = source;
+      throw new Error(`Unsupported source: ${String(_exhaustive)}`);
+    }
+  }
 }

@@ -4,4 +4,7 @@ node_modules/
 !test/fixtures/cursor/transcripts/*.jsonl
 !test/fixtures/cursor/live-regression/
 !test/fixtures/cursor/live-regression/*.jsonl
+!test/fixtures/claude-code/projects/
+!test/fixtures/claude-code/projects/*/
+!test/fixtures/claude-code/projects/*/*.jsonl
 .todos/
