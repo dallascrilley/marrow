@@ -17,27 +17,27 @@ retention workflows.
   test: Run `npm install`, `npm run build`, and `node dist/cli.js --help` from a clean checkout.
   proof_required: Command transcript showing successful install, build, and help output.
   proof_level: B
-  status: blocking
-  validated_on: null
-  proof: null
+  status: validated
+  validated_on: 2026-05-18
+  proof: /tmp/agent-session-distillery/2026-05-18_first-run/SUMMARY.md
 
 - id: cursor-local-discovery
   feature: The CLI discovers local Cursor transcript files and workspace hints from the supported on-disk paths.
   test: Run a fixture-backed `node dist/cli.js ingest backfill --source cursor` with `HOME` and `AGENT_SESSION_DISTILLERY_ROOT` pointed at an isolated sandbox.
   proof_required: Command output plus runtime artifacts proving at least one transcript was discovered and attributed to a project key.
   proof_level: B
-  status: blocking
-  validated_on: null
-  proof: null
+  status: validated
+  validated_on: 2026-05-18
+  proof: /tmp/agent-session-distillery/2026-05-18_first-run/SUMMARY.md
 
 - id: ingest-review-explain
   feature: A discovered transcript can move through parse, reduce, summarize, extract, archive, review queue, and explain surfaces.
   test: Run fixture-backed ingest, then `node dist/cli.js review queue`, `node dist/cli.js review show <session-id>`, and `node dist/cli.js explain <session-id>`.
   proof_required: Command output and runtime paths for `summaries/by-session/<session-id>/`, `reviews/`, `archives/`, and `reports/`.
   proof_level: B
-  status: blocking
-  validated_on: null
-  proof: null
+  status: validated
+  validated_on: 2026-05-18
+  proof: /tmp/agent-session-distillery/2026-05-18_first-run/SUMMARY.md
 
 - id: deletion-readiness-safety
   feature: Deletion readiness is blocked unless summary, knowledge, manifest, and retention receipt artifacts exist.
