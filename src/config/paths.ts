@@ -16,7 +16,8 @@ const runtimePathSuffixes = {
   reports: "reports",
   reviews: "reviews",
   staging: "staging",
-  summaries: "summaries/by-session"
+  summaries: "summaries/by-session",
+  wikiMemoryExports: "exports/wiki-memory"
 } as const;
 
 export type RuntimePathName = keyof typeof runtimePathSuffixes;
