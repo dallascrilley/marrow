@@ -37,6 +37,7 @@ test("asd --help lists every Task 1 command", () => {
     "delete candidates",
     "delete apply",
     "search",
+    "memory export-wiki",
     "stats",
     "explain"
   ];
@@ -89,18 +90,18 @@ test("runtime-path creation is isolated by the root override", async () => {
     const beforeEntries = await readdir(sandboxBase);
     assert.deepEqual(beforeEntries, []);
 
-    const result = runCli(["review", "queue"], {
+    const result = runCli(["search", "alpha"], {
       [runtimeOverrideEnvVar]: runtimeRoot
     });
 
     assert.equal(result.status, 0, result.stderr);
 
-    const reviewsPath = join(runtimeRoot, "reviews");
-    const reviewsStats = await stat(reviewsPath);
-    assert.ok(reviewsStats.isDirectory());
+    const indexPath = join(runtimeRoot, "index");
+    const indexStats = await stat(indexPath);
+    assert.ok(indexStats.isDirectory());
 
     const runtimeEntries = await readdir(runtimeRoot);
-    assert.deepEqual(runtimeEntries, ["reviews"]);
+    assert.deepEqual(runtimeEntries, ["index"]);
 
     const sandboxEntries = await readdir(sandboxBase);
     assert.deepEqual(sandboxEntries, ["runtime-root"]);
