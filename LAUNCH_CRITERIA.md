@@ -88,3 +88,12 @@ retention workflows.
   status: validated
   validated_on: 2026-05-18
   proof: docs/research/background-agent-source-strategy.md
+
+- id: vault-push-research
+  feature: Vault push integration has a researched source strategy and a documented CLAUDE.md amendment draft before any code lands.
+  test: Read docs/research/vault-push-source-strategy.md and docs/claude-md-amendment-draft.md; verify the probe results match the current state of ~/vault and the amendment target line exists in ~/.claude/CLAUDE.md.
+  proof_required: Research note plus amendment draft, both committed.
+  proof_level: C
+  status: validated
+  validated_on: 2026-05-18
+  proof: docs/research/vault-push-source-strategy.md
