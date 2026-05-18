@@ -44,12 +44,14 @@ match, stop and reconcile manually — the global file has drifted since
 this draft was written.
 
 **Paste preservation note.** Both the anchor sentence above and the
-proposed replacement below contain em-dash characters (`—`, U+2014). If
-the paste path normalises punctuation (some terminals, some plaintext
-editors), the em dashes become two-hyphens (`--`) and the verification
-greps below will return zero matches. Paste through a Unicode-preserving
-path (e.g. `pbpaste`, the macOS clipboard, or a direct editor open of
-`~/.claude/CLAUDE.md`).
+proposed replacement below contain em-dash characters (`—`, U+2014). Some
+sources (an autocorrecting note app, a "smart punctuation" terminal) will
+normalise them to two-hyphens (`--`) at copy time, after which the
+verification greps below return zero matches. The safest path is to open
+this draft file directly in the same editor as `~/.claude/CLAUDE.md` and
+copy the block across — that way no intermediate transform touches the
+text. If the paste produced `--` instead of `—`, search for "Named
+exception" without the em dash to confirm and fix in place.
 
 ## Proposed replacement
 

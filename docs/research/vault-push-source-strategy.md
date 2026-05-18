@@ -27,8 +27,9 @@ new asd pages the same way it picks up any other new file under `wiki/`.
 
 ## Filesystem probe (2026-05-18)
 
-A direct probe of this machine confirms the chosen subtree is unused and
-the chosen layout matches an existing vault convention.
+A direct probe of this machine confirms the chosen subtree is unused.
+Single-level subdirectories under `projects/` are an established layout;
+the deeper two-level nesting is new but Obsidian-supported (see below).
 
 - `~/vault/wiki/projects/` — 14 flat project pages plus one subdir
   (`@zosmaai/` containing `pi-llm-wiki.md`). The existing hub page
@@ -112,6 +113,18 @@ pass discovers asd pages through the same mechanism it uses for any new
 file under `wiki/` — no special integration is required from the vault
 side.
 
+**Forward-looking F2-B requirement: em-dash sanitisation.** The
+`claude-obsidian:wiki-ingest` SKILL.md has an explicit "Never" rule:
+*"Use em dashes or `--` as punctuation."* asd-pushed pages will include
+record `title`, `body`, and `evidence` strings extracted from LLM-generated
+session content, which routinely contains em dashes. F2-B's page renderer
+must normalise both `—` (U+2014) and the two-hyphen `--` shorthand in
+those fields before writing, or asd will silently violate the vault
+convention on every push. Frontmatter and structural markdown (headers,
+list bullets) are author-controlled in F2-B's renderer and can be written
+em-dash-free by construction. Only the variable fields lifted from records
+need sanitisation.
+
 ## Atomic-write contract
 
 The follow-up `memory push-wiki` command will write each page via
@@ -128,7 +141,7 @@ and accepting the on-disk page as canonical.
 | Risk | Mitigation |
 |---|---|
 | `~/vault` missing on a fresh machine | `push-wiki` exits 0 with a "vault not present" notice. Launchd / cron does not pile up failure noise. |
-| Operator manually edits an asd-authored page | **Default behaviour does not detect operator edits.** `push-wiki` compares its newly-rendered output's `content_hash` to the manifest, not to the on-disk page. The next time asd's rendering changes (new evidence, schema bump, re-export), the manual edit is overwritten. F2-B ships a `--no-overwrite` flag which reads the on-disk page, compares its hash to the manifest, and skips when they diverge — preserving manual edits at the cost of suppressing legitimate asd updates. Operators who edit asd pages by hand should run with `--no-overwrite` or move the page out of the `asd-learnings/` subtree. |
+| Operator manually edits an asd-authored page | **Default behaviour does not detect operator edits.** `push-wiki` compares its newly-rendered output's `content_hash` to the manifest, not to the on-disk page. A re-run with no upstream source change is a no-op (same hash, manifest skip), so plain re-runs do not clobber edits. Any change that alters rendered output — new evidence, title/body revision, schema bump — produces a new hash and overwrites the edited page. F2-B ships a `--no-overwrite` flag which reads the on-disk page, compares its hash to the manifest, and skips when they diverge, preserving manual edits at the cost of suppressing legitimate asd updates. Operators who edit asd pages by hand should run with `--no-overwrite`. Moving the page out of the `asd-learnings/` subtree does not help: the manifest's recovery contract recreates the canonical page at the original path on the next push. |
 | Future vault-side tool moves or renames pages | `_asd-manifest.json` tolerates the named page being absent and recreates it on the next push. The manifest is the source of truth for "did I write this id"; the on-disk page is the source of truth for "what does the wiki currently say about this id". No known vault-side tool renames pages today; this row is a forward-looking guarantee, not a response to current behaviour. |
 | `project.key` contains `/` or `..` | Sanitiser strips path separators and leading dots; falls back to `unknown` if sanitisation empties the key. asd never writes outside `<vault>/wiki/projects/<sanitised>/asd-learnings/`. |
 | Dual writer race with a vault session running `wiki-ingest` | Containment: asd's subtree is disjoint from anything `wiki-ingest` writes. No file path is shared. |
