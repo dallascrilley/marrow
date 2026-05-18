@@ -38,11 +38,13 @@ By default the runtime lives at `~/.agent-session-distillery`. Override it with 
 AGENT_SESSION_DISTILLERY_ROOT=/tmp/asd-demo node dist/cli.js stats
 ```
 
-## Supported Cursor Sources
+## Supported Sources
 
-v1 supports only local Cursor data that is present on disk.
+Each adapter is selected with `--source <name>` on `ingest backfill` and `ingest sync`. Run multiple adapters back-to-back to grow the corpus.
 
-Transcript inputs:
+### Cursor (`--source cursor`)
+
+Local Cursor data only. Transcript inputs:
 
 - `~/.cursor/projects/<workspace-slug>/agent-transcripts/*.jsonl`
 - `~/.cursor/projects/<workspace-slug>/agent-transcripts/*.txt`
@@ -60,9 +62,17 @@ Optional Cursor support databases that improve attribution but are not required 
 - `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb`
 - `~/Library/Application Support/Cursor/User/workspaceStorage/*/state.vscdb`
 
-Out of scope for v1:
+Out of scope: Cursor background-agent chats. Cursor stores those remotely rather than in the local transcript tree this tool ingests; see [`docs/research/background-agent-source-strategy.md`](docs/research/background-agent-source-strategy.md).
 
-- Background-agent chats. Cursor stores those remotely rather than in the local transcript tree this tool ingests, so they are not part of the supported source surface yet.
+### Claude Code (`--source claude-code`)
+
+Local Claude Code data only. Transcript inputs:
+
+- `~/.claude/projects/<encoded-workspace>/<session-uuid>.jsonl`
+
+The `<encoded-workspace>` segment is the absolute workspace path with `/` replaced by `-` (the leading `/` also encodes to `-`). The adapter decodes it back to the real workspace path. No auxiliary stores are needed; everything Claude Code writes for a session lives in the file.
+
+Design and source-surface research: [`docs/research/claude-code-source-strategy.md`](docs/research/claude-code-source-strategy.md).
 
 ## Runtime Layout
 

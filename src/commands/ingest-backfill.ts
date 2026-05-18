@@ -94,12 +94,12 @@ export function parseIngestOptions(args: string[]): {
   limit?: number;
   resume: boolean;
   since?: string;
-  source: "cursor";
+  source: "cursor" | "claude-code";
 } {
   let limit: number | undefined;
   let resume = false;
   let since: string | undefined;
-  let source: "cursor" = "cursor";
+  let source: "cursor" | "claude-code" = "cursor";
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -111,7 +111,7 @@ export function parseIngestOptions(args: string[]): {
 
     if (arg === "--source") {
       const value = args[index + 1];
-      if (value !== "cursor") {
+      if (value !== "cursor" && value !== "claude-code") {
         throw new Error(`Unsupported --source value: ${value ?? "<missing>"}`);
       }
       source = value;
