@@ -244,6 +244,17 @@ test("retention blocks deletion until summary, learnings, manifest, and receipt 
 			);
 			assert.equal(knowledgeResult.project.path, expectedProjectPath);
 			assert.equal(knowledgeResult.user.path, expectedUserPath);
+			const firstProjectKnowledge = await readFile(expectedProjectPath, "utf8");
+			const firstUserKnowledge = await readFile(expectedUserPath, "utf8");
+			const secondKnowledgeResult = await writeKnowledgeArtifacts({
+				projectLearnings: learnings.project,
+				sessionId: sourceSession.session_id,
+				userLearnings: learnings.user,
+			});
+			assert.equal(secondKnowledgeResult.project.path, expectedProjectPath);
+			assert.equal(secondKnowledgeResult.user.path, expectedUserPath);
+			assert.equal(await readFile(expectedProjectPath, "utf8"), firstProjectKnowledge);
+			assert.equal(await readFile(expectedUserPath, "utf8"), firstUserKnowledge);
 
 			const receiptPath = getRetentionReceiptPath(sourceSession.session_id);
 			const manifestResult = await writeSessionManifest({

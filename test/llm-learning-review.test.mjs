@@ -1,8 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { sourceSessionFixture } from "../dist/models/canonical.js";
-import { reviewLearningWithOpenRouter } from "../dist/pipeline/llm-learning-review.js";
+import {
+	buildLearningReviewCacheKey,
+	reviewLearningWithOpenRouter,
+} from "../dist/pipeline/llm-learning-review.js";
 
 function learning(overrides = {}) {
 	return {
@@ -120,4 +126,120 @@ test("OpenRouter learning review rejects invalid JSON schema", async () => {
 		}),
 		/invalid verdict/,
 	);
+});
+
+test("OpenRouter learning review uses exact-input cache before fetching", async () => {
+	const cacheDir = await mkdtemp(join(tmpdir(), "asd-llm-review-cache-"));
+	const cachedReview = {
+		durability: "durable",
+		keep: true,
+		reason: "Cached durable project rule.",
+		statement: "Use cached review output for identical learning inputs.",
+		verdict: "keep",
+	};
+	const item = learning();
+	const cacheKey = buildLearningReviewCacheKey({
+		learning: item,
+		model: "openai/gpt-5-nano",
+		projectKey: "studio-tools",
+	});
+
+	try {
+		await writeFile(
+			join(cacheDir, `${cacheKey}.json`),
+			`${JSON.stringify(cachedReview)}\n`,
+			"utf8",
+		);
+		const fetchImpl = async () => {
+			throw new Error("fetch should not be called on cache hit");
+		};
+
+		const review = await reviewLearningWithOpenRouter({
+			apiKey: "test-key",
+			cacheDir,
+			fetchImpl,
+			learning: item,
+			model: "openai/gpt-5-nano",
+			projectKey: "studio-tools",
+		});
+
+		assert.deepEqual(review, cachedReview);
+	} finally {
+		await rm(cacheDir, { force: true, recursive: true });
+	}
+});
+
+test("OpenRouter learning review refresh bypasses cache and overwrites it", async () => {
+	const cacheDir = await mkdtemp(join(tmpdir(), "asd-llm-review-refresh-"));
+	const item = learning();
+	const cacheKey = buildLearningReviewCacheKey({
+		learning: item,
+		model: "openai/gpt-5-nano",
+		projectKey: "studio-tools",
+	});
+	const cachePath = join(cacheDir, `${cacheKey}.json`);
+	await writeFile(
+		cachePath,
+		`${JSON.stringify({
+			durability: "durable",
+			keep: true,
+			reason: "Old cached result.",
+			statement: "Use old cached result.",
+			verdict: "keep",
+		})}\n`,
+		"utf8",
+	);
+	let calls = 0;
+	const fetchImpl = async () => {
+		calls += 1;
+		return {
+			ok: true,
+			status: 200,
+			async json() {
+				return {
+					choices: [
+						{
+							message: {
+								content: JSON.stringify({
+									durability: "durable",
+									keep: true,
+									reason: "Fresh model result.",
+									statement: "Use fresh model review when refresh is requested.",
+									verdict: "rewrite",
+								}),
+							},
+						},
+					],
+				};
+			},
+			async text() {
+				return "";
+			},
+		};
+	};
+
+	try {
+		const review = await reviewLearningWithOpenRouter({
+			apiKey: "test-key",
+			cacheDir,
+			fetchImpl,
+			learning: item,
+			model: "openai/gpt-5-nano",
+			projectKey: "studio-tools",
+			refreshLlm: true,
+		});
+
+		assert.equal(calls, 1);
+		assert.equal(
+			review.statement,
+			"Use fresh model review when refresh is requested.",
+		);
+		const cached = JSON.parse(await readFile(cachePath, "utf8"));
+		assert.equal(
+			cached.statement,
+			"Use fresh model review when refresh is requested.",
+		);
+	} finally {
+		await rm(cacheDir, { force: true, recursive: true });
+	}
 });

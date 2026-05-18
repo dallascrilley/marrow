@@ -48,9 +48,16 @@ export async function executeQualityReviewLearnings(
 		let sessionReviews;
 		try {
 			sessionReviews = await reviewProjectLearningsWithOpenRouter({
+				cacheDir:
+					options.noCache === true
+						? undefined
+						: (options.cacheDir ??
+							join(getRuntimePath("root"), "cache", "llm-learning-review")),
 				learnings: selectedLearnings,
 				model: options.model,
+				noCache: options.noCache,
 				projectKey: session.project_key,
+				refreshLlm: options.refreshLlm,
 			});
 		} catch (error) {
 			for (const learning of selectedLearnings) {
@@ -103,6 +110,11 @@ export async function executeQualityReviewLearnings(
 		JSON.stringify(
 			{
 				count: reviewed.length,
+				cache:
+					options.noCache === true
+						? "disabled"
+						: (options.cacheDir ??
+							join(getRuntimePath("root"), "cache", "llm-learning-review")),
 				model:
 					options.model ?? process.env.OPENROUTER_MODEL ?? "openai/gpt-5-nano",
 				path: outputPath,
@@ -122,17 +134,23 @@ export async function executeQualityReviewLearnings(
 
 type ReviewLearningsOptions = {
 	limit?: number | undefined;
+	cacheDir?: string | undefined;
 	maxLearnings?: number | undefined;
 	maxTotalLearnings?: number | undefined;
 	model?: string | undefined;
+	noCache?: boolean | undefined;
+	refreshLlm?: boolean | undefined;
 };
 
 function parseOptions(args: readonly string[]): ReviewLearningsOptions {
 	return {
+		cacheDir: parseStringOption(args, "--cache-dir"),
 		limit: parseIntegerOption(args, "--limit"),
 		maxLearnings: parseIntegerOption(args, "--max-learnings"),
 		maxTotalLearnings: parseIntegerOption(args, "--max-total-learnings"),
 		model: parseStringOption(args, "--model"),
+		noCache: args.includes("--no-cache"),
+		refreshLlm: args.includes("--refresh-llm"),
 	};
 }
 

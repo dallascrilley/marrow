@@ -79,6 +79,12 @@ test("memory export-wiki writes stable reviewed-memory JSONL from project learni
 		);
 		const lines = (await readFile(exportPath, "utf8")).trim().split("\n");
 		assert.equal(lines.length, 1);
+		const firstExport = await readFile(exportPath, "utf8");
+		const rerun = runCli(["memory", "export-wiki"], {
+			[runtimeOverrideEnvVar]: runtimeRoot,
+		});
+		assert.equal(rerun.status, 0, rerun.stderr);
+		assert.equal(await readFile(exportPath, "utf8"), firstExport);
 
 		const record = JSON.parse(lines[0]);
 		assert.equal(record.schema_version, "asd.wiki_memory.v1");

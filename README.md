@@ -154,9 +154,11 @@ Review deterministic project learnings with an OpenRouter memory-lint sidecar:
 ```bash
 OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --model openai/gpt-5-nano
 OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --limit 25 --max-total-learnings 100
+OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --cache-dir /tmp/asd-review-cache
+OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --refresh-llm
 ```
 
-This writes `reports/llm-learning-review.jsonl`. Individual session failures are recorded as rejected review entries so a batch can continue.
+This writes `reports/llm-learning-review.jsonl`. LLM reviews are cached by exact learning/model/prompt/validator input under `cache/llm-learning-review/` by default; pass `--refresh-llm` to overwrite cached entries or `--no-cache` to bypass cache reads and writes. Individual session failures are recorded as rejected review entries so a batch can continue.
 
 Apply the LLM review into a separate reviewed namespace:
 
