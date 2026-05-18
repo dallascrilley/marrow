@@ -31,7 +31,8 @@
 
 ### Decision outcomes
 
-- Do not add a cheap LLM extraction stage yet. First fix deterministic reduction and add a real-session regression corpus.
+- Deterministic reduction and real-session regression fixtures are the base quality gate.
+- A later slice added an optional OpenRouter memory-lint sidecar for already-extracted project learnings; it reviews deterministic candidates but does not replace deterministic extraction or mutate canonical candidates.
 - Do not broaden deletion eligibility until summary and learning quality improve; otherwise the tool will make deletion look safer than it is.
 - Treat real-session fixtures and golden summaries as the primary evaluation surface for the next slice.
 
@@ -39,7 +40,7 @@
 
 ## File Structure
 
-This plan improves the current project in place under `/Users/dallascrilley/.cursor/agent-session-distillery`.
+This plan originally improved the project in place; the repository now lives under `/Users/dallascrilley/Code/agent-session-distillery`.
 
 ```text
 agent-session-distillery/

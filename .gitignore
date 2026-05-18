@@ -1,3 +1,7 @@
 dist/
 node_modules/
+!test/fixtures/cursor/transcripts/
+!test/fixtures/cursor/transcripts/*.jsonl
+!test/fixtures/cursor/live-regression/
+!test/fixtures/cursor/live-regression/*.jsonl
 .todos/

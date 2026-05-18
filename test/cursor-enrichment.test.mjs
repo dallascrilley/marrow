@@ -5,12 +5,7 @@ import { join } from "node:path";
 import { enrichCursorStateDb } from "../dist/adapters/cursor/enrich-state-db.js";
 import { enrichCursorTrackingDb } from "../dist/adapters/cursor/enrich-tracking-db.js";
 
-const fixturesRoot = join(
-  "/Users/dallascrilley/.cursor/agent-session-distillery",
-  "test",
-  "fixtures",
-  "cursor"
-);
+const fixturesRoot = join(import.meta.dirname, "fixtures", "cursor");
 
 test("state DB enrichment reads composer and workspace metadata from the frozen fixture", () => {
   const enrichment = enrichCursorStateDb({
