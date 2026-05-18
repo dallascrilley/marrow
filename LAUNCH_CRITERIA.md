@@ -44,9 +44,9 @@ retention workflows.
   test: Run `node dist/cli.js archive run`, `node dist/cli.js delete candidates`, and dry-run `node dist/cli.js delete apply` against a sandbox containing ready and blocked fixture sessions.
   proof_required: Output showing ready and blocked deletion-candidate states, including blocked reasons and dry-run deletion behavior.
   proof_level: B
-  status: blocking
-  validated_on: null
-  proof: null
+  status: validated
+  validated_on: 2026-05-18
+  proof: /tmp/agent-session-distillery/2026-05-18_deletion-readiness/SUMMARY.md
 
 - id: quality-audit-signal
   feature: Operators can audit summary, learning, and deletion-readiness quality across stored runtime artifacts.
