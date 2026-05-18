@@ -43,6 +43,14 @@ Expected output is a single line. If `grep` returns zero or more than one
 match, stop and reconcile manually — the global file has drifted since
 this draft was written.
 
+**Paste preservation note.** Both the anchor sentence above and the
+proposed replacement below contain em-dash characters (`—`, U+2014). If
+the paste path normalises punctuation (some terminals, some plaintext
+editors), the em dashes become two-hyphens (`--`) and the verification
+greps below will return zero matches. Paste through a Unicode-preserving
+path (e.g. `pbpaste`, the macOS clipboard, or a direct editor open of
+`~/.claude/CLAUDE.md`).
+
 ## Proposed replacement
 
 Replace the one sentence above with the same sentence plus an explicit
@@ -62,7 +70,7 @@ named exception:
 > `_index.md`, or `.raw/.manifest.json`). It is named for asd
 > specifically and does not extend by precedent to other tools.
 
-## Rationale (for the operator's commit message)
+## Rationale (for the operator's change log or audit trail)
 
 The exception is safe because the write surface is contained and the
 vault-session-owned indices stay vault-session-owned:

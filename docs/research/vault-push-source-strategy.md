@@ -44,10 +44,11 @@ the chosen layout matches an existing vault convention.
   under `~/vault/`. No legacy directory blocks the chosen subtree.
 - `find ~/vault/wiki -maxdepth 4 -type d -name "*asd*"` — zero matches.
   No existing asd-shaped artifact anywhere under `wiki/`.
-- Subdirectory-under-`projects/` precedent: `~/vault/wiki/projects/@zosmaai/`.
-  The proposed `~/vault/wiki/projects/<project-key>/asd-learnings/` layout
-  therefore matches an existing vault convention rather than introducing a
-  new one.
+- Subdirectory-under-`projects/` precedent: `~/vault/wiki/projects/@zosmaai/`
+  (one flat `.md` inside). Subdirectories under `projects/` are therefore an
+  established layout. The deeper two-level `<project-key>/asd-learnings/`
+  nesting is new but Obsidian-supported; no precedent or counter-precedent
+  was found.
 
 ## Existing project-page frontmatter (for reconciliation)
 
@@ -127,8 +128,8 @@ and accepting the on-disk page as canonical.
 | Risk | Mitigation |
 |---|---|
 | `~/vault` missing on a fresh machine | `push-wiki` exits 0 with a "vault not present" notice. Launchd / cron does not pile up failure noise. |
-| Operator manually edits an asd-authored page | Edits preserved only when the page's `content_hash` no longer matches what asd wrote. `push-wiki` ships a `--no-overwrite` flag as the operator escape hatch. |
-| Vault session moves / renames pages (e.g. `wiki-lint`) | `_asd-manifest.json` tolerates the named page being absent and recreates it on the next push. The manifest is the source of truth for "did I write this id"; the on-disk page is the source of truth for "what does the wiki currently say about this id". |
+| Operator manually edits an asd-authored page | **Default behaviour does not detect operator edits.** `push-wiki` compares its newly-rendered output's `content_hash` to the manifest, not to the on-disk page. The next time asd's rendering changes (new evidence, schema bump, re-export), the manual edit is overwritten. F2-B ships a `--no-overwrite` flag which reads the on-disk page, compares its hash to the manifest, and skips when they diverge — preserving manual edits at the cost of suppressing legitimate asd updates. Operators who edit asd pages by hand should run with `--no-overwrite` or move the page out of the `asd-learnings/` subtree. |
+| Future vault-side tool moves or renames pages | `_asd-manifest.json` tolerates the named page being absent and recreates it on the next push. The manifest is the source of truth for "did I write this id"; the on-disk page is the source of truth for "what does the wiki currently say about this id". No known vault-side tool renames pages today; this row is a forward-looking guarantee, not a response to current behaviour. |
 | `project.key` contains `/` or `..` | Sanitiser strips path separators and leading dots; falls back to `unknown` if sanitisation empties the key. asd never writes outside `<vault>/wiki/projects/<sanitised>/asd-learnings/`. |
 | Dual writer race with a vault session running `wiki-ingest` | Containment: asd's subtree is disjoint from anything `wiki-ingest` writes. No file path is shared. |
 | Operator wants to delete asd pages wholesale | Not a phase-1 concern. asd marks `deleted_at` in the manifest when a source record disappears but leaves the page in place. A vault-side cleanup skill (phase 2) can act on `deleted_at` later. |

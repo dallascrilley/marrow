@@ -208,8 +208,8 @@ What does **not** ship in phase 1:
 
 | PR | Title | LAUNCH_CRITERIA gate | Depends on |
 |---|---|---|---|
-| **A** | Vault push design note. Confirms the chosen frontmatter shape against `claude-obsidian:wiki-ingest`, locks the carve-out wording for CLAUDE.md, and probes `~/vault/wiki/projects/` for any existing collisions under the `asd-learnings/` subtree (read-only). | `vault-push-research` — proof: short note in `docs/research/` plus a CLAUDE.md amendment draft. | none. |
-| **B** | `memory push-wiki` command in asd. New module `src/pipeline/vault-push.ts` (no changes to `src/adapters/cursor/`, no changes to existing pipeline stages). README + WIKI.md updates. CLAUDE.md amendment landed (both repo-local and global). Smoke fixture under `test/integration/push-wiki/`. | `vault-push-phase-1` — proof: against a fixture vault dir under `/tmp`, `memory push-wiki` produces N pages where N == unique `id`s in the JSONL; rerun is a no-op (manifest skip); manifest co-validated against the page set; vault dir untouched outside `wiki/projects/<key>/asd-learnings/`. | A. |
+| **F2-A** | Vault push design note. Confirms the chosen frontmatter shape against `claude-obsidian:wiki-ingest`, locks the carve-out wording for CLAUDE.md, and probes `~/vault/wiki/projects/` for any existing collisions under the `asd-learnings/` subtree (read-only). | `vault-push-research` — proof: short note in `docs/research/` plus a CLAUDE.md amendment draft. | none. |
+| **F2-B** | `memory push-wiki` command in asd. New module `src/pipeline/vault-push.ts` (no changes to `src/adapters/cursor/`, no changes to existing pipeline stages). README + WIKI.md updates. CLAUDE.md amendment landed (both repo-local and global). Smoke fixture under `test/integration/push-wiki/`. | `vault-push-phase-1` — proof: against a fixture vault dir under `/tmp`, `memory push-wiki` produces N pages where N == unique `id`s in the JSONL; rerun is a no-op (manifest skip); manifest co-validated against the page set; vault dir untouched outside `wiki/projects/<key>/asd-learnings/`. | F2-A. |
 
 Both PRs land **in this repo**. No out-of-repo dependency for phase 1.
 
@@ -223,7 +223,7 @@ Both PRs land **in this repo**. No out-of-repo dependency for phase 1.
   additively).
 - No re-opening of the four closed `td` review items.
 - No writes to `~/vault` or `pi-llm-wiki-custom` from this design session;
-  both were inspected read-only. Writes to `~/vault` only begin in PR B,
+  both were inspected read-only. Writes to `~/vault` only begin in PR F2-B,
   scoped to `wiki/projects/<project-key>/asd-learnings/`.
 - No writes to `hot.md`, `index.md`, `log.md`, `.raw/.manifest.json`, or any
   vault path outside the scoped `asd-learnings/` subtree.
@@ -234,7 +234,7 @@ Both PRs land **in this repo**. No out-of-repo dependency for phase 1.
 
 ## Recommended model routing
 
-- **PR A:** Opus 4.7 — careful design + getting the CLAUDE.md amendment
+- **PR F2-A:** Opus 4.7 — careful design + getting the CLAUDE.md amendment
   wording right.
-- **PR B:** Sonnet 4.6 — straightforward implementation against a known
+- **PR F2-B:** Sonnet 4.6 — straightforward implementation against a known
   contract. Drop to Haiku for the smoke fixture.

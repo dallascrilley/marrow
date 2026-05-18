@@ -277,25 +277,25 @@ proof_required / proof_level).
 
 | PR | Title | LAUNCH_CRITERIA gate(s) | Depends on |
 |---|---|---|---|
-| **A** | Extract `src/adapters/_common/` (hash, fs, jsonl, text-extract). Cursor adapter rewired to use the shared module with zero behaviour change. | `adapter-base-contract` — proof: `node dist/cli.js ingest backfill --source cursor` against the existing v1 fixture produces a byte-identical runtime under `AGENT_SESSION_DISTILLERY_ROOT`. | none. |
-| **B** | Claude Code adapter source research note under `docs/research/`, mirroring `background-agent-source-strategy.md`. | `claude-code-adapter-source-research` — proof: research note checked in, citing real on-disk paths and ranking surfaces. | A optional. |
-| **C** | Claude Code adapter (`src/adapters/claude-code/`). | `claude-code-adapter` — proof: `ingest backfill --source claude-code` against a fixture in `test/adapters/claude-code/` produces at least one session with attributed `projectKey`, one summary, and one extracted learning. Quality audit passes. | A, B. |
-| **D** | Codex CLI adapter source research note. | `codex-cli-adapter-source-research`. | A optional. |
-| **E** | Codex CLI adapter (`src/adapters/codex-cli/`). | `codex-cli-adapter` — same proof shape as C. | A, D. |
-| **F** | Pi adapter source research note. | `pi-adapter-source-research`. | A optional. |
-| **G** | Pi adapter (`src/adapters/pi/`). | `pi-adapter` — same proof shape as C. | A, F. |
+| **F1-A** | Extract `src/adapters/_common/` (hash, fs, jsonl, text-extract). Cursor adapter rewired to use the shared module with zero behaviour change. | `adapter-base-contract` — proof: `node dist/cli.js ingest backfill --source cursor` against the existing v1 fixture produces a byte-identical runtime under `AGENT_SESSION_DISTILLERY_ROOT`. | none. |
+| **F1-B** | Claude Code adapter source research note under `docs/research/`, mirroring `background-agent-source-strategy.md`. | `claude-code-adapter-source-research` — proof: research note checked in, citing real on-disk paths and ranking surfaces. | F1-A optional. |
+| **F1-C** | Claude Code adapter (`src/adapters/claude-code/`). | `claude-code-adapter` — proof: `ingest backfill --source claude-code` against a fixture in `test/adapters/claude-code/` produces at least one session with attributed `projectKey`, one summary, and one extracted learning. Quality audit passes. | F1-A, F1-B. |
+| **F1-D** | Codex CLI adapter source research note. | `codex-cli-adapter-source-research`. | F1-A optional. |
+| **F1-E** | Codex CLI adapter (`src/adapters/codex-cli/`). | `codex-cli-adapter` — same proof shape as F1-C. | F1-A, F1-D. |
+| **F1-F** | Pi adapter source research note. | `pi-adapter-source-research`. | F1-A optional. |
+| **F1-G** | Pi adapter (`src/adapters/pi/`). | `pi-adapter` — same proof shape as F1-C. | F1-A, F1-F. |
 
-PRs B/D/F can ship in parallel after A; C/E/G are sequential per adapter but
-independent across adapters. None of them modify `src/adapters/cursor/`
-beyond the A common-module rewire.
+PRs F1-B/D/F can ship in parallel after F1-A; F1-C/E/G are sequential per
+adapter but independent across adapters. None of them modify
+`src/adapters/cursor/` beyond the F1-A common-module rewire.
 
 ---
 
 ## What this plan deliberately does **not** do
 
 - No code changes in `src/adapters/cursor/`. The Cursor adapter is the
-  reference implementation. PR A's `_common/` extraction is a rewire, not a
-  rewrite; the public type surface is unchanged.
+  reference implementation. PR F1-A's `_common/` extraction is a rewire,
+  not a rewrite; the public type surface is unchanged.
 - No re-opening of the four closed `td` review items.
 - No background-agent ingestion. That surface remains gated by
   `docs/research/background-agent-source-strategy.md`.
@@ -304,9 +304,9 @@ beyond the A common-module rewire.
 
 ## Recommended model routing
 
-- **PR A:** Opus 4.7 — careful refactor; the only chance to set up the shared
-  module cleanly.
-- **PRs B/D/F (research notes):** Sonnet 4.6 — probe + write.
-- **PRs C/E/G (adapter implementations):** Sonnet 4.6 — straightforward
+- **PR F1-A:** Opus 4.7 — careful refactor; the only chance to set up the
+  shared module cleanly.
+- **PRs F1-B/D/F (research notes):** Sonnet 4.6 — probe + write.
+- **PRs F1-C/E/G (adapter implementations):** Sonnet 4.6 — straightforward
   implementation against a known contract. Drop to Haiku for fixture
   scaffolding.
