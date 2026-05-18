@@ -4,6 +4,8 @@ Standalone CLI for ingesting local Cursor agent transcripts into a durable runti
 
 Launch proof: [`docs/launch-proof-index.md`](docs/launch-proof-index.md)
 
+5-minute demo: [`docs/demo-local-cursor-ingestion.md`](docs/demo-local-cursor-ingestion.md)
+
 ## Requirements
 
 - Node `22.x`
