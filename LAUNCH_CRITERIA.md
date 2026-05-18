@@ -73,9 +73,9 @@ retention workflows.
   test: After P0 proof is captured, update README or docs with the proof path and rerun `npm test`.
   proof_required: Commit or PR linking the proof artifact and passing test output.
   proof_level: C
-  status: blocking
-  validated_on: null
-  proof: null
+  status: validated
+  validated_on: 2026-05-18
+  proof: docs/launch-proof-index.md
 
 ## P2 - Fast-follow
 
