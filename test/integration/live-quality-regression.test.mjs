@@ -278,6 +278,34 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
 		assert.equal(statsResult.status, 0, statsResult.stderr);
 		assert.match(statsResult.stdout, /blockedReasons/);
 		assert.match(statsResult.stdout, /summary_low_signal/);
+
+		const deletionReportResult = runCli(["delete", "candidates"], {
+			HOME: homeDir,
+			[runtimeOverrideEnvVar]: runtimeRoot,
+		});
+		assert.equal(deletionReportResult.status, 0, deletionReportResult.stderr);
+		const deletionReport = JSON.parse(deletionReportResult.stdout);
+		const richDecision = deletionReport.decisions.find(
+			(decision) =>
+				decision.session_id === "6e8197bb-269e-43a8-bc58-e965468c3f82",
+		);
+		assert.ok(richDecision);
+		assert.equal(richDecision.status, "ready");
+		assert.deepEqual(richDecision.missing_required_artifacts, []);
+		assert.match(richDecision.artifact_paths.manifest_json, /sources\/manifests/);
+		assert.match(richDecision.artifact_paths.retention_receipt_json, /deletes\/receipts/);
+		assert.match(richDecision.next_action, /delete apply --apply/);
+
+		const blockedDecision = deletionReport.decisions.find(
+			(decision) =>
+				decision.session_id === "d2d8b0e7-3fae-4506-927b-8f80a301ccb0",
+		);
+		assert.ok(blockedDecision);
+		assert.equal(blockedDecision.status, "blocked");
+		assert.deepEqual(blockedDecision.missing_required_artifacts, [
+			"knowledge_jsonl",
+		]);
+		assert.match(blockedDecision.next_action, /Keep the source transcript/);
 	} finally {
 		if (previousHome === undefined) {
 			delete process.env.HOME;
