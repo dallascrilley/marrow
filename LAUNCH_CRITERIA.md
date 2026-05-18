@@ -115,3 +115,12 @@ retention workflows.
   status: validated
   validated_on: 2026-05-18
   proof: /tmp/agent-session-distillery/2026-05-18_f1a-adapter-base-contract/SUMMARY.md
+
+- id: claude-code-adapter-source-research
+  feature: The Claude Code adapter has a researched source strategy citing real on-disk paths and a documented classifier strategy before any code lands.
+  test: Read docs/research/claude-code-source-strategy.md; verify the cited paths resolve on this machine and the classifier table covers all probed type values.
+  proof_required: Research note checked in, citing real on-disk paths.
+  proof_level: C
+  status: validated
+  validated_on: 2026-05-18
+  proof: docs/research/claude-code-source-strategy.md
