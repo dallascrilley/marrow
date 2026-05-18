@@ -1,8 +1,9 @@
-import { createHash } from "node:crypto";
-import { access, lstat, readdir, readFile, stat } from "node:fs/promises";
+import { lstat, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { extname, join, resolve } from "node:path";
 
+import { hashFileContents } from "../_common/hash.js";
+import { pathExists } from "../_common/fs.js";
 import { deriveCursorWorkspaceMapping, type CursorWorkspaceMapping } from "./workspace-map.js";
 
 export const cursorTranscriptExtensions = [".jsonl", ".txt"] as const;
@@ -173,24 +174,6 @@ async function discoverSupportDatabases(cursorUserStateRoot: string): Promise<Cu
   return discoveries;
 }
 
-async function hashFileContents(filePath: string): Promise<string> {
-  const fileContents = await readFile(filePath);
-  return `sha256:${createHash("sha256").update(fileContents).digest("hex")}`;
-}
-
-async function pathExists(targetPath: string): Promise<boolean> {
-  try {
-    await access(targetPath);
-    return true;
-  } catch (error) {
-    if (isMissingPathError(error)) {
-      return false;
-    }
-
-    throw error;
-  }
-}
-
 function normalizeTranscriptFormat(filePath: string): CursorTranscriptFormat {
   const extension = extname(filePath).toLowerCase();
 
@@ -199,13 +182,4 @@ function normalizeTranscriptFormat(filePath: string): CursorTranscriptFormat {
   }
 
   return "txt";
-}
-
-function isMissingPathError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "ENOENT"
-  );
 }

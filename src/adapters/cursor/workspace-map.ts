@@ -1,6 +1,8 @@
 import { access, readFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 
+import { isMissingPathError } from "../_common/fs.js";
+
 export type CursorWorkspaceMapping = {
   cursorProjectPath: string;
   projectKey: string;
@@ -199,13 +201,4 @@ function decodeWorkspaceSlug(workspaceSlug: string): string {
 
 function isAbsolutePathLike(value: string): boolean {
   return value.startsWith("/") || /^[A-Za-z]:\\/.test(value);
-}
-
-function isMissingPathError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "ENOENT"
-  );
 }
