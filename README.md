@@ -128,6 +128,11 @@ node dist/cli.js delete candidates
 node dist/cli.js delete apply
 ```
 
+`delete candidates` includes the raw ledger candidates plus an operator-facing
+`decisions` array with ready/blocked status, required artifact presence, missing
+required artifacts, manifest and retention receipt paths, and the next action for
+each session.
+
 Explicit deletion apply:
 
 ```bash
