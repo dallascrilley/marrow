@@ -175,6 +175,17 @@ node dist/cli.js quality apply-learning-review
 
 This writes `knowledge/projects-reviewed/` and `reports/llm-learning-review-apply.json` without mutating `knowledge/projects/`. The apply step keeps only durable keep/rewrite verdicts that pass strict post-validation.
 
+Run the local memory value loop as a single dry-run command:
+
+```bash
+npm --silent run memory:pipeline:dry-run -- --root /tmp/asd-memory-demo --limit 100
+```
+
+The dry run executes `quality audit`, applies `reports/llm-learning-review.jsonl`
+only when that review sidecar already exists, then runs `memory export-wiki`.
+It prints a JSON step report with command output, failure points, whether apply
+occurred, and the wiki export path.
+
 ## Retention Model
 
 The current lifecycle is:
