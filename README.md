@@ -2,6 +2,8 @@
 
 Standalone CLI for ingesting local Cursor agent transcripts into a durable runtime with summaries, learnings, manifests, review state, and deletion receipts.
 
+Launch proof: [`docs/launch-proof-index.md`](docs/launch-proof-index.md)
+
 ## Requirements
 
 - Node `22.x`
