@@ -2,6 +2,7 @@
 project: agent-session-distillery
 owner: dallascrilley
 last_reviewed: 2026-05-18
+version: 1.0.0
 ---
 
 # Launch Criteria
@@ -84,6 +85,6 @@ retention workflows.
   test: Document available source surfaces and constraints before implementing any adapter.
   proof_required: Research note or plan with verified source behavior.
   proof_level: C
-  status: blocking
-  validated_on: null
-  proof: null
+  status: validated
+  validated_on: 2026-05-18
+  proof: docs/research/background-agent-source-strategy.md
