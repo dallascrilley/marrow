@@ -186,6 +186,8 @@ only when that review sidecar already exists, then runs `memory export-wiki`.
 It prints a JSON step report with command output, failure points, whether apply
 occurred, and the wiki export path.
 
+Wiki export contract: [`docs/wiki-memory-export-contract.md`](docs/wiki-memory-export-contract.md)
+
 ## Retention Model
 
 The current lifecycle is:
