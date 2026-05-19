@@ -74,6 +74,17 @@ The `<encoded-workspace>` segment is the absolute workspace path with `/` replac
 
 Design and source-surface research: [`docs/research/claude-code-source-strategy.md`](docs/research/claude-code-source-strategy.md).
 
+### Codex CLI (`--source codex-cli`)
+
+Local Codex CLI rollout files only. Transcript inputs:
+
+- `~/.codex/sessions/<YYYY>/<MM>/<DD>/rollout-*.jsonl` (date-partitioned tree)
+- `~/.codex/archived_sessions/rollout-*.jsonl` (flat archive)
+
+Codex sessions are date-partitioned, not workspace-partitioned. The adapter reads the `session_meta` line at the top of each rollout to recover `payload.cwd`; the project key is the last segment of that path. The composite classifier joins the top-level `type` with the inner `payload.type` so every `response_item/message`, `response_item/function_call`, `response_item/function_call_output`, and `response_item/reasoning` is mapped correctly. Auxiliary stores (`session_index.jsonl`, `history.jsonl`) are intentionally out of scope.
+
+Design and source-surface research: [`docs/research/codex-cli-source-strategy.md`](docs/research/codex-cli-source-strategy.md).
+
 ## Runtime Layout
 
 The CLI writes a local runtime under `~/.agent-session-distillery` or the path set in `AGENT_SESSION_DISTILLERY_ROOT`.

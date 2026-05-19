@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 
 import { parseClaudeCodeTranscript } from "../adapters/claude-code/parse-transcript.js";
+import { parseCodexCliTranscript } from "../adapters/codex-cli/parse-transcript.js";
 import { parseCursorTranscript } from "../adapters/cursor/parse-transcript.js";
 import type {
   ParseTranscriptOptions,
@@ -146,6 +147,8 @@ async function parseBySourceTool(
       return parseCursorTranscript(options);
     case "claude-code":
       return parseClaudeCodeTranscript(options);
+    case "codex-cli":
+      return parseCodexCliTranscript(options);
     default:
       throw new Error(`Unsupported source_tool: ${sourceTool}`);
   }

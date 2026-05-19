@@ -1,0 +1,9 @@
+{"timestamp":"2026-05-03T23:02:54.000Z","type":"session_meta","payload":{"id":"019df127-415e-7b43-a43b-96fc77a98775","timestamp":"2026-05-03T23:02:54.000Z","cwd":"/Users/example/Code/demo","originator":"codex-cli","cli_version":"0.128.0","model_provider":"openai"}}
+{"timestamp":"2026-05-03T23:02:55.000Z","type":"event_msg","payload":{"type":"task_started","turn_id":"turn-1","started_at":"2026-05-03T23:02:55.000Z","model_context_window":200000,"collaboration_mode_kind":"standard"}}
+{"timestamp":"2026-05-03T23:02:56.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Use `npm test` to verify the codex-cli demo before shipping."}]}}
+{"timestamp":"2026-05-03T23:02:57.000Z","type":"turn_context","payload":{"turn_id":"turn-1","cwd":"/Users/example/Code/demo","current_date":"2026-05-03","timezone":"UTC","approval_policy":"never","sandbox_policy":"workspace","permission_profile":"trusted","model":"gpt-5"}}
+{"timestamp":"2026-05-03T23:02:58.000Z","type":"response_item","payload":{"type":"reasoning","summary":"plan the verification","content":[{"type":"summary_text","text":"User wants to run npm test."}]}}
+{"timestamp":"2026-05-03T23:03:00.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I decided to keep the codex-cli demo's verification step focused on /Users/example/Code/demo/src so the smoke run stays fast."}]}}
+{"timestamp":"2026-05-03T23:03:01.000Z","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{\"cmd\":[\"npm\",\"test\"]}","call_id":"call-1"}}
+{"timestamp":"2026-05-03T23:03:05.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-1","output":"all tests passed"}}
+{"timestamp":"2026-05-03T23:03:06.000Z","type":"event_msg","payload":{"type":"token_count","info":{"input_tokens":100,"output_tokens":40},"rate_limits":{}}}
