@@ -10,9 +10,9 @@ const sourceRefSchema = z.object({
   source_path: z.string(),
   source_hash: z.string(),
   session_id: z.string(),
-  turn_id: z.string(),
-  event_id: z.string(),
-  line: z.number().int().nonnegative(),
+  turn_id: z.string().nullable(),
+  event_id: z.string().nullable(),
+  line: z.number().int().nonnegative().nullable(),
 });
 
 const wikiMemoryRecordSchema = z.object({
@@ -96,6 +96,16 @@ function yamlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+/** Emit `null` for null values, single-quoted string otherwise. */
+function yamlNullableString(value: string | null): string {
+  return value === null ? "null" : yamlString(value);
+}
+
+/** Emit `null` for null values, the bare number otherwise. */
+function yamlNullableNumber(value: number | null): string {
+  return value === null ? "null" : String(value);
+}
+
 /** Render the YAML frontmatter for a wiki memory record. */
 export function renderFrontmatter(record: WikiMemoryRecord): string {
   const lines = [
@@ -122,9 +132,9 @@ export function renderFrontmatter(record: WikiMemoryRecord): string {
       lines.push(`  - source_path: ${yamlString(ref.source_path)}`);
       lines.push(`    source_hash: ${yamlString(ref.source_hash)}`);
       lines.push(`    session_id: ${yamlString(ref.session_id)}`);
-      lines.push(`    turn_id: ${yamlString(ref.turn_id)}`);
-      lines.push(`    event_id: ${yamlString(ref.event_id)}`);
-      lines.push(`    line: ${ref.line}`);
+      lines.push(`    turn_id: ${yamlNullableString(ref.turn_id)}`);
+      lines.push(`    event_id: ${yamlNullableString(ref.event_id)}`);
+      lines.push(`    line: ${yamlNullableNumber(ref.line)}`);
     }
   }
 
