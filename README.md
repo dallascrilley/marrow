@@ -85,6 +85,16 @@ Codex sessions are date-partitioned, not workspace-partitioned. The adapter read
 
 Design and source-surface research: [`docs/research/codex-cli-source-strategy.md`](docs/research/codex-cli-source-strategy.md).
 
+### Pi / Zosma (`--source pi`)
+
+Local Pi session files only. Transcript inputs:
+
+- `~/.pi/agent/sessions/<encoded-cwd>/<iso>_<uuid>.jsonl`
+
+The `<encoded-cwd>` segment is the absolute workspace path with leading-and-trailing `--` framing plus `/` → `-` internally. The adapter prefers the content-derived `cwd` from the session line (line 0) over the path-encoded slug because the encoding can collide if a workspace itself contains `--`. Classifier is **role-nested**: `message` records branch on `message.role` ∈ {`user`, `assistant`, `toolResult`}; tool calls live inside assistant `message.content[]` as `toolCall` blocks (not promoted to separate records in phase 1).
+
+Design and source-surface research: [`docs/research/pi-source-strategy.md`](docs/research/pi-source-strategy.md).
+
 ## Runtime Layout
 
 The CLI writes a local runtime under `~/.agent-session-distillery` or the path set in `AGENT_SESSION_DISTILLERY_ROOT`.

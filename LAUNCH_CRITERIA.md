@@ -160,3 +160,12 @@ retention workflows.
   status: validated
   validated_on: 2026-05-18
   proof: docs/research/pi-source-strategy.md
+
+- id: pi-adapter
+  feature: asd ingests local Pi (Zosma) session JSONL files via `ingest backfill --source pi` end-to-end, branching message records by message.role into user/assistant/toolResult kinds.
+  test: Run `node dist/cli.js ingest backfill --source pi` against the smoke fixture at test/fixtures/pi/sessions/. Verify the session is discovered, parsed (7 records covering session/model_change/thinking_level_change/custom_message/message-user/message-assistant/message-toolResult), summarised, has a learning extracted, and is archived.
+  proof_required: Unit tests (workspace-map, discover, parse) plus integration test (ingest-backfill via CLI subprocess) passing under `npm test`; live end-to-end run against the fixture HOME.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-18
+  proof: /tmp/agent-session-distillery/2026-05-18_f1g-pi-adapter/SUMMARY.md
