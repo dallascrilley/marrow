@@ -104,6 +104,66 @@ test("renderFrontmatter handles zero source_refs without breaking YAML", () => {
 	assert.match(yaml, /^source_refs:\n {2}\[\]$/m);
 });
 
+test("renderFrontmatter emits 'null' (not 'null'-string) for nullable source_ref fields", () => {
+	// Real learnings from the canonical pipeline can have turn_id, event_id,
+	// and line all null on the source_refs entry (e.g. learnings derived from
+	// turn-level signals without a single anchor event). The push schema and
+	// the YAML emitter must round-trip those nulls.
+	const record = sampleRecord({
+		evidence: {
+			learning_id: "lid",
+			promotion_basis: "pb",
+			evidence: [],
+			source_refs: [
+				{
+					source_path: "/tmp/sample.jsonl",
+					source_hash: "sha256:sample",
+					session_id: "session-x",
+					turn_id: null,
+					event_id: null,
+					line: null,
+				},
+			],
+		},
+	});
+	const yaml = renderFrontmatter(record);
+	assert.match(yaml, /^ {4}turn_id: null$/m);
+	assert.match(yaml, /^ {4}event_id: null$/m);
+	assert.match(yaml, /^ {4}line: null$/m);
+});
+
+test("readWikiMemoryJsonl accepts source_refs entries with null turn_id/event_id/line", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "asd-vp-nullable-"));
+	try {
+		const path = join(dir, "nullable.jsonl");
+		const record = sampleRecord({
+			evidence: {
+				learning_id: "lid",
+				promotion_basis: "pb",
+				evidence: [],
+				source_refs: [
+					{
+						source_path: "/tmp/sample.jsonl",
+						source_hash: "sha256:sample",
+						session_id: "session-x",
+						turn_id: null,
+						event_id: null,
+						line: null,
+					},
+				],
+			},
+		});
+		await writeFile(path, `${JSON.stringify(record)}\n`, "utf8");
+		const records = await readWikiMemoryJsonl(path);
+		assert.equal(records.length, 1);
+		assert.equal(records[0].evidence.source_refs[0].turn_id, null);
+		assert.equal(records[0].evidence.source_refs[0].event_id, null);
+		assert.equal(records[0].evidence.source_refs[0].line, null);
+	} finally {
+		await rm(dir, { force: true, recursive: true });
+	}
+});
+
 test("renderFrontmatter single-quote-escapes apostrophes in scalar values", () => {
 	const record = sampleRecord({
 		evidence: {
