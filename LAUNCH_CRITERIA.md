@@ -151,3 +151,12 @@ retention workflows.
   status: validated
   validated_on: 2026-05-18
   proof: /tmp/agent-session-distillery/2026-05-18_f1e-codex-cli-adapter/SUMMARY.md
+
+- id: pi-adapter-source-research
+  feature: The Pi adapter has a researched source strategy citing real on-disk paths, role-nested message classifier handling, and the documented tool-call-block strategy before any code lands.
+  test: Read docs/research/pi-source-strategy.md; verify the cited paths resolve on this machine and the classifier covers all probed type values plus the role-branching for message records.
+  proof_required: Research note checked in, citing real on-disk paths and the message.role classifier branch.
+  proof_level: C
+  status: validated
+  validated_on: 2026-05-18
+  proof: docs/research/pi-source-strategy.md
