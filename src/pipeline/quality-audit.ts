@@ -47,6 +47,7 @@ export type QualityAuditReport = {
 	blocked_reasons: Record<string, number>;
 	deletion_readiness: {
 		blocked: number;
+		discardable_no_signal: number;
 		missing_candidate: number;
 		ready: number;
 	};
@@ -104,6 +105,7 @@ export async function auditQuality(
 	const blockedReasons: Record<string, number> = {};
 	const deletionReadiness = {
 		blocked: 0,
+		discardable_no_signal: 0,
 		missing_candidate: 0,
 		ready: 0,
 	};
@@ -129,6 +131,11 @@ export async function auditQuality(
 
 		if (candidate === null) {
 			deletionReadiness.missing_candidate += 1;
+		} else if (
+			candidate.safe_to_delete === 1 &&
+			candidate.candidate_state === "discardable_no_signal"
+		) {
+			deletionReadiness.discardable_no_signal += 1;
 		} else if (candidate.safe_to_delete === 1) {
 			deletionReadiness.ready += 1;
 		} else {

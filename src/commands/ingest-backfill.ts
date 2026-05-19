@@ -21,6 +21,11 @@ export async function executeIngestBackfill(context: CommandContext, database: D
   const options = parseIngestOptions(context.args);
   const discovery = await runDiscoverPhase({
     database,
+    ...(options.excludePaths.length > 0 ? { excludePaths: options.excludePaths } : {}),
+    ...(options.excludeProjectKeys.length > 0
+      ? { excludeProjectKeys: options.excludeProjectKeys }
+      : {}),
+    ...(options.includeTestSessions ? { includeTestSessions: true } : {}),
     ...(options.limit === undefined ? {} : { limit: options.limit }),
     ...(options.since === undefined ? {} : { since: options.since }),
     source: options.source
@@ -91,6 +96,9 @@ export async function processDiscoveredSessions(
 }
 
 export function parseIngestOptions(args: string[]): {
+  excludePaths: string[];
+  excludeProjectKeys: string[];
+  includeTestSessions: boolean;
   limit?: number;
   resume: boolean;
   since?: string;
@@ -100,9 +108,29 @@ export function parseIngestOptions(args: string[]): {
   let resume = false;
   let since: string | undefined;
   let source: "cursor" | "claude-code" | "codex-cli" | "pi" = "cursor";
+  let includeTestSessions = false;
+  const excludePaths: string[] = [];
+  const excludeProjectKeys: string[] = [];
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
+
+    if (arg === "--include-test-sessions") {
+      includeTestSessions = true;
+      continue;
+    }
+
+    if (arg === "--exclude-path") {
+      excludePaths.push(requireOptionValue("--exclude-path", args[index + 1]));
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--exclude-project") {
+      excludeProjectKeys.push(requireOptionValue("--exclude-project", args[index + 1]));
+      index += 1;
+      continue;
+    }
 
     if (arg === "--resume") {
       resume = true;
@@ -144,6 +172,9 @@ export function parseIngestOptions(args: string[]): {
   }
 
   return {
+    excludePaths,
+    excludeProjectKeys,
+    includeTestSessions,
     ...(limit === undefined ? {} : { limit }),
     resume,
     ...(since === undefined ? {} : { since }),

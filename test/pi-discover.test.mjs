@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-import { discoverPiInputs } from "../dist/adapters/pi/discover.js";
+import {
+	discoverPiInputs,
+	shouldSkipPiSessionPath,
+} from "../dist/adapters/pi/discover.js";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
@@ -35,4 +38,29 @@ test("returns an empty list when the sessions root is missing", async () => {
 	} finally {
 		await rm(dir, { force: true, recursive: true });
 	}
+});
+
+test("shouldSkipPiSessionPath skips pi-test basenames under var/folders by default", () => {
+	const path =
+		"/var/folders/xx/yy/T/pi-sessions/--Users-example-Code-demo--/2026_pi-test-abc.jsonl";
+	assert.equal(
+		shouldSkipPiSessionPath(path, { includeTestSessions: false }),
+		"test_session_name",
+	);
+	assert.equal(shouldSkipPiSessionPath(path, { includeTestSessions: true }), null);
+});
+
+test("shouldSkipPiSessionPath does not skip production paths in macOS temp sandboxes", () => {
+	const path =
+		"/var/folders/xx/yy/T/asd-pi-int-abc/home/.pi/agent/sessions/--Users-example-Code-demo--/2026-05-18T00-28-01-780Z_019e387b.jsonl";
+	assert.equal(shouldSkipPiSessionPath(path, { includeTestSessions: false }), null);
+});
+
+test("shouldSkipPiSessionPath skips pi-test session basenames by default", () => {
+	const path =
+		"/Users/example/.pi/agent/sessions/--Users-example-Code-demo--/pi-test-smoke.jsonl";
+	assert.equal(
+		shouldSkipPiSessionPath(path, { includeTestSessions: false }),
+		"test_session_name",
+	);
 });

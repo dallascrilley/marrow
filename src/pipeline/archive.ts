@@ -52,7 +52,8 @@ export async function runArchivePhase(input: {
     const preReceipt = await evaluateRetentionReadiness({
       currentLifecycleState: "extracted",
       sourceSession: sourceSessionModel,
-      sourceSessionId: input.sourceSessionId
+      sourceSessionId: input.sourceSessionId,
+      turns: input.turns
     });
     await writeRetentionReceipt(preReceipt.receipt);
 
@@ -82,7 +83,8 @@ export async function runArchivePhase(input: {
     const postReceipt = await evaluateRetentionReadiness({
       currentLifecycleState: "archived",
       sourceSession: sourceSessionModel,
-      sourceSessionId: input.sourceSessionId
+      sourceSessionId: input.sourceSessionId,
+      turns: input.turns
     });
     const candidate = upsertDeletionCandidate(input.database, postReceipt.candidate);
     const report = await writeRetentionBatchReport(

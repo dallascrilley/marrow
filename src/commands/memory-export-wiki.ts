@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { CommandContext } from "../cli.js";
 import { ensureRuntimePath, getRuntimePath } from "../config/paths.js";
-import { type Learning, learningSchema } from "../models/canonical.js";
+import type { Learning } from "../models/canonical.js";
+import { mergeProjectKnowledgeDirectory } from "../pipeline/project-knowledge-merge.js";
 
 export const wikiMemorySchemaVersion = "asd.wiki_memory.v1";
 
@@ -64,17 +65,10 @@ export async function buildWikiMemoryExport(): Promise<WikiMemoryRecord[]> {
 
 	for (const projectKey of projectDirs.sort()) {
 		const projectDir = join(projectRoot, projectKey);
-		const files = (await readDirectoryNames(projectDir)).filter((file) =>
-			file.endsWith(".jsonl"),
-		);
-
-		for (const file of files.sort()) {
-			const lines = await readJsonl(join(projectDir, file));
-			for (const value of lines) {
-				const learning = learningSchema.parse(value);
-				if (learning.scope !== "project") continue;
-				records.push(toWikiMemoryRecord(learning, reviewSource));
-			}
+		const merged = await mergeProjectKnowledgeDirectory(projectDir);
+		for (const learning of merged.merged) {
+			if (learning.scope !== "project") continue;
+			records.push(toWikiMemoryRecord(learning, reviewSource));
 		}
 	}
 
@@ -147,15 +141,6 @@ async function directoryExists(path: string): Promise<boolean> {
 		if (isNodeError(error) && error.code === "ENOENT") return false;
 		throw error;
 	}
-}
-
-async function readJsonl(path: string): Promise<unknown[]> {
-	const content = await readFile(path, "utf8");
-	return content
-		.split(/\r?\n/)
-		.map((line) => line.trim())
-		.filter((line) => line.length > 0)
-		.map((line) => JSON.parse(line) as unknown);
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
