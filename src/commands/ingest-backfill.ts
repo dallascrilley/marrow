@@ -94,12 +94,12 @@ export function parseIngestOptions(args: string[]): {
   limit?: number;
   resume: boolean;
   since?: string;
-  source: "cursor" | "claude-code" | "codex-cli";
+  source: "cursor" | "claude-code" | "codex-cli" | "pi";
 } {
   let limit: number | undefined;
   let resume = false;
   let since: string | undefined;
-  let source: "cursor" | "claude-code" | "codex-cli" = "cursor";
+  let source: "cursor" | "claude-code" | "codex-cli" | "pi" = "cursor";
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -111,7 +111,12 @@ export function parseIngestOptions(args: string[]): {
 
     if (arg === "--source") {
       const value = args[index + 1];
-      if (value !== "cursor" && value !== "claude-code" && value !== "codex-cli") {
+      if (
+        value !== "cursor" &&
+        value !== "claude-code" &&
+        value !== "codex-cli" &&
+        value !== "pi"
+      ) {
         throw new Error(`Unsupported --source value: ${value ?? "<missing>"}`);
       }
       source = value;

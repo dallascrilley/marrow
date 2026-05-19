@@ -1,0 +1,7 @@
+{"type":"session","version":3,"id":"019e387b-8d74-7c8b-9578-ff8d1151ae4f","timestamp":"2026-05-18T00:28:01.780Z","cwd":"/Users/example/Code/demo"}
+{"type":"model_change","id":"ee77c6ae","parentId":null,"timestamp":"2026-05-18T00:28:05.327Z","provider":"vibeproxy","modelId":"gpt-5.5"}
+{"type":"thinking_level_change","id":"aa2ae41c","parentId":"ee77c6ae","timestamp":"2026-05-18T00:28:05.327Z","thinkingLevel":"medium"}
+{"type":"custom_message","customType":"pi-memory-context","content":"<memory>injected memory snippet</memory>","display":"hidden","id":"abc12345","parentId":"aa2ae41c","timestamp":"2026-05-18T00:28:05.500Z"}
+{"type":"message","id":"u-1","parentId":"abc12345","timestamp":"2026-05-18T00:29:58.741Z","message":{"role":"user","content":[{"type":"text","text":"Use `npm test` to verify the pi demo before shipping."}]}}
+{"type":"message","id":"a-1","parentId":"u-1","timestamp":"2026-05-18T00:30:04.478Z","message":{"role":"assistant","content":[{"type":"thinking","text":"plan the run"},{"type":"text","text":"I decided to keep the pi demo's test suite focused on /Users/example/Code/demo/src so the smoke run stays fast."},{"type":"toolCall","id":"call-1","name":"shell","arguments":{"cmd":["npm","test"]}}]}}
+{"type":"message","id":"tr-1","parentId":"a-1","timestamp":"2026-05-18T00:30:09.000Z","message":{"role":"toolResult","toolCallId":"call-1","toolName":"shell","content":[{"type":"text","text":"all tests passed"}]}}
