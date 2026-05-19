@@ -1,0 +1,38 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+import { discoverPiInputs } from "../dist/adapters/pi/discover.js";
+
+const testDir = dirname(fileURLToPath(import.meta.url));
+const projectRoot = dirname(testDir);
+const fixtureSessionsRoot = join(projectRoot, "test", "fixtures", "pi", "sessions");
+
+test("discovers the smoke fixture and attributes the workspace via cwd", async () => {
+	const result = await discoverPiInputs({
+		piSessionsRoot: fixtureSessionsRoot,
+	});
+	assert.equal(result.transcripts.length, 1);
+	const transcript = result.transcripts[0];
+	assert.equal(transcript.projectKey, "demo");
+	assert.equal(transcript.workspacePath, "/Users/example/Code/demo");
+	assert.equal(transcript.workspaceSlug, "--Users-example-Code-demo--");
+	assert.equal(transcript.sourceFormat, "jsonl");
+	assert.ok(transcript.sourceHash.startsWith("sha256:"));
+	assert.ok(transcript.sourcePath.endsWith(".jsonl"));
+});
+
+test("returns an empty list when the sessions root is missing", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "asd-pi-empty-"));
+	try {
+		const result = await discoverPiInputs({
+			piSessionsRoot: join(dir, "no-such-root"),
+		});
+		assert.deepEqual(result.transcripts, []);
+	} finally {
+		await rm(dir, { force: true, recursive: true });
+	}
+});

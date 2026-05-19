@@ -9,4 +9,6 @@ node_modules/
 !test/fixtures/claude-code/projects/*/*.jsonl
 !test/fixtures/codex-cli/
 !test/fixtures/codex-cli/**/*.jsonl
+!test/fixtures/pi/
+!test/fixtures/pi/**/*.jsonl
 .todos/

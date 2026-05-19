@@ -5,6 +5,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { parseClaudeCodeTranscript } from "../adapters/claude-code/parse-transcript.js";
 import { parseCodexCliTranscript } from "../adapters/codex-cli/parse-transcript.js";
 import { parseCursorTranscript } from "../adapters/cursor/parse-transcript.js";
+import { parsePiTranscript } from "../adapters/pi/parse-transcript.js";
 import type {
   ParseTranscriptOptions,
   ParseTranscriptResult,
@@ -149,6 +150,8 @@ async function parseBySourceTool(
       return parseClaudeCodeTranscript(options);
     case "codex-cli":
       return parseCodexCliTranscript(options);
+    case "pi":
+      return parsePiTranscript(options);
     default:
       throw new Error(`Unsupported source_tool: ${sourceTool}`);
   }
