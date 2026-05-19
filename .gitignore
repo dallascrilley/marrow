@@ -7,4 +7,6 @@ node_modules/
 !test/fixtures/claude-code/projects/
 !test/fixtures/claude-code/projects/*/
 !test/fixtures/claude-code/projects/*/*.jsonl
+!test/fixtures/codex-cli/
+!test/fixtures/codex-cli/**/*.jsonl
 .todos/

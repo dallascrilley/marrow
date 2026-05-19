@@ -2,12 +2,13 @@ import type { DatabaseSync } from "node:sqlite";
 import { basename, extname } from "node:path";
 
 import { discoverClaudeCodeInputs } from "../adapters/claude-code/discover.js";
+import { discoverCodexCliInputs } from "../adapters/codex-cli/discover.js";
 import { discoverCursorInputs } from "../adapters/cursor/discover.js";
 import type { TranscriptDiscovery } from "../adapters/_common/intermediate.js";
 import { upsertSourceSession, type UpsertSourceSessionResult } from "../db/ledger.js";
 import type { SourceSession } from "../models/canonical.js";
 
-export const supportedSources = ["cursor", "claude-code"] as const;
+export const supportedSources = ["cursor", "claude-code", "codex-cli"] as const;
 export type SupportedSource = (typeof supportedSources)[number];
 
 export type DiscoverPhaseInput = {
@@ -109,6 +110,10 @@ async function runAdapterDiscovery(source: SupportedSource): Promise<{ transcrip
     }
     case "claude-code": {
       const result = await discoverClaudeCodeInputs();
+      return { transcripts: result.transcripts };
+    }
+    case "codex-cli": {
+      const result = await discoverCodexCliInputs();
       return { transcripts: result.transcripts };
     }
     default: {
