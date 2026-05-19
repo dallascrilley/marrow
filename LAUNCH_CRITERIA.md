@@ -133,3 +133,12 @@ retention workflows.
   status: validated
   validated_on: 2026-05-18
   proof: /tmp/agent-session-distillery/2026-05-18_f1c-claude-code-adapter/SUMMARY.md
+
+- id: codex-cli-adapter-source-research
+  feature: The Codex CLI adapter has a researched source strategy citing real on-disk paths, two-level type discriminator decoding, and a documented classifier strategy before any code lands.
+  test: Read docs/research/codex-cli-source-strategy.md; verify the cited paths resolve on this machine and the composite-key classifier table covers all probed type/payload.type combinations.
+  proof_required: Research note checked in, citing real on-disk paths and the two-level discriminator joins.
+  proof_level: C
+  status: validated
+  validated_on: 2026-05-18
+  proof: docs/research/codex-cli-source-strategy.md
