@@ -14,6 +14,7 @@ import { getSessionSummaryJsonPath, getSessionSummaryMarkdownPath } from "../wri
 import {
   firstSubstantivePromptFromTurns,
   isNoSignalPrompt,
+  isTinyNoSignalSession,
 } from "./prompt-sanitize.js";
 
 export type RetentionEvaluation = {
@@ -120,6 +121,10 @@ export function isDiscardableNoSignal(
   }
 
   if (turns !== undefined && turns.length > 0) {
+    if (isTinyNoSignalSession(turns)) {
+      return true;
+    }
+
     const firstSubstantive = firstSubstantivePromptFromTurns(turns);
     if (firstSubstantive === null) {
       return true;

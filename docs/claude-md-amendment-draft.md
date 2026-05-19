@@ -1,8 +1,17 @@
 ---
 date: 2026-05-18
-status: operator-action-required
+status: superseded
+superseded_by: docs/claude-md-v2-carve-out-amendment-draft.md
+superseded_on: 2026-05-19
+original_status: operator-action-required
 purpose: Draft wording for a named exception in the global CLAUDE.md before F2-B lands.
 ---
+
+> **Superseded 2026-05-19** by the v2 carve-out amendment, which
+> was applied to `~/.claude/CLAUDE.md` and the project `CLAUDE.md`
+> on the same day. See
+> [`docs/claude-md-v2-carve-out-amendment-draft.md`](claude-md-v2-carve-out-amendment-draft.md)
+> and ADR-0004. Content below preserved for history.
 
 # Global CLAUDE.md amendment draft
 

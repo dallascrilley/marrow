@@ -9,8 +9,12 @@ import type {
 } from "../models/canonical.js";
 import { learningSchema } from "../models/canonical.js";
 import {
+	capEvidenceText,
 	extractSubstantivePrompt,
 	learningEvidenceFromPrompt,
+	looksLikeSkillHarnessLeak,
+	sanitizeHarnessLeakText,
+	sanitizeLearningTitle,
 	sanitizeUserPrompt,
 } from "./prompt-sanitize.js";
 
@@ -117,7 +121,11 @@ function extractProjectLearningCandidates(
 			turn,
 		}),
 	);
-	return dedupeProjectCandidates([...eventCandidates, ...turnCandidates]);
+	return dedupeProjectCandidates(
+		[...eventCandidates, ...turnCandidates]
+			.map(finalizeProjectLearningCandidate)
+			.filter((candidate): candidate is ProjectLearningCandidate => candidate !== null),
+	);
 }
 
 function hasSameTurnVerifiedFix(
@@ -151,6 +159,10 @@ function toProjectEventCandidate(
 		isProcessText(event.summary) ||
 		looksLikeProcessNarration(event.summary)
 	) {
+		return null;
+	}
+
+	if (looksLikeSkillHarnessLeak(event.summary)) {
 		return null;
 	}
 
@@ -200,11 +212,16 @@ function toProjectEventCandidate(
 	}
 
 	switch (event.type) {
-		case "decision":
+		case "decision": {
+			const statement = sanitizeHarnessLeakText(event.summary);
+			if (statement.length === 0) {
+				return null;
+			}
+
 			return {
 				confidence: event.confidence,
-				dedupeKey: `decision:${event.summary.toLowerCase()}`,
-				evidence: [event.summary],
+				dedupeKey: `decision:${statement.toLowerCase()}`,
+				evidence: [statement],
 				kind: "decision",
 				learningId: `${sourceSession.session_id}:project:decision:${event.event_id}`,
 				promotionBasis:
@@ -216,9 +233,10 @@ function toProjectEventCandidate(
 						turnId: event.turn_id,
 					}),
 				],
-				statement: event.summary,
-				title: `Decision: ${truncateInline(event.summary, 72)}`,
+				statement,
+				title: `Decision: ${truncateInline(statement, 72)}`,
 			};
+		}
 		case "failure":
 			return {
 				confidence: event.confidence,
@@ -984,14 +1002,25 @@ function extractSpecDecision(
 	}
 
 	const file = specFiles[0]!;
-	const topic = promptForClassification
-		.replace(/\/(?:speckit|speckit-specify)\b/gi, "")
-		.replace(/['"]/g, "")
-		.trim()
-		.split(/\r?\n/)[0] ?? "the specified design";
+	const topic = sanitizeHarnessLeakText(
+		promptForClassification
+			.replace(/\/(?:speckit|speckit-specify)\b/gi, "")
+			.replace(/['"]/g, "")
+			.trim()
+			.split(/\r?\n/)[0] ?? "",
+	);
+
+	if (topic.length === 0 || looksLikeSkillHarnessLeak(topic)) {
+		return null;
+	}
+
+	const statement = `Refer to ${file} for ${truncateInline(topic, 60)} architecture decisions.`;
+	if (looksLikeSkillHarnessLeak(statement)) {
+		return null;
+	}
 
 	return {
-		statement: `Refer to ${file} for ${truncateInline(topic, 60)} architecture decisions.`,
+		statement,
 		evidence: learningEvidenceFromPrompt(turn.user_prompt, file),
 	};
 }
@@ -1348,6 +1377,37 @@ function dedupeLearnings(learnings: readonly Learning[]): Learning[] {
 	}
 
 	return uniqueLearnings;
+}
+
+function finalizeProjectLearningCandidate(
+	candidate: ProjectLearningCandidate,
+): ProjectLearningCandidate | null {
+	const statement = sanitizeHarnessLeakText(candidate.statement);
+	if (statement.length === 0 || looksLikeSkillHarnessLeak(statement)) {
+		return null;
+	}
+
+	const evidence = uniqueStrings(
+		candidate.evidence
+			.map((item) => capEvidenceText(sanitizeHarnessLeakText(item)))
+			.filter((item) => item.length > 0 && !looksLikeSkillHarnessLeak(item)),
+	);
+
+	const titleBodyMax =
+		candidate.kind === "decision" || candidate.title.startsWith("Decision:")
+			? 72
+			: 60;
+	const title = sanitizeLearningTitle(candidate.title, statement, titleBodyMax);
+	if (title.length === 0 || looksLikeSkillHarnessLeak(title)) {
+		return null;
+	}
+
+	return {
+		...candidate,
+		evidence: evidence.length > 0 ? evidence : [capEvidenceText(statement)],
+		statement,
+		title,
+	};
 }
 
 function dedupeProjectCandidates(

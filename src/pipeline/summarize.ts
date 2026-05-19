@@ -2,7 +2,8 @@ import type { Event, Learning, SourceSession, Summary, Turn } from "../models/ca
 import { summarySchema } from "../models/canonical.js";
 import {
   extractSubstantivePrompt,
-  firstSubstantivePromptFromTurns
+  firstSubstantivePromptFromTurns,
+  sanitizeHarnessLeakText,
 } from "./prompt-sanitize.js";
 
 export type SummarizeSessionInput = {
@@ -241,7 +242,11 @@ function truncateInline(value: string, maxLength: number): string {
 }
 
 function normalizeSummaryLine(value: string): string {
-  return truncateInline(value.replace(/\s+/g, " ").trim(), 180);
+  const sanitized = sanitizeHarnessLeakText(value);
+  const normalized = (sanitized.length > 0 ? sanitized : value)
+    .replace(/\s+/g, " ")
+    .trim();
+  return truncateInline(normalized, 180);
 }
 
 function selectTopicLine(prompt: string): string {
@@ -262,7 +267,12 @@ function selectTopicLine(prompt: string): string {
 }
 
 function isHarnessTopicLine(line: string): boolean {
-  return /^#\s*AGENTS\.md\b/i.test(line) || /^AGENTS\.md\s+instructions\s+for\b/i.test(line);
+  return (
+    /^#\s*AGENTS\.md\b/i.test(line) ||
+    /^AGENTS\.md\s+instructions\s+for\b/i.test(line) ||
+    /^<\/?skill\b/i.test(line) ||
+    /\/SKILL\.md\b/i.test(line)
+  );
 }
 
 function isPromptNoiseLine(line: string): boolean {

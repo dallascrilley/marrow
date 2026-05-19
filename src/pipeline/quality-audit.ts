@@ -308,7 +308,9 @@ function collectSessionIssues(
 		issues.push("process_chatter");
 	}
 
-	if (/<(?:attached_files|code_selection|plugin_info)\b/i.test(summaryText)) {
+	if (
+		/<(?:attached_files|code_selection|plugin_info|skill)\b/i.test(summaryText)
+	) {
 		issues.push("wrapper_tags");
 	}
 
