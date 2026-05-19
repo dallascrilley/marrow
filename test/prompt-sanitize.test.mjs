@@ -8,7 +8,11 @@ import {
 	firstSubstantivePromptFromTurns,
 	isHarnessOrBootLine,
 	isNoSignalPrompt,
+	isTinyNoSignalSession,
 	learningEvidenceFromPrompt,
+	looksLikeSkillHarnessLeak,
+	sanitizeHarnessLeakText,
+	sanitizeLearningTitle,
 	sanitizeUserPrompt,
 } from "../dist/pipeline/prompt-sanitize.js";
 
@@ -81,8 +85,94 @@ test("isNoSignalPrompt detects tiny test prompts", () => {
 	assert.equal(isNoSignalPrompt("Hello"), true);
 	assert.equal(isNoSignalPrompt("What is 2+2?"), true);
 	assert.equal(isNoSignalPrompt("Say one"), true);
+	assert.equal(isNoSignalPrompt("Thanks!"), true);
 	assert.equal(
 		isNoSignalPrompt("Refactor retention.ts to classify no-signal sessions."),
+		false,
+	);
+});
+
+test("sanitizeUserPrompt strips skill blocks and SKILL.md paths", () => {
+	const raw = [
+		"<skill>dogfood</skill>",
+		"Keep vault-push carve-out scoped to asd-learnings/.",
+		"See ~/.cursor/skills/dogfood/SKILL.md for triggers.",
+	].join("\n");
+
+	const sanitized = sanitizeUserPrompt(raw);
+	assert.match(sanitized, /vault-push carve-out/);
+	assert.doesNotMatch(sanitized, /<skill/i);
+	assert.doesNotMatch(sanitized, /SKILL\.md/i);
+});
+
+test("sanitizeHarnessLeakText removes skill preamble lines", () => {
+	const raw = [
+		"Use when the user asks to dogfood a workflow.",
+		"Decision: scope vault writes to asd-learnings/ only.",
+	].join("\n");
+
+	const sanitized = sanitizeHarnessLeakText(raw);
+	assert.match(sanitized, /scope vault writes/);
+	assert.doesNotMatch(sanitized, /Use when/i);
+});
+
+test("extractSubstantivePrompt drops Base directory skill preamble", () => {
+	const raw = [
+		"Base directory for this skill: /Users/me/.cursor/skills/overseer",
+		"Run pnpm test in agent-session-distillery before vault push.",
+	].join("\n");
+
+	const substantive = extractSubstantivePrompt(raw);
+	assert.match(substantive, /pnpm test/);
+	assert.doesNotMatch(substantive, /Base directory for this skill/i);
+});
+
+test("learningEvidenceFromPrompt omits skill preamble evidence", () => {
+	const evidence = learningEvidenceFromPrompt(
+		[
+			"Base directory for this skill: /tmp/skills/foo",
+			"Verify memory push-wiki only writes asd-learnings/.",
+		].join("\n"),
+	);
+
+	assert.equal(evidence.length, 1);
+	assert.match(evidence[0], /memory push-wiki/);
+	assert.doesNotMatch(evidence[0], /Base directory/i);
+});
+
+test("sanitizeLearningTitle rebuilds when title body has skill tags", () => {
+	const title = sanitizeLearningTitle(
+		"Decision: Refer to docs/spec.md for <skill>plan</skill> architecture decisions.",
+		"Refer to docs/spec.md for sherry content architecture decisions.",
+		60,
+	);
+
+	assert.match(title, /^Decision:/);
+	assert.doesNotMatch(title, /<skill/i);
+	assert.match(title, /sherry content/i);
+});
+
+test("looksLikeSkillHarnessLeak flags skill metadata", () => {
+	assert.equal(looksLikeSkillHarnessLeak("<skill>plan</skill> topic"), true);
+	assert.equal(
+		looksLikeSkillHarnessLeak("Prefer sqlite WAL for ledger durability."),
+		false,
+	);
+});
+
+test("isTinyNoSignalSession accepts multi-turn smoke without durable task", () => {
+	assert.equal(
+		isTinyNoSignalSession([
+			{ user_prompt: "Hello" },
+			{ user_prompt: "Say one" },
+		]),
+		true,
+	);
+	assert.equal(
+		isTinyNoSignalSession([
+			{ user_prompt: "Hello" },
+			{ user_prompt: "Make these tests go faster in src/foo.test.ts" },
+		]),
 		false,
 	);
 });

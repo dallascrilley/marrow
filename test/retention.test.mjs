@@ -87,3 +87,37 @@ test("isDiscardableNoSignal is false for substantive multi-turn task", () => {
 
   assert.equal(isDiscardableNoSignal(summary, turns), false);
 });
+
+test("isDiscardableNoSignal is true for tiny multi-turn no-signal session", () => {
+  const summary = lowSignalSummary({ topic: "Hello" });
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Hi.",
+      commands_seen: [],
+      ended_at: "2026-05-16T12:02:00Z",
+      files_touched: [],
+      index: 0,
+      session_id: "sess-1",
+      started_at: "2026-05-16T12:00:00Z",
+      tool_stub_count: 0,
+      turn_id: "sess-1:turn-0000",
+      user_prompt: "Hello",
+      verification_seen: false,
+    }),
+    turnSchema.parse({
+      assistant_summary: "One.",
+      commands_seen: [],
+      ended_at: "2026-05-16T12:05:00Z",
+      files_touched: [],
+      index: 1,
+      session_id: "sess-1",
+      started_at: "2026-05-16T12:03:00Z",
+      tool_stub_count: 0,
+      turn_id: "sess-1:turn-0001",
+      user_prompt: "Say one",
+      verification_seen: false,
+    }),
+  ];
+
+  assert.equal(isDiscardableNoSignal(summary, turns), true);
+});
