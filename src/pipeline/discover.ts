@@ -14,6 +14,9 @@ export type SupportedSource = (typeof supportedSources)[number];
 
 export type DiscoverPhaseInput = {
   database: DatabaseSync;
+  excludePaths?: readonly string[];
+  excludeProjectKeys?: readonly string[];
+  includeTestSessions?: boolean;
   limit?: number;
   onlyNewOrChanged?: boolean;
   since?: string;
@@ -33,7 +36,7 @@ export type DiscoverPhaseResult = {
 };
 
 export async function runDiscoverPhase(input: DiscoverPhaseInput): Promise<DiscoverPhaseResult> {
-  const discovery = await runAdapterDiscovery(input.source);
+  const discovery = await runAdapterDiscovery(input);
   const sinceTimestamp = input.since ? Date.parse(input.since) : Number.NEGATIVE_INFINITY;
 
   if (Number.isNaN(sinceTimestamp)) {
@@ -42,6 +45,7 @@ export async function runDiscoverPhase(input: DiscoverPhaseInput): Promise<Disco
 
   const transcripts = discovery.transcripts
     .filter((entry) => Date.parse(entry.modifiedAt) >= sinceTimestamp)
+    .filter((entry) => !shouldExcludeTranscript(entry, input))
     .sort((left, right) => {
       const byTime = Date.parse(left.modifiedAt) - Date.parse(right.modifiedAt);
       return byTime !== 0 ? byTime : left.sourcePath.localeCompare(right.sourcePath);
@@ -103,7 +107,25 @@ function toSourceSession(transcript: TranscriptDiscovery, source: SupportedSourc
   };
 }
 
-async function runAdapterDiscovery(source: SupportedSource): Promise<{ transcripts: readonly TranscriptDiscovery[] }> {
+function shouldExcludeTranscript(
+  entry: TranscriptDiscovery,
+  input: DiscoverPhaseInput,
+): boolean {
+  const excludePaths = input.excludePaths ?? [];
+  for (const fragment of excludePaths) {
+    if (fragment.length > 0 && entry.sourcePath.includes(fragment)) {
+      return true;
+    }
+  }
+
+  const excludeProjects = input.excludeProjectKeys ?? [];
+  return excludeProjects.includes(entry.projectKey);
+}
+
+async function runAdapterDiscovery(
+  input: DiscoverPhaseInput,
+): Promise<{ transcripts: readonly TranscriptDiscovery[] }> {
+  const source = input.source;
   switch (source) {
     case "cursor": {
       const result = await discoverCursorInputs();
@@ -118,7 +140,9 @@ async function runAdapterDiscovery(source: SupportedSource): Promise<{ transcrip
       return { transcripts: result.transcripts };
     }
     case "pi": {
-      const result = await discoverPiInputs();
+      const result = await discoverPiInputs({
+        includeTestSessions: input.includeTestSessions === true,
+      });
       return { transcripts: result.transcripts };
     }
     default: {

@@ -15,8 +15,11 @@ test("walks the date-partitioned sessions tree and attributes the workspace", as
 	const result = await discoverCodexCliInputs({
 		codexHome: fixtureCodexHome,
 	});
-	assert.equal(result.transcripts.length, 1);
-	const transcript = result.transcripts[0];
+	assert.equal(result.transcripts.length, 2);
+	const transcript = result.transcripts.find((entry) =>
+		entry.sourcePath.includes("rollout-agents-first"),
+	);
+	assert.ok(transcript);
 	assert.equal(transcript.projectKey, "demo");
 	assert.equal(transcript.workspacePath, "/Users/example/Code/demo");
 	assert.equal(transcript.rolloutTreeRoot, "sessions");

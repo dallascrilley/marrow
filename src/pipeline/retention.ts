@@ -1,7 +1,7 @@
 import { access, readFile } from "node:fs/promises";
 
 import type { DeletionCandidateInput, LifecycleState } from "../db/queries.js";
-import type { RetentionReceipt, SourceSession, Summary } from "../models/canonical.js";
+import type { RetentionReceipt, SourceSession, Summary, Turn } from "../models/canonical.js";
 import { retentionReceiptSchema, summarySchema } from "../models/canonical.js";
 import { defaultUserScopeKey } from "./extract.js";
 import { getSessionManifestPath } from "../writers/manifest-writer.js";
@@ -11,6 +11,10 @@ import {
 } from "../writers/knowledge-writer.js";
 import { getRetentionReceiptPath } from "../writers/report-writer.js";
 import { getSessionSummaryJsonPath, getSessionSummaryMarkdownPath } from "../writers/summary-writer.js";
+import {
+  firstSubstantivePromptFromTurns,
+  isNoSignalPrompt,
+} from "./prompt-sanitize.js";
 
 export type RetentionEvaluation = {
   artifactState: {
@@ -32,6 +36,7 @@ export async function evaluateRetentionReadiness(input: {
   sourceHash?: string;
   sourceSession: SourceSession;
   sourceSessionId: number;
+  turns?: readonly Pick<Turn, "user_prompt">[];
   userScopeKey?: string;
 }): Promise<RetentionEvaluation> {
   const sessionId = input.sessionId ?? input.sourceSession.session_id;
@@ -44,19 +49,33 @@ export async function evaluateRetentionReadiness(input: {
   const manifestWritten = await fileExists(getSessionManifestPath(sessionId));
   const receiptPath = getRetentionReceiptPath(sessionId);
   const receiptWritten = await fileExists(receiptPath);
+  const hasLearnings = projectLearningsWritten || userLearningsWritten;
+  const artifactsComplete =
+    summaryWritten && manifestWritten && receiptWritten;
+  const discardableNoSignal =
+    artifactsComplete &&
+    !hasLearnings &&
+    summary !== null &&
+    isDiscardableNoSignal(summary, input.turns);
   const safeToDelete =
-    summaryWritten &&
-    (projectLearningsWritten || userLearningsWritten) &&
-    manifestWritten &&
-    receiptWritten;
-  const reason = determineBlockedReason({
-    manifestWritten,
-    projectLearningsWritten,
-    receiptWritten,
-    summary,
-    summaryWritten,
-    userLearningsWritten
-  });
+    artifactsComplete && (hasLearnings || discardableNoSignal);
+  const candidateState = safeToDelete
+    ? hasLearnings
+      ? "ready"
+      : "discardable_no_signal"
+    : "pending_artifacts";
+  const reason = safeToDelete
+    ? hasLearnings
+      ? "All required retention artifacts are present."
+      : "no_signal: Summary and provenance artifacts exist; session had no durable learnings."
+    : determineBlockedReason({
+        manifestWritten,
+        projectLearningsWritten,
+        receiptWritten,
+        summary,
+        summaryWritten,
+        userLearningsWritten
+      });
   const receipt = retentionReceiptSchema.parse({
     archive_copy_written: manifestWritten,
     extracted_at: new Date().toISOString(),
@@ -78,10 +97,10 @@ export async function evaluateRetentionReadiness(input: {
       userLearningsWritten
     },
     candidate: {
-      candidateState: safeToDelete ? "ready" : "pending_artifacts",
+      candidateState,
       currentLifecycleState: input.currentLifecycleState,
       projectKey,
-      reason: safeToDelete ? "All required retention artifacts are present." : reason,
+      reason,
       safeToDelete,
       sessionId,
       sourceHash: receipt.source_hash,
@@ -90,6 +109,30 @@ export async function evaluateRetentionReadiness(input: {
     receipt,
     receiptPath
   };
+}
+
+export function isDiscardableNoSignal(
+  summary: Summary,
+  turns?: readonly Pick<Turn, "user_prompt">[],
+): boolean {
+  if (!isLowSignalSummary(summary)) {
+    return false;
+  }
+
+  if (turns !== undefined && turns.length > 0) {
+    const firstSubstantive = firstSubstantivePromptFromTurns(turns);
+    if (firstSubstantive === null) {
+      return true;
+    }
+
+    return isNoSignalPrompt(firstSubstantive);
+  }
+
+  if (summary.topic !== null && summary.topic.length > 0) {
+    return isNoSignalPrompt(summary.topic);
+  }
+
+  return true;
 }
 
 async function hasSummaryArtifacts(sessionId: string): Promise<boolean> {

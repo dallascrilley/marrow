@@ -38,8 +38,8 @@ test("ingest backfill --source codex-cli processes the smoke fixture end-to-end"
 
 		const payload = JSON.parse(result.stdout);
 		assert.equal(payload.source, "codex-cli");
-		assert.equal(payload.discovered_count, 1);
-		assert.equal(payload.sessions.length, 1);
+		assert.equal(payload.discovered_count, 2);
+		assert.equal(payload.sessions.length, 2);
 		const session = payload.sessions[0];
 		assert.equal(session.project_key, "demo");
 		assert.ok(session.summary_path.endsWith("summary.json"));

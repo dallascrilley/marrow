@@ -8,6 +8,11 @@ import type {
 	Turn,
 } from "../models/canonical.js";
 import { learningSchema } from "../models/canonical.js";
+import {
+	extractSubstantivePrompt,
+	learningEvidenceFromPrompt,
+	sanitizeUserPrompt,
+} from "./prompt-sanitize.js";
 
 export const defaultUserScopeKey = "operator";
 
@@ -56,7 +61,9 @@ export function extractLearnings(
 	);
 	const user = dedupeLearnings(
 		input.turns.flatMap((turn) =>
-			extractUserPreferenceCandidates(turn.user_prompt).map(
+			extractUserPreferenceCandidates(
+				extractSubstantivePrompt(turn.user_prompt) ?? "",
+			).map(
 				(candidate, index) =>
 					createLearning({
 						confidence: candidate.confidence,
@@ -347,16 +354,18 @@ function toProjectTurnCandidates(input: {
 		});
 	}
 
+	const promptForClassification =
+		sanitizeUserPrompt(input.turn.user_prompt) || input.turn.user_prompt;
 	const workflowCommand = hasVerifiedFix
 		? null
-		: selectWorkflowCommand(commands, input.turn.user_prompt);
+		: selectWorkflowCommand(commands, promptForClassification);
 	if (workflowCommand !== null) {
-		const workflowTarget = classifyWorkflowTarget(input.turn.user_prompt);
+		const workflowTarget = classifyWorkflowTarget(promptForClassification);
 		const statement = `Use ${formatCommand(workflowCommand)} for ${workflowTarget} in ${input.sourceSession.project_key}.`;
 		candidates.push({
 			confidence: "medium",
 			dedupeKey: `workflow:${statement.toLowerCase()}`,
-			evidence: [input.turn.user_prompt, workflowCommand],
+			evidence: learningEvidenceFromPrompt(input.turn.user_prompt, workflowCommand),
 			kind: "workflow",
 			learningId: `${input.sourceSession.session_id}:project:workflow:${input.index}`,
 			promotionBasis:
@@ -397,14 +406,14 @@ function toProjectTurnCandidates(input: {
 
 	const prReviewCommand = selectPrReviewCommand(
 		commands,
-		input.turn.user_prompt,
+		promptForClassification,
 	);
 	if (prReviewCommand !== null) {
 		const statement = `Use ${formatCommand(prReviewCommand)} for PR review in ${input.sourceSession.project_key}.`;
 		candidates.push({
 			confidence: "medium",
 			dedupeKey: `pr-review:${statement.toLowerCase()}`,
-			evidence: [input.turn.user_prompt, prReviewCommand],
+			evidence: learningEvidenceFromPrompt(input.turn.user_prompt, prReviewCommand),
 			kind: "workflow",
 			learningId: `${input.sourceSession.session_id}:project:pr-review:${input.index}`,
 			promotionBasis:
@@ -421,14 +430,14 @@ function toProjectTurnCandidates(input: {
 
 	const forkSyncCommand = selectForkSyncCommand(
 		commands,
-		input.turn.user_prompt,
+		promptForClassification,
 	);
 	if (forkSyncCommand !== null) {
 		const statement = `Use ${formatCommand(forkSyncCommand)} to maintain private fork with upstream in ${input.sourceSession.project_key}.`;
 		candidates.push({
 			confidence: "medium",
 			dedupeKey: `fork-sync:${statement.toLowerCase()}`,
-			evidence: [input.turn.user_prompt, forkSyncCommand],
+			evidence: learningEvidenceFromPrompt(input.turn.user_prompt, forkSyncCommand),
 			kind: "workflow",
 			learningId: `${input.sourceSession.session_id}:project:fork-sync:${input.index}`,
 			promotionBasis:
@@ -895,8 +904,10 @@ function extractCrashDiagnostic(
 	commands: readonly string[],
 	files: readonly string[],
 ): { statement: string; evidence: string[] } | null {
+	const promptForClassification =
+		sanitizeUserPrompt(turn.user_prompt) || turn.user_prompt;
 	if (
-		!/\b(?:fix|crash|error):|\b(?:debug|diagnose)\b/i.test(turn.user_prompt)
+		!/\b(?:fix|crash|error):|\b(?:debug|diagnose)\b/i.test(promptForClassification)
 	) {
 		return null;
 	}
@@ -918,10 +929,11 @@ function extractCrashDiagnostic(
 
 	const command = diagnosticCommands[0];
 	const file = errorFiles[0];
+	const promptSnippet = promptContextLine(turn.user_prompt);
 	const evidence = uniqueStrings([
 		...(command ? [command] : []),
 		...(file ? [file] : []),
-		turn.user_prompt,
+		...learningEvidenceFromPrompt(turn.user_prompt),
 	]);
 
 	if (command !== undefined && file !== undefined) {
@@ -933,14 +945,14 @@ function extractCrashDiagnostic(
 
 	if (command !== undefined) {
 		return {
-			statement: `Diagnose crashes with ${formatCommand(command)} in ${turn.user_prompt.split(/\r?\n/)[0] ?? "this project"}.`,
+			statement: `Diagnose crashes with ${formatCommand(command)} in ${promptSnippet}.`,
 			evidence,
 		};
 	}
 
 	if (file !== undefined) {
 		return {
-			statement: `Check ${file} for crash diagnostics in ${turn.user_prompt.split(/\r?\n/)[0] ?? "this project"}.`,
+			statement: `Check ${file} for crash diagnostics in ${promptSnippet}.`,
 			evidence,
 		};
 	}
@@ -952,9 +964,11 @@ function extractSpecDecision(
 	turn: Turn,
 	files: readonly string[],
 ): { statement: string; evidence: string[] } | null {
+	const promptForClassification =
+		sanitizeUserPrompt(turn.user_prompt) || turn.user_prompt;
 	if (
 		!/\b(?:speckit|spec|architecture|roadmap|design doc|create a .+ wrapper|create a .+ spec)\b/i.test(
-			turn.user_prompt,
+			promptForClassification,
 		)
 	) {
 		return null;
@@ -970,17 +984,25 @@ function extractSpecDecision(
 	}
 
 	const file = specFiles[0]!;
-	const topic =
-		turn.user_prompt
-			.replace(/\/(?:speckit|speckit-specify)\b/gi, "")
-			.replace(/['"]/g, "")
-			.trim()
-			.split(/\r?\n/)[0] ?? "the specified design";
+	const topic = promptForClassification
+		.replace(/\/(?:speckit|speckit-specify)\b/gi, "")
+		.replace(/['"]/g, "")
+		.trim()
+		.split(/\r?\n/)[0] ?? "the specified design";
 
 	return {
 		statement: `Refer to ${file} for ${truncateInline(topic, 60)} architecture decisions.`,
-		evidence: [turn.user_prompt, file],
+		evidence: learningEvidenceFromPrompt(turn.user_prompt, file),
 	};
+}
+
+function promptContextLine(rawPrompt: string): string {
+	const substantive = extractSubstantivePrompt(rawPrompt);
+	if (substantive === null) {
+		return "this project";
+	}
+
+	return substantive.split(/\r?\n/)[0]?.trim() || "this project";
 }
 
 function formatCommand(command: string): string {
@@ -1417,6 +1439,10 @@ function isRedundantProjectCandidate(
 	return (
 		candidateKey.includes(existingKey) || existingKey.includes(candidateKey)
 	);
+}
+
+export function semanticLearningStatementKey(value: string): string {
+	return semanticCandidateKey(value);
 }
 
 function semanticCandidateKey(value: string): string {

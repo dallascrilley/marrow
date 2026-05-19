@@ -173,3 +173,49 @@ test("summary synthesis turns final completion evidence into operator-ready outc
   assert.deepEqual(summary.files_of_interest, ["shared/db_sqlite.py"]);
   assert.equal(summary.next_step, "No open next step recorded.");
 });
+
+test("summary topic ignores AGENTS harness and uses substantive user task", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "agents-first-topic"
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Acknowledged harness.",
+      commands_seen: [],
+      ended_at: "2026-05-03T23:10:03.000Z",
+      files_touched: [],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-03T23:10:02.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt:
+        "# AGENTS.md instructions for /Users/example/Code/demo\n\n<INSTRUCTIONS>\nFollow project standards.\n</INSTRUCTIONS>",
+      verification_seen: false
+    }),
+    turnSchema.parse({
+      assistant_summary: "Documented carve-out.",
+      commands_seen: [],
+      ended_at: "2026-05-03T23:10:05.000Z",
+      files_touched: ["CLAUDE.md"],
+      index: 1,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-03T23:10:04.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0001`,
+      user_prompt: "Add vault-push carve-out documentation to CLAUDE.md.",
+      verification_seen: false
+    })
+  ];
+
+  const summary = summarizeSession({
+    events: [],
+    sourceSession,
+    turns
+  });
+
+  assert.match(summary.topic, /vault-push carve-out/i);
+  assert.doesNotMatch(summary.topic, /AGENTS\.md/i);
+});

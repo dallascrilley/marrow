@@ -59,7 +59,10 @@ async function buildRetentionDecision(candidate: DeletionCandidateRow): Promise<
     Object.entries(artifactPaths).map(async ([name, path]) => [name, await pathExists(path)] as const)
   );
   const artifactPresence = Object.fromEntries(artifactPresenceEntries) as RetentionDecision["artifact_presence"];
-  const missingArtifacts = missingRequiredArtifacts(artifactPresence);
+  const missingArtifacts = missingRequiredArtifacts(
+    artifactPresence,
+    candidate.candidate_state,
+  );
   const safeToDelete = candidate.safe_to_delete === 1;
 
   return {
@@ -75,25 +78,38 @@ async function buildRetentionDecision(candidate: DeletionCandidateRow): Promise<
     session_id: candidate.session_id,
     source_hash: candidate.source_hash,
     source_session_id: candidate.source_session_id,
-    status: safeToDelete && candidate.candidate_state === "ready" ? "ready" : "blocked",
+    status:
+      safeToDelete && isDeletionReadyState(candidate.candidate_state) ? "ready" : "blocked",
     updated_at: candidate.updated_at
   };
 }
 
-function missingRequiredArtifacts(artifactPresence: RetentionDecision["artifact_presence"]): string[] {
+function isDeletionReadyState(candidateState: string): boolean {
+  return candidateState === "ready" || candidateState === "discardable_no_signal";
+}
+
+function missingRequiredArtifacts(
+  artifactPresence: RetentionDecision["artifact_presence"],
+  candidateState: string,
+): string[] {
+  const knowledgeOptional = candidateState === "discardable_no_signal";
   const missing = [
     artifactPresence.manifest_json ? null : "manifest_json",
     artifactPresence.retention_receipt_json ? null : "retention_receipt_json",
     artifactPresence.summary_json ? null : "summary_json",
     artifactPresence.summary_markdown ? null : "summary_markdown",
-    artifactPresence.project_knowledge_jsonl || artifactPresence.user_knowledge_jsonl ? null : "knowledge_jsonl"
+    knowledgeOptional ||
+    artifactPresence.project_knowledge_jsonl ||
+    artifactPresence.user_knowledge_jsonl
+      ? null
+      : "knowledge_jsonl"
   ].filter((value): value is string => value !== null);
 
   return missing.sort();
 }
 
 function nextAction(candidate: DeletionCandidateRow, missingArtifacts: readonly string[]): string {
-  if (candidate.safe_to_delete === 1 && candidate.candidate_state === "ready") {
+  if (candidate.safe_to_delete === 1 && isDeletionReadyState(candidate.candidate_state)) {
     return "Review the manifest and retention receipt; run delete apply --apply only when deletion is intentionally approved.";
   }
 

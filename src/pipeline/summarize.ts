@@ -1,5 +1,9 @@
 import type { Event, Learning, SourceSession, Summary, Turn } from "../models/canonical.js";
 import { summarySchema } from "../models/canonical.js";
+import {
+  extractSubstantivePrompt,
+  firstSubstantivePromptFromTurns
+} from "./prompt-sanitize.js";
 
 export type SummarizeSessionInput = {
   deletionReadiness?: string;
@@ -59,10 +63,12 @@ export function summarizeSession(input: SummarizeSessionInput): Summary {
 }
 
 function deriveTopic(sourceSession: SourceSession, turns: readonly Turn[]): string {
-  const prompt = turns[0]?.user_prompt.trim() ?? "";
+  const substantive =
+    firstSubstantivePromptFromTurns(turns) ??
+    extractSubstantivePrompt(turns[0]?.user_prompt ?? "");
 
-  if (prompt.length > 0) {
-    const topicLine = selectTopicLine(prompt);
+  if (substantive !== null && substantive.length > 0) {
+    const topicLine = selectTopicLine(substantive);
     return truncateInline(topicLine, 120);
   }
 
@@ -245,7 +251,7 @@ function selectTopicLine(prompt: string): string {
     .filter((line) => line.length > 0);
 
   for (const line of lines) {
-    if (isPromptNoiseLine(line)) {
+    if (isPromptNoiseLine(line) || isHarnessTopicLine(line)) {
       continue;
     }
 
@@ -253,6 +259,10 @@ function selectTopicLine(prompt: string): string {
   }
 
   return prompt;
+}
+
+function isHarnessTopicLine(line: string): boolean {
+  return /^#\s*AGENTS\.md\b/i.test(line) || /^AGENTS\.md\s+instructions\s+for\b/i.test(line);
 }
 
 function isPromptNoiseLine(line: string): boolean {

@@ -9,7 +9,10 @@ import { listDeletionCandidates, markDeletionCandidateApplied, transitionPhase }
 export async function executeDeleteApply(context: CommandContext, database: DatabaseSync): Promise<number> {
   const apply = context.args.includes("--apply");
   const ready = listDeletionCandidates(database).filter(
-    (candidate) => candidate.safe_to_delete === 1 && candidate.candidate_state === "ready"
+    (candidate) =>
+      candidate.safe_to_delete === 1 &&
+      (candidate.candidate_state === "ready" ||
+        candidate.candidate_state === "discardable_no_signal")
   );
 
   if (!apply) {

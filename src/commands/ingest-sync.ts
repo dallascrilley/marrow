@@ -8,6 +8,11 @@ export async function executeIngestSync(context: CommandContext, database: Datab
   const options = parseIngestOptions(context.args);
   const discovery = await runDiscoverPhase({
     database,
+    ...(options.excludePaths.length > 0 ? { excludePaths: options.excludePaths } : {}),
+    ...(options.excludeProjectKeys.length > 0
+      ? { excludeProjectKeys: options.excludeProjectKeys }
+      : {}),
+    ...(options.includeTestSessions ? { includeTestSessions: true } : {}),
     ...(options.limit === undefined ? {} : { limit: options.limit }),
     onlyNewOrChanged: true,
     ...(options.since === undefined ? {} : { since: options.since }),

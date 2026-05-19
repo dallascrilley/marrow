@@ -55,3 +55,53 @@ test("verified completion events produce conservative project learnings", () => 
   assert.equal(learnings.project[0].confidence, "medium");
   assert.deepEqual(learnings.user, []);
 });
+
+test("learning evidence excludes AGENTS harness text from raw user prompt", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "extract-evidence"
+  };
+  const harness =
+    "# AGENTS.md instructions for /Users/example/Code/demo\n\n<INSTRUCTIONS>\nFollow project standards.\n</INSTRUCTIONS>";
+  const task = "Run ./.codex/prompts/review-pr.md on PR #42 before merge.";
+  const turn = turnSchema.parse({
+    assistant_summary: "Ran review prompt.",
+    commands_seen: ["./.codex/prompts/review-pr.md"],
+    ended_at: "2026-05-16T12:05:00Z",
+    files_touched: [],
+    index: 0,
+    session_id: sourceSession.session_id,
+    started_at: "2026-05-16T12:00:00Z",
+    tool_stub_count: 0,
+    turn_id: `${sourceSession.session_id}:turn-0000`,
+    user_prompt: `${harness}\n\n${task}`,
+    verification_seen: true
+  });
+  const event = eventSchema.parse({
+    confidence: "medium",
+    event_id: "extract-evidence:verification:1",
+    payload_small: {
+      command_strings: ["./.codex/prompts/review-pr.md"],
+      matched_rule: "verified"
+    },
+    source_offsets: {
+      end_line: 10,
+      start_line: 10
+    },
+    summary: "Verification noted: review prompt completed for PR #42.",
+    turn_id: turn.turn_id,
+    type: "verification"
+  });
+
+  const learnings = extractLearnings({
+    events: [event],
+    sourceSession,
+    turns: [turn]
+  });
+
+  assert.ok(learnings.project.length >= 1);
+  const evidence = learnings.project.flatMap((learning) => learning.evidence).join("\n");
+  assert.match(evidence, /review-pr\.md/);
+  assert.doesNotMatch(evidence, /AGENTS\.md instructions/i);
+});
