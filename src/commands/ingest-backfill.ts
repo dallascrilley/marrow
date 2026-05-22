@@ -8,12 +8,13 @@ import {
   upsertReviewQueueEntry
 } from "../db/ledger.js";
 import type { SourceSessionRow } from "../db/queries.js";
+import type { Event, Turn } from "../models/canonical.js";
 import { extractLearnings } from "../pipeline/extract.js";
 import { runArchivePhase } from "../pipeline/archive.js";
 import { runDiscoverPhase, type DiscoveredSourceSession } from "../pipeline/discover.js";
 import { runParsePhase } from "../pipeline/parse.js";
 import { runReducePhase } from "../pipeline/reduce.js";
-import { summarizeSession } from "../pipeline/summarize.js";
+import { summarizeSessionWithOptionalLlmTopic } from "../pipeline/summarize.js";
 import { writeKnowledgeArtifacts } from "../writers/knowledge-writer.js";
 import { writeSessionSummary } from "../writers/summary-writer.js";
 
@@ -30,12 +31,18 @@ export async function executeIngestBackfill(context: CommandContext, database: D
     ...(options.since === undefined ? {} : { since: options.since }),
     source: options.source
   });
-  const sessions = await processDiscoveredSessions(database, discovery.sessions, options.resume);
+  const sessions = await processDiscoveredSessions(
+    database,
+    discovery.sessions,
+    options.resume,
+    options.llmTopic
+  );
 
   context.output.info(
     JSON.stringify(
       {
         discovered_count: discovery.discoveredCount,
+        llm_topic: options.llmTopic,
         processed_count: discovery.sessions.length,
         resumed: options.resume,
         sessions,
@@ -52,7 +59,8 @@ export async function executeIngestBackfill(context: CommandContext, database: D
 export async function processDiscoveredSessions(
   database: DatabaseSync,
   entries: readonly DiscoveredSourceSession[],
-  resume: boolean
+  resume: boolean,
+  llmTopic = false
 ): Promise<Array<Record<string, unknown>>> {
   const sessions: Array<Record<string, unknown>> = [];
 
@@ -69,7 +77,7 @@ export async function processDiscoveredSessions(
       resume,
       sourceSession
     });
-    const summary = await runSummarizePhase(database, sourceSession, reduced.turns, reduced.events, resume);
+    const summary = await runSummarizePhase(database, sourceSession, reduced.turns, reduced.events, resume, llmTopic);
     const extracted = await runExtractPhase(database, sourceSession, reduced.turns, reduced.events, resume);
     const archived = await runArchivePhase({
       database,
@@ -100,6 +108,7 @@ export function parseIngestOptions(args: string[]): {
   excludeProjectKeys: string[];
   includeTestSessions: boolean;
   limit?: number;
+  llmTopic: boolean;
   resume: boolean;
   since?: string;
   source: "cursor" | "claude-code" | "codex-cli" | "pi";
@@ -109,6 +118,7 @@ export function parseIngestOptions(args: string[]): {
   let since: string | undefined;
   let source: "cursor" | "claude-code" | "codex-cli" | "pi" = "cursor";
   let includeTestSessions = false;
+  let llmTopic = false;
   const excludePaths: string[] = [];
   const excludeProjectKeys: string[] = [];
 
@@ -134,6 +144,11 @@ export function parseIngestOptions(args: string[]): {
 
     if (arg === "--resume") {
       resume = true;
+      continue;
+    }
+
+    if (arg === "--llm-topic") {
+      llmTopic = true;
       continue;
     }
 
@@ -176,6 +191,7 @@ export function parseIngestOptions(args: string[]): {
     excludeProjectKeys,
     includeTestSessions,
     ...(limit === undefined ? {} : { limit }),
+    llmTopic,
     resume,
     ...(since === undefined ? {} : { since }),
     source
@@ -185,9 +201,10 @@ export function parseIngestOptions(args: string[]): {
 export async function runSummarizePhase(
   database: DatabaseSync,
   sourceSession: SourceSessionRow,
-  turns: Parameters<typeof summarizeSession>[0]["turns"],
-  events: Parameters<typeof summarizeSession>[0]["events"],
-  resume: boolean
+  turns: readonly Turn[],
+  events: readonly Event[],
+  resume: boolean,
+  llmTopic = false
 ) {
   const checkpoint = getPhaseCheckpoint(database, sourceSession.id, "summarized");
   const reducedLearnings = extractLearnings({
@@ -195,13 +212,13 @@ export async function runSummarizePhase(
     sourceSession: toSourceSessionModel(sourceSession),
     turns
   });
-  const summary = summarizeSession({
+  const summary = await summarizeSessionWithOptionalLlmTopic({
     events,
     projectLearnings: reducedLearnings.project,
     sourceSession: toSourceSessionModel(sourceSession),
     turns,
     userLearnings: reducedLearnings.user
-  });
+  }, { llmTopic });
   const summaryResult = await writeSessionSummary(summary);
 
   if (

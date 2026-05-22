@@ -2,10 +2,12 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import type { Learning } from "../models/canonical.js";
+import type { Learning, SourceSession, Turn } from "../models/canonical.js";
 import { learningSchema } from "../models/canonical.js";
+import { extractSubstantivePrompt, sanitizeHarnessLeakText } from "./prompt-sanitize.js";
 
 export const defaultOpenRouterLearningReviewModel = "openai/gpt-5-nano";
+export const defaultOpenRouterTopicModel = "openai/gpt-5.4-nano";
 export const openRouterApiKeyEnvVar = "OPENROUTER_API_KEY";
 export const openRouterModelEnvVar = "OPENROUTER_MODEL";
 export const learningReviewCacheSchemaVersion = "llm-learning-review-cache-v1";
@@ -34,6 +36,10 @@ export type ReviewedLearning = {
 };
 
 type FetchLike = typeof fetch;
+type ChatMessage = {
+	content: string;
+	role: "system" | "user";
+};
 
 export async function reviewLearningWithOpenRouter(input: {
 	apiKey?: string | undefined;
@@ -71,70 +77,31 @@ export async function reviewLearningWithOpenRouter(input: {
 		}
 	}
 
-	const apiKey = input.apiKey ?? process.env[openRouterApiKeyEnvVar];
-	if (apiKey === undefined || apiKey.trim().length === 0) {
-		throw new Error(
-			`${openRouterApiKeyEnvVar} is required for LLM learning review`,
-		);
-	}
-
-	const fetchImpl = input.fetchImpl ?? fetch;
-	const abortController = new AbortController();
-	const timeout = setTimeout(() => abortController.abort(), 30_000);
-	let response: Response;
-	try {
-		response = await fetchImpl(
-			"https://openrouter.ai/api/v1/chat/completions",
+	const content = await completeOpenRouterJson({
+		apiKey: input.apiKey,
+		errorLabel: "learning review",
+		fetchImpl: input.fetchImpl,
+		messages: [
 			{
-				body: JSON.stringify({
-					messages: [
-						{
-							content: buildLearningReviewSystemPrompt(),
-							role: "system",
-						},
-						{
-							content: JSON.stringify(
-								{
-									evidence: learning.evidence,
-									kind: learning.kind,
-									project_key: input.projectKey,
-									statement: learning.statement,
-								},
-								null,
-								2,
-							),
-							role: "user",
-						},
-					],
-					model,
-					response_format: { type: "json_object" },
-					temperature: 0,
-				}),
-				headers: {
-					Authorization: `Bearer ${apiKey}`,
-					"Content-Type": "application/json",
-					"HTTP-Referer": "https://github.com/agent-session-distillery",
-					"X-Title": "agent-session-distillery",
-				},
-				method: "POST",
-				signal: abortController.signal,
+				content: buildLearningReviewSystemPrompt(),
+				role: "system",
 			},
-		);
-	} finally {
-		clearTimeout(timeout);
-	}
-
-	if (!response.ok) {
-		const body = await response.text();
-		throw new Error(
-			`OpenRouter learning review failed (${response.status}): ${body}`,
-		);
-	}
-
-	const payload = (await response.json()) as {
-		choices?: Array<{ message?: { content?: string } }>;
-	};
-	const content = extractReviewContent(payload);
+			{
+				content: JSON.stringify(
+					{
+						evidence: learning.evidence,
+						kind: learning.kind,
+						project_key: input.projectKey,
+						statement: learning.statement,
+					},
+					null,
+					2,
+				),
+				role: "user",
+			},
+		],
+		model,
+	});
 
 	const review = parseLearningReview(content);
 	if (cachePath !== undefined && input.noCache !== true) {
@@ -142,6 +109,36 @@ export async function reviewLearningWithOpenRouter(input: {
 	}
 
 	return review;
+}
+
+export async function generateTopicWithOpenRouter(input: {
+	apiKey?: string | undefined;
+	deterministicTopic: string;
+	fetchImpl?: FetchLike | undefined;
+	model?: string | undefined;
+	sourceSession: SourceSession;
+	turns: readonly Turn[];
+}): Promise<string> {
+	const model =
+		input.model ?? process.env[openRouterModelEnvVar] ?? defaultOpenRouterTopicModel;
+	const content = await completeOpenRouterJson({
+		apiKey: input.apiKey,
+		errorLabel: "topic generation",
+		fetchImpl: input.fetchImpl,
+		messages: [
+			{
+				content: buildTopicGenerationSystemPrompt(),
+				role: "system",
+			},
+			{
+				content: JSON.stringify(buildTopicGenerationPayload(input), null, 2),
+				role: "user",
+			},
+		],
+		model,
+	});
+
+	return parseTopicGeneration(content);
 }
 
 export async function reviewProjectLearningsWithOpenRouter(input: {
@@ -188,6 +185,59 @@ function buildLearningReviewSystemPrompt(): string {
 		"Reject generic completion summaries whose only durable fact is that work was completed or verified.",
 		"Use keep=false for reject; use keep=true for keep or rewrite.",
 	].join("\n");
+}
+
+function buildTopicGenerationSystemPrompt(): string {
+	return [
+		"You generate concise display topics for agent session summaries.",
+		"Return only JSON with key: topic.",
+		"The topic must be specific, human-readable, and at most 10 words.",
+		"Use the actual requested work, not harness text, file paths, commands, or boilerplate.",
+		"Do not invent product names, outcomes, or files absent from the provided turns.",
+	].join("\n");
+}
+
+function buildTopicGenerationPayload(input: {
+	deterministicTopic: string;
+	sourceSession: SourceSession;
+	turns: readonly Turn[];
+}): Record<string, unknown> {
+	return {
+		deterministic_topic: input.deterministicTopic,
+		project_key: input.sourceSession.project_key,
+		session_id: input.sourceSession.session_id,
+		turns: input.turns
+			.map((turn) => ({
+				assistant_summary: sanitizeTopicPayloadText(turn.assistant_summary, 240),
+				commands_seen: turn.commands_seen.slice(0, 4),
+				files_touched: turn.files_touched.slice(0, 6),
+				index: turn.index,
+				user_prompt: sanitizeTopicPayloadText(
+					extractSubstantivePrompt(turn.user_prompt) ?? turn.user_prompt,
+					500,
+				),
+			}))
+			.filter(
+				(turn) =>
+					turn.user_prompt.length > 0 ||
+					turn.assistant_summary.length > 0 ||
+					turn.commands_seen.length > 0 ||
+					turn.files_touched.length > 0,
+			)
+			.slice(0, 8),
+	};
+}
+
+function sanitizeTopicPayloadText(value: string, maxLength: number): string {
+	const sanitized = sanitizeHarnessLeakText(value);
+	const normalized = (sanitized.length > 0 ? sanitized : value)
+		.replace(/\s+/g, " ")
+		.trim();
+	if (normalized.length <= maxLength) {
+		return normalized;
+	}
+
+	return `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
 }
 
 export function buildLearningReviewCacheKey(input: {
@@ -262,15 +312,72 @@ function stableStringify(value: unknown): string {
 		.join(",")}}`;
 }
 
-function extractReviewContent(payload: {
+async function completeOpenRouterJson(input: {
+	apiKey?: string | undefined;
+	errorLabel: string;
+	fetchImpl?: FetchLike | undefined;
+	messages: readonly ChatMessage[];
+	model: string;
+}): Promise<string> {
+	const apiKey = input.apiKey ?? process.env[openRouterApiKeyEnvVar];
+	if (apiKey === undefined || apiKey.trim().length === 0) {
+		throw new Error(`${openRouterApiKeyEnvVar} is required for LLM ${input.errorLabel}`);
+	}
+
+	const fetchImpl = input.fetchImpl ?? fetch;
+	const abortController = new AbortController();
+	const timeout = setTimeout(() => abortController.abort(), 30_000);
+	let response: Response;
+	try {
+		response = await fetchImpl("https://openrouter.ai/api/v1/chat/completions", {
+			body: JSON.stringify({
+				messages: input.messages,
+				model: input.model,
+				response_format: { type: "json_object" },
+				temperature: 0,
+			}),
+			headers: {
+				Authorization: `Bearer ${apiKey}`,
+				"Content-Type": "application/json",
+				"HTTP-Referer": "https://github.com/agent-session-distillery",
+				"X-Title": "agent-session-distillery",
+			},
+			method: "POST",
+			signal: abortController.signal,
+		});
+	} finally {
+		clearTimeout(timeout);
+	}
+
+	if (!response.ok) {
+		const body = await response.text();
+		throw new Error(`OpenRouter ${input.errorLabel} failed (${response.status}): ${body}`);
+	}
+
+	const payload = (await response.json()) as {
+		choices?: Array<{ message?: { content?: string } }>;
+	};
+	return extractMessageContent(payload, input.errorLabel);
+}
+
+function extractMessageContent(payload: {
 	choices?: Array<{ message?: { content?: string } }>;
-}): string {
+}, errorLabel: string): string {
 	const content = payload.choices?.[0]?.message?.content;
 	if (content === undefined || content.trim().length === 0) {
-		throw new Error("OpenRouter learning review returned no message content");
+		throw new Error(`OpenRouter ${errorLabel} returned no message content`);
 	}
 
 	return content.trim();
+}
+
+function parseTopicGeneration(content: string): string {
+	const parsed = JSON.parse(content) as { topic?: unknown };
+	if (typeof parsed.topic !== "string" || parsed.topic.trim().length === 0) {
+		throw new Error("Topic generation JSON must include non-empty topic");
+	}
+
+	return parsed.topic.replace(/\s+/g, " ").trim();
 }
 
 function parseLearningReview(content: string): LearningReviewResult {
