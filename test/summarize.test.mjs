@@ -219,3 +219,58 @@ test("summary topic ignores AGENTS harness and uses substantive user task", () =
   assert.match(summary.topic, /vault-push carve-out/i);
   assert.doesNotMatch(summary.topic, /AGENTS\.md/i);
 });
+
+test("summary topic skips Codex protocol-only preambles", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "codex-protocol-topic"
+  };
+  const noisePrompts = [
+    "# CLAUDE.md instructions for /Users/example/Code/demo\n\n<INSTRUCTIONS>\nFollow project standards.\n</INSTRUCTIONS>",
+    "<environment_context>\n  <cwd>/Users/example/Code/demo</cwd>\n</environment_context>",
+    "<command-message>resume context</command-message>",
+    "<turn_aborted>",
+    "Caveat: this is a resumed conversation summary.",
+    "[Request interrupted by user for tool use]",
+    "[Image: screenshot.png]"
+  ];
+  const turns = [
+    ...noisePrompts.map((userPrompt, index) =>
+      turnSchema.parse({
+        assistant_summary: "Ignored protocol-only prompt.",
+        commands_seen: [],
+        ended_at: `2026-05-03T23:10:${String(index + 1).padStart(2, "0")}.000Z`,
+        files_touched: [],
+        index,
+        session_id: sourceSession.session_id,
+        started_at: `2026-05-03T23:10:${String(index).padStart(2, "0")}.000Z`,
+        tool_stub_count: 0,
+        turn_id: `${sourceSession.session_id}:turn-${String(index).padStart(4, "0")}`,
+        user_prompt: userPrompt,
+        verification_seen: false
+      })
+    ),
+    turnSchema.parse({
+      assistant_summary: "Started the requested export work.",
+      commands_seen: [],
+      ended_at: "2026-05-03T23:10:20.000Z",
+      files_touched: ["src/commands/export-index.ts"],
+      index: noisePrompts.length,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-03T23:10:19.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0007`,
+      user_prompt: "Add a consolidated session index export command.",
+      verification_seen: false
+    })
+  ];
+
+  const summary = summarizeSession({
+    events: [],
+    sourceSession,
+    turns
+  });
+
+  assert.equal(summary.topic, "Add a consolidated session index export command.");
+});

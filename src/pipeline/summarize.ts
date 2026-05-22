@@ -268,8 +268,13 @@ function selectTopicLine(prompt: string): string {
 
 function isHarnessTopicLine(line: string): boolean {
   return (
-    /^#\s*AGENTS\.md\b/i.test(line) ||
-    /^AGENTS\.md\s+instructions\s+for\b/i.test(line) ||
+    /^#\s*(?:AGENTS|CLAUDE)\.md\b/i.test(line) ||
+    /^(?:AGENTS|CLAUDE)\.md\s+instructions\s+for\b/i.test(line) ||
+    /^(?:system[-_]reminder|environment_context|command-message|command-name|command-args|task-notification|local-command-(?:stdout|stderr)|user-prompt-submit-hook|bash-(?:input|stdout|stderr))\b/i.test(line) ||
+    /^turn_aborted$/i.test(line) ||
+    /^Caveat:/i.test(line) ||
+    /^\[Request interrupted by user\b/i.test(line) ||
+    /^\[Image:[^\]]+\]$/i.test(line) ||
     /^<\/?skill\b/i.test(line) ||
     /\/SKILL\.md\b/i.test(line)
   );
