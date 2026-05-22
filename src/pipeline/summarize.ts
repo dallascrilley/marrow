@@ -50,18 +50,28 @@ export async function summarizeSessionWithOptionalLlmTopic(
   }
 
   const generateTopic = options.generateTopic ?? generateTopicWithOpenRouter;
-  const llmTopic = normalizeGeneratedTopic(
-    await generateTopic({
-      deterministicTopic,
-      sourceSession: input.sourceSession,
-      turns: input.turns
-    })
-  );
+  try {
+    const llmTopic = normalizeGeneratedTopic(
+      await generateTopic({
+        deterministicTopic,
+        sourceSession: input.sourceSession,
+        turns: input.turns
+      })
+    );
 
-  return summarizeSessionWithTopic(input, {
-    topic: llmTopic,
-    topicSource: "llm"
-  });
+    return summarizeSessionWithTopic(input, {
+      topic: llmTopic,
+      topicSource: "llm"
+    });
+  } catch (error) {
+    // An optional title enhancer must never break core ingest: on any LLM failure
+    // (network, rate limit, empty/invalid response), fall back to the deterministic topic.
+    console.warn(`[asd] LLM topic generation failed; using deterministic topic (${String(error)})`);
+    return summarizeSessionWithTopic(input, {
+      topic: deterministicTopic,
+      topicSource: "deterministic"
+    });
+  }
 }
 
 function summarizeSessionWithTopic(
