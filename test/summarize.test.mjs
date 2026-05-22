@@ -366,3 +366,39 @@ test("optional LLM topic calls mocked generator only for weak deterministic topi
   assert.equal(summary.topic, "gated LLM topic support");
   assert.equal(summary.topic_source, "llm");
 });
+
+test("optional LLM topic falls back to the deterministic topic when generation fails", async () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "agent-session-distillery",
+    session_id: "llm-topic-fallback"
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Implemented gated LLM topic generation.",
+      commands_seen: ["npm run build"],
+      ended_at: "2026-05-22T20:10:00.000Z",
+      files_touched: ["src/pipeline/summarize.ts"],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-22T20:09:00.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.",
+      verification_seen: false
+    })
+  ];
+
+  const summary = await summarizeSessionWithOptionalLlmTopic(
+    { events: [], sourceSession, turns },
+    {
+      generateTopic: async () => {
+        throw new Error("simulated OpenRouter failure");
+      },
+      llmTopic: true
+    }
+  );
+
+  assert.equal(summary.topic, "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.");
+  assert.equal(summary.topic_source, "deterministic");
+});
