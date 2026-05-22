@@ -1,6 +1,8 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import type { DatabaseSync } from "node:sqlite";
+
 import type { CommandContext } from "../cli.js";
 import { getRuntimePath } from "../config/paths.js";
 import {
@@ -10,6 +12,7 @@ import {
   type PushAllResult,
 } from "../pipeline/vault-push.js";
 import { executeMemoryExportWiki } from "./memory-export-wiki.js";
+import { renderProjectMemoryToVault } from "../v2/vault/render-memory.js";
 
 export const vaultRootEnvVar = "ASD_VAULT_ROOT";
 
@@ -64,11 +67,12 @@ function defaultVaultRoot(): string {
 
 export async function executeMemoryPushWiki(
   context: CommandContext,
+  database: DatabaseSync,
 ): Promise<number> {
   const options = parsePushWikiOptions(context.args);
 
   if (options.refresh) {
-    const exportExitCode = await executeMemoryExportWiki(context);
+    const exportExitCode = await executeMemoryExportWiki(context, database);
     if (exportExitCode !== 0) return exportExitCode;
   }
 
@@ -100,11 +104,33 @@ export async function executeMemoryPushWiki(
     vaultRoot: options.vaultRoot,
   });
 
-  context.output.info(formatSummary(result, options));
+  const memoryRenders = [];
+  const projectIds = [...new Set(records.map((record) => record.project.key))];
+  for (const projectId of projectIds) {
+    memoryRenders.push(
+      await renderProjectMemoryToVault({
+        projectId,
+        vaultRoot: options.vaultRoot,
+      }),
+    );
+  }
+
+  context.output.info(
+    formatSummary(result, options, memoryRenders),
+  );
   return 0;
 }
 
-function formatSummary(result: PushAllResult, options: PushWikiOptions): string {
+function formatSummary(
+  result: PushAllResult,
+  options: PushWikiOptions,
+  memoryRenders: Array<{
+    memoryPath: string;
+    topicFiles: Record<string, string>;
+    includedCount: number;
+    spilledCount: number;
+  }>,
+): string {
   return JSON.stringify(
     {
       vault_root: options.vaultRoot,
@@ -113,6 +139,9 @@ function formatSummary(result: PushAllResult, options: PushWikiOptions): string 
       total_written: result.total_written,
       total_skipped_unchanged: result.total_skipped_unchanged,
       total_skipped_protected: result.total_skipped_protected,
+      memory_renders: memoryRenders,
+      claude_import_hint:
+        "Add @import for MEMORY.md in the consuming repo CLAUDE.md if ambient context is desired.",
       pages: result.outcomes.map((entry) => ({
         id: entry.id,
         outcome: entry.outcome,

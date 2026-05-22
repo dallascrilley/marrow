@@ -10,6 +10,7 @@ import { executeIngestBackfill } from "./commands/ingest-backfill.js";
 import { executeIngestSync } from "./commands/ingest-sync.js";
 import { executeMemoryExportWiki } from "./commands/memory-export-wiki.js";
 import { executeMemoryPushWiki } from "./commands/memory-push-wiki.js";
+import { executeMigrateProjectIds } from "./commands/migrate-project-ids.js";
 import { executeQualityAudit } from "./commands/quality-audit.js";
 import { executeQualityApplyLearningReview } from "./commands/quality-apply-learning-review.js";
 import { executeQualityReviewLearnings } from "./commands/quality-review-learnings.js";
@@ -116,12 +117,13 @@ const commandTree: Record<string, CommandDefinition> = {
 		subcommands: {
 			"export-wiki": {
 				description: "Write reviewed-memory JSONL for the LLM wiki importer.",
-				execute: executeMemoryExportWiki,
+				execute: async (context) =>
+					withLedger(context, executeMemoryExportWiki),
 			},
 			"push-wiki": {
 				description:
 					"Push reviewed-memory records into the personal vault as Obsidian-shaped pages.",
-				execute: executeMemoryPushWiki,
+				execute: async (context) => withLedger(context, executeMemoryPushWiki),
 			},
 		},
 	},
@@ -136,6 +138,17 @@ const commandTree: Record<string, CommandDefinition> = {
 	explain: {
 		description: "Explain how a stored result was derived.",
 		execute: async (context) => withLedger(context, executeExplain),
+	},
+	migrate: {
+		description: "Migrate runtime artifacts between naming schemes.",
+		subcommands: {
+			"project-ids": {
+				description:
+					"Map legacy project keys to ADR-0002 project ids (dry-run by default; pass --apply to copy knowledge/projects).",
+				execute: async (context) =>
+					withLedger(context, executeMigrateProjectIds),
+			},
+		},
 	},
 };
 

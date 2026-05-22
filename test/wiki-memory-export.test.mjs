@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
+import { hashToProjectId } from "../dist/v2/project/resolve.js";
+
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
 const cliPath = join(projectRoot, "dist", "cli.js");
@@ -90,7 +92,10 @@ test("memory export-wiki writes stable reviewed-memory JSONL from project learni
 		assert.equal(record.schema_version, "asd.wiki_memory.v1");
 		assert.match(record.id, /^sha256:[a-f0-9]{64}$/);
 		assert.equal(record.kind, "project_learning");
-		assert.equal(record.project.key, "agent-session-distillery");
+		assert.equal(
+			record.project.key,
+			hashToProjectId("agent-session-distillery"),
+		);
 		assert.equal(record.project.root, null);
 		assert.equal(record.title, "Keep the wiki import boundary narrow");
 		assert.equal(

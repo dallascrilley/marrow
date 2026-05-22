@@ -1,8 +1,8 @@
 // Atomic instinct schema — v2 storage unit.
 // Specification: docs/specs/atomic-instinct-schema.md
-// Decision: docs/decisions/0001-storage-unit.md (pending)
+// Decision: docs/decisions/0001-storage-unit.md (accepted)
 //
-// Type-only. Not imported by v1 code paths.
+// v2 storage types — imported by pipeline bridges and tests only.
 
 import { z } from "zod";
 
@@ -113,6 +113,7 @@ export const createDeltaSchema = z.object({
   domain: domainSchema,
   initial_confidence: confidenceSchema,
 });
+export type CreateDelta = z.infer<typeof createDeltaSchema>;
 
 export const reinforceDeltaSchema = z.object({
   op: z.literal("reinforce"),
@@ -167,7 +168,7 @@ export const sessionBundleSchema = z.object({
   schema_version: z.literal(SCHEMA_VERSION),
   session_id: nonEmptyStringSchema,
   project_id: nonEmptyStringSchema,
-  source_adapter: z.enum(["cursor", "codex-cli", "pi"]),
+  source_adapter: z.enum(["cursor", "claude-code", "codex-cli", "pi"]),
   source_transcript: nonEmptyStringSchema,
   ingested_at: isoTimestampSchema,
   reviewed_at: isoTimestampSchema.nullable(),

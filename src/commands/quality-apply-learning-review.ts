@@ -5,7 +5,14 @@ import { dirname, join } from "node:path";
 import type { CommandContext } from "../cli.js";
 import { getRuntimePath, getRuntimeRoot } from "../config/paths.js";
 import { listSourceSessions } from "../db/ledger.js";
-import { learningSchema, type Learning } from "../models/canonical.js";
+import {
+	learningSchema,
+	type Learning,
+	type SourceSession,
+} from "../models/canonical.js";
+import { resolveProjectIdForSession } from "../v2/project/resolve.js";
+import { syncReviewedLearningsToInstinctStore } from "../v2/learning/sync-reviewed.js";
+import type { SupportedSource } from "../pipeline/discover.js";
 
 export async function executeQualityApplyLearningReview(
 	context: CommandContext,
@@ -70,17 +77,37 @@ export async function executeQualityApplyLearningReview(
 		reviewedLearningsBySession.set(review.session_id, sessionLearnings);
 	}
 
+	const instinctSync: Array<{
+		session_id: string;
+		project_key: string;
+		project_id: string;
+		instinct_count: number;
+	}> = [];
+
 	for (const [sessionId, learnings] of reviewedLearningsBySession) {
 		const session = sessionsById.get(sessionId);
 		if (session === undefined || learnings.length === 0) {
 			continue;
 		}
 
-		const outputPath = getReviewedProjectKnowledgePath(
-			session.project_key,
-			sessionId,
-		);
+		const projectId = (await resolveProjectIdForSession(session)).id;
+		const outputPath = getReviewedProjectKnowledgePath(projectId, sessionId);
 		await writeJsonlFile(outputPath, learnings);
+
+		const reviewedAt = new Date().toISOString();
+		const syncResult = await syncReviewedLearningsToInstinctStore({
+			session,
+			learnings,
+			sourceAdapter: session.source_tool as SupportedSource,
+			reviewedAt,
+			reviewer: "quality-apply-learning-review",
+		});
+		instinctSync.push({
+			session_id: sessionId,
+			project_key: session.project_key,
+			project_id: syncResult.projectId,
+			instinct_count: syncResult.instinctCount,
+		});
 	}
 
 	const reportPath = join(
@@ -100,6 +127,7 @@ export async function executeQualityApplyLearningReview(
 				rejected: rejected.length,
 				skipped: skipped.length,
 				output_root: join(getRuntimeRoot(), "knowledge/projects-reviewed"),
+				instinct_sync: instinctSync,
 				rejected_details: rejected,
 				skipped_details: skipped,
 			},
@@ -182,7 +210,7 @@ async function readOriginalProjectLearnings(
 	reviews: readonly ReviewSidecarEntry[],
 	sessionsById: ReadonlyMap<
 		string,
-		{ project_key: string; session_id: string }
+		Pick<SourceSession, "project_key" | "workspace_path" | "session_id">
 	>,
 ): Promise<Map<string, Learning>> {
 	const originalLearnings = new Map<string, Learning>();
@@ -193,8 +221,10 @@ async function readOriginalProjectLearnings(
 			continue;
 		}
 
+		const projectId = (await resolveProjectIdForSession(session)).id;
 		for (const learning of await readProjectLearningFile(
 			session.project_key,
+			projectId,
 			session.session_id,
 		)) {
 			originalLearnings.set(learning.learning_id, learning);
@@ -205,30 +235,44 @@ async function readOriginalProjectLearnings(
 }
 
 async function readProjectLearningFile(
-	projectKey: string,
+	legacyProjectKey: string,
+	resolvedProjectId: string,
 	sessionId: string,
 ): Promise<Learning[]> {
-	try {
-		const contents = await readFile(
-			join(
-				getRuntimePath("knowledgeProjects"),
-				projectKey,
-				`${sessionId}.jsonl`,
-			),
-			"utf8",
-		);
-		return contents
-			.split(/\r?\n/)
-			.map((line) => line.trim())
-			.filter((line) => line.length > 0)
-			.map((line) => learningSchema.parse(JSON.parse(line)));
-	} catch (error) {
-		if (isMissingFileError(error)) {
-			return [];
+	for (const projectKey of uniqueKeys(legacyProjectKey, resolvedProjectId)) {
+		try {
+			const contents = await readFile(
+				join(
+					getRuntimePath("knowledgeProjects"),
+					projectKey,
+					`${sessionId}.jsonl`,
+				),
+				"utf8",
+			);
+			return contents
+				.split(/\r?\n/)
+				.map((line) => line.trim())
+				.filter((line) => line.length > 0)
+				.map((line) => learningSchema.parse(JSON.parse(line)));
+		} catch (error) {
+			if (!isMissingFileError(error)) {
+				throw error;
+			}
 		}
-
-		throw error;
 	}
+
+	return [];
+}
+
+function uniqueKeys(...keys: string[]): string[] {
+	const seen = new Set<string>();
+	const ordered: string[] = [];
+	for (const key of keys) {
+		if (seen.has(key)) continue;
+		seen.add(key);
+		ordered.push(key);
+	}
+	return ordered;
 }
 
 function getReviewedProjectKnowledgePath(

@@ -86,7 +86,7 @@ export function maturityStateFrom(
   const correction = observations.length - reinforcing;
   const ageDays =
     observations.length > 0
-      ? daysBetween(observations[0]!.at, now)
+      ? Math.max(...observations.map((o) => daysBetween(o.at, now)))
       : 0;
   const survived = survivedContradiction(observations);
   return {
