@@ -2,10 +2,14 @@ import { createHash } from "node:crypto";
 import { readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import type { DatabaseSync } from "node:sqlite";
+
 import type { CommandContext } from "../cli.js";
 import { ensureRuntimePath, getRuntimePath } from "../config/paths.js";
+import { listSourceSessions } from "../db/ledger.js";
 import type { Learning } from "../models/canonical.js";
 import { mergeProjectKnowledgeDirectory } from "../pipeline/project-knowledge-merge.js";
+import { resolveProjectIdForLegacyKey } from "../v2/project/resolve.js";
 
 export const wikiMemorySchemaVersion = "asd.wiki_memory.v1";
 
@@ -35,8 +39,9 @@ export type WikiMemoryRecord = {
 
 export async function executeMemoryExportWiki(
 	context: CommandContext,
+	database: DatabaseSync,
 ): Promise<number> {
-	const records = await buildWikiMemoryExport();
+	const records = await buildWikiMemoryExport(database);
 	const exportDir = await ensureRuntimePath("wikiMemoryExports");
 	const exportPath = join(exportDir, "reviewed-memory.jsonl");
 	const contents =
@@ -54,7 +59,10 @@ export async function executeMemoryExportWiki(
 	return 0;
 }
 
-export async function buildWikiMemoryExport(): Promise<WikiMemoryRecord[]> {
+export async function buildWikiMemoryExport(
+	database: DatabaseSync,
+): Promise<WikiMemoryRecord[]> {
+	const sessions = listSourceSessions(database);
 	const reviewedRoot = join(getRuntimePath("root"), "knowledge", "projects-reviewed");
 	const projectRoot =
 		(await directoryExists(reviewedRoot)) ? reviewedRoot : getRuntimePath("knowledgeProjects");
@@ -62,13 +70,25 @@ export async function buildWikiMemoryExport(): Promise<WikiMemoryRecord[]> {
 	const records: WikiMemoryRecord[] = [];
 	const reviewSource =
 		projectRoot === reviewedRoot ? "reviewed-export" : "deterministic-export";
+	const resolvedByDir = new Map<string, string>();
 
 	for (const projectKey of projectDirs.sort()) {
+		let resolvedProjectId = resolvedByDir.get(projectKey);
+		if (resolvedProjectId === undefined) {
+			resolvedProjectId = await resolveProjectIdForLegacyKey(
+				projectKey,
+				sessions,
+			);
+			resolvedByDir.set(projectKey, resolvedProjectId);
+		}
+
 		const projectDir = join(projectRoot, projectKey);
 		const merged = await mergeProjectKnowledgeDirectory(projectDir);
 		for (const learning of merged.merged) {
 			if (learning.scope !== "project") continue;
-			records.push(toWikiMemoryRecord(learning, reviewSource));
+			records.push(
+				toWikiMemoryRecord(learning, reviewSource, resolvedProjectId),
+			);
 		}
 	}
 
@@ -79,13 +99,14 @@ export async function buildWikiMemoryExport(): Promise<WikiMemoryRecord[]> {
 function toWikiMemoryRecord(
 	learning: Learning,
 	reviewSource: WikiMemoryRecord["review"]["source"],
+	resolvedProjectId: string,
 ): WikiMemoryRecord {
 	return {
 		schema_version: wikiMemorySchemaVersion,
-		id: stableRecordId(learning),
+		id: stableRecordId(learning, resolvedProjectId),
 		kind: "project_learning",
 		project: {
-			key: learning.scope_key,
+			key: resolvedProjectId,
 			root: null,
 		},
 		title: learning.title,
@@ -105,11 +126,11 @@ function toWikiMemoryRecord(
 	};
 }
 
-function stableRecordId(learning: Learning): string {
+function stableRecordId(learning: Learning, resolvedProjectId: string): string {
 	const stablePayload = JSON.stringify({
 		schema_version: wikiMemorySchemaVersion,
 		learning_id: learning.learning_id,
-		project_key: learning.scope_key,
+		project_key: resolvedProjectId,
 		title: learning.title,
 		body: learning.statement,
 		source_refs: learning.source_refs,

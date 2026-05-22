@@ -1,7 +1,7 @@
 # Atomic Instinct Schema
 
 - Date: 2026-05-19
-- Status: draft — pending ADR-0001 decision
+- Status: accepted (ADR-0001, 2026-05-19)
 - Related: [ADR-0001](../decisions/0001-storage-unit.md), [td-839bd1](#)
 
 This is the concrete schema proposal for v2's atomic storage unit.

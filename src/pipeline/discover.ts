@@ -8,6 +8,7 @@ import { discoverPiInputs } from "../adapters/pi/discover.js";
 import type { TranscriptDiscovery } from "../adapters/_common/intermediate.js";
 import { upsertSourceSession, type UpsertSourceSessionResult } from "../db/ledger.js";
 import type { SourceSession } from "../models/canonical.js";
+import { resolveProjectId } from "../v2/project/resolve.js";
 
 export const supportedSources = ["cursor", "claude-code", "codex-cli", "pi"] as const;
 export type SupportedSource = (typeof supportedSources)[number];
@@ -54,7 +55,8 @@ export async function runDiscoverPhase(input: DiscoverPhaseInput): Promise<Disco
   const selected: DiscoveredSourceSession[] = [];
 
   for (const transcript of transcripts) {
-    const sourceSession = toSourceSession(transcript, input.source);
+    const projectKey = await resolveProjectKeyForTranscript(transcript);
+    const sourceSession = toSourceSession(transcript, input.source, projectKey);
     const ledger = upsertSourceSession(input.database, sourceSession);
 
     if (input.onlyNewOrChanged && !ledger.sourceChanged && ledger.sourceSession.content_revision > 1) {
@@ -88,13 +90,27 @@ export async function runDiscoverPhase(input: DiscoverPhaseInput): Promise<Disco
   };
 }
 
-function toSourceSession(transcript: TranscriptDiscovery, source: SupportedSource): SourceSession {
+async function resolveProjectKeyForTranscript(
+  transcript: TranscriptDiscovery,
+): Promise<string> {
+  const resolved = await resolveProjectId({
+    workspacePath: transcript.workspacePath,
+    sessionRoot: transcript.workspacePath ?? transcript.workspaceSlug,
+  });
+  return resolved.id;
+}
+
+function toSourceSession(
+  transcript: TranscriptDiscovery,
+  source: SupportedSource,
+  projectKey: string,
+): SourceSession {
   const sessionId = basename(transcript.sourcePath, extname(transcript.sourcePath));
 
   return {
-    conversation_id: `${transcript.projectKey}:${sessionId}`,
+    conversation_id: `${projectKey}:${sessionId}`,
     ingest_status: "discovered",
-    project_key: transcript.projectKey,
+    project_key: projectKey,
     retention_status: "kept",
     session_id: sessionId,
     source_format: transcript.sourceFormat,

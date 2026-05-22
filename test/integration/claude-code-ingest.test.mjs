@@ -6,6 +6,11 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
+import { hashToProjectId } from "../../dist/v2/project/resolve.js";
+
+const fixtureWorkspacePath = "/Users/example/Code/demo";
+const expectedProjectKey = hashToProjectId(fixtureWorkspacePath);
+
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(dirname(testDir));
 const cliPath = join(projectRoot, "dist", "cli.js");
@@ -47,7 +52,7 @@ test("ingest backfill --source claude-code processes the smoke fixture end-to-en
 		assert.equal(payload.discovered_count, 1);
 		assert.equal(payload.sessions.length, 1);
 		const session = payload.sessions[0];
-		assert.equal(session.project_key, "demo");
+		assert.equal(session.project_key, expectedProjectKey);
 		assert.equal(session.session_id, "session-fixture-0001");
 		assert.ok(session.summary_path.endsWith("summary.json"));
 

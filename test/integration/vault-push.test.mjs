@@ -6,6 +6,11 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
+import { hashToProjectId } from "../../dist/v2/project/resolve.js";
+
+const LEGACY_PROJECT_KEY = "agent-session-distillery";
+const RESOLVED_PROJECT_ID = hashToProjectId(LEGACY_PROJECT_KEY);
+
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(dirname(testDir));
 const cliPath = join(projectRoot, "dist", "cli.js");
@@ -37,7 +42,7 @@ function makeRecord(suffix, overrides = {}) {
 		schema_version: "asd.wiki_memory.v1",
 		id: `sha256:${"0".repeat(63)}${suffix}`,
 		kind: "project_learning",
-		project: { key: "agent-session-distillery", root: null },
+		project: { key: LEGACY_PROJECT_KEY, root: null },
 		title: `Decision ${suffix}`,
 		body: `Body for record ${suffix}.`,
 		evidence: {
@@ -86,7 +91,7 @@ test("memory push-wiki writes one page per JSONL record into the scoped subtree"
 			vaultRoot,
 			"wiki",
 			"projects",
-			"agent-session-distillery",
+			LEGACY_PROJECT_KEY,
 			"asd-learnings",
 		);
 		const manifest = JSON.parse(
@@ -217,7 +222,7 @@ test("memory push-wiki --refresh re-runs export-wiki against the runtime", async
 			vaultRoot,
 			"wiki",
 			"projects",
-			"agent-session-distillery",
+			RESOLVED_PROJECT_ID,
 			"asd-learnings",
 		);
 		const manifest = JSON.parse(
