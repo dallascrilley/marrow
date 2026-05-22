@@ -1,8 +1,8 @@
 ---
 project: agent-session-distillery
 owner: dallascrilley
-last_reviewed: 2026-05-18
-version: 1.0.0
+last_reviewed: 2026-05-22
+version: 1.1.0
 ---
 
 # Launch Criteria
@@ -169,3 +169,50 @@ retention workflows.
   status: validated
   validated_on: 2026-05-18
   proof: /tmp/agent-session-distillery/2026-05-18_f1g-pi-adapter/SUMMARY.md
+
+## P0 — v2 launch blockers (atomic instincts + vault render)
+
+- id: v2-instinct-yaml-roundtrip
+  feature: Atomic instinct records round-trip through YAML serialization and schema validation.
+  test: Run `npm test` — `test/v2-instinct-store.test.mjs` and related schema tests.
+  proof_required: Passing unit tests for emit/parse and store prune behavior.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-22
+  proof: test/v2-instinct-store.test.mjs
+
+- id: v2-project-id-resolution
+  feature: Project IDs resolve per ADR-0002 (git-remote hash with path-hash fallback).
+  test: Run `npm test` — `test/v2-project-id.test.mjs`.
+  proof_required: Passing tests covering git-remote, declared-key, and path-hash paths.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-22
+  proof: test/v2-project-id.test.mjs
+
+- id: v2-bundle-replay-store
+  feature: Session bundles replay into the instinct store with create/reinforce deltas.
+  test: Run `npm test` — `test/v2-bundle-replay.test.mjs`, `test/v2-apply-delta.test.mjs`.
+  proof_required: Passing bundle replay and delta application tests.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-22
+  proof: test/v2-bundle-replay.test.mjs
+
+- id: v2-vault-memory-render
+  feature: Curated MEMORY.md and topic spill files render under the vault carve-out with allowlist enforcement.
+  test: Run `npm test` — `test/v2-render-memory.test.mjs`, `test/v2-memory-pipeline.test.mjs`.
+  proof_required: Passing render tests including rollup selection and spill paths.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-22
+  proof: test/v2-render-memory.test.mjs
+
+- id: v2-memory-pipeline-e2e
+  feature: Reviewed learnings sync to instincts, export to wiki JSONL, and push to vault including MEMORY.md render.
+  test: Run `node scripts/proof-smoke.mjs --suite v2` against fixture-backed ingest + review sidecar in an isolated sandbox.
+  proof_required: Proof smoke output with instinct store files, export JSONL, asd-learnings page, and MEMORY.md path.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-22
+  proof: /tmp/agent-session-distillery/2026-05-22_v2-memory-pipeline/SUMMARY.md
