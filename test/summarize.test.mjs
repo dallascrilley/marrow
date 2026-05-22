@@ -6,7 +6,11 @@ import {
   sourceSessionFixture,
   turnSchema
 } from "../dist/models/canonical.js";
-import { summarizeSession } from "../dist/pipeline/summarize.js";
+import {
+  isLowSignalTopic,
+  summarizeSession,
+  summarizeSessionWithOptionalLlmTopic
+} from "../dist/pipeline/summarize.js";
 
 test("summary synthesis skips prompt noise, prefers the latest next step, and filters weak commands", () => {
   const sourceSession = {
@@ -273,4 +277,92 @@ test("summary topic skips Codex protocol-only preambles", () => {
   });
 
   assert.equal(summary.topic, "Add a consolidated session index export command.");
+});
+
+test("low-signal topic heuristic is conservative but catches harness paths and commands", () => {
+  assert.equal(isLowSignalTopic("Read .agents-state/handoff.md in this worktree"), true);
+  assert.equal(isLowSignalTopic("Base directory for this skill is /tmp/demo"), true);
+  assert.equal(isLowSignalTopic("/init"), true);
+  assert.equal(isLowSignalTopic("npm run build"), true);
+  assert.equal(isLowSignalTopic("/Users/example/Code/demo/AGENTS.md"), true);
+  assert.equal(isLowSignalTopic("Fix export-index contract topic provenance"), false);
+  assert.equal(isLowSignalTopic("Automation: macOS stability scan"), false);
+});
+
+test("optional LLM topic stays off by default even for weak deterministic topics", async () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "agent-session-distillery",
+    session_id: "llm-topic-off"
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Read the handoff.",
+      commands_seen: [],
+      ended_at: "2026-05-22T20:10:00.000Z",
+      files_touched: [".agents-state/handoff.md"],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-22T20:09:00.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.",
+      verification_seen: false
+    })
+  ];
+  let calls = 0;
+
+  const summary = await summarizeSessionWithOptionalLlmTopic(
+    { events: [], sourceSession, turns },
+    {
+      generateTopic: async () => {
+        calls += 1;
+        return "LLM topic should not be used";
+      }
+    }
+  );
+
+  assert.equal(calls, 0);
+  assert.equal(summary.topic, "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.");
+  assert.equal(summary.topic_source, "deterministic");
+});
+
+test("optional LLM topic calls mocked generator only for weak deterministic topics", async () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "agent-session-distillery",
+    session_id: "llm-topic-on"
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Implemented gated LLM topic generation.",
+      commands_seen: ["npm run build"],
+      ended_at: "2026-05-22T20:10:00.000Z",
+      files_touched: ["src/pipeline/summarize.ts"],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-22T20:09:00.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.",
+      verification_seen: false
+    })
+  ];
+  const calls = [];
+
+  const summary = await summarizeSessionWithOptionalLlmTopic(
+    { events: [], sourceSession, turns },
+    {
+      generateTopic: async (input) => {
+        calls.push(input);
+        return "gated LLM topic support";
+      },
+      llmTopic: true
+    }
+  );
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].deterministicTopic, "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.");
+  assert.equal(summary.topic, "gated LLM topic support");
+  assert.equal(summary.topic_source, "llm");
 });

@@ -3,8 +3,18 @@ import { summarySchema } from "../models/canonical.js";
 import {
   extractSubstantivePrompt,
   firstSubstantivePromptFromTurns,
+  isHarnessOrBootLine,
   sanitizeHarnessLeakText,
 } from "./prompt-sanitize.js";
+import { generateTopicWithOpenRouter } from "./llm-learning-review.js";
+
+type TopicSource = "deterministic" | "llm";
+
+export type LlmTopicGenerator = (input: {
+  deterministicTopic: string;
+  sourceSession: SourceSession;
+  turns: readonly Turn[];
+}) => Promise<string>;
 
 export type SummarizeSessionInput = {
   deletionReadiness?: string;
@@ -15,7 +25,49 @@ export type SummarizeSessionInput = {
   userLearnings?: readonly Learning[];
 };
 
+export type OptionalLlmTopicOptions = {
+  generateTopic?: LlmTopicGenerator | undefined;
+  llmTopic?: boolean | undefined;
+};
+
 export function summarizeSession(input: SummarizeSessionInput): Summary {
+  return summarizeSessionWithTopic(input, {
+    topic: deriveTopic(input.sourceSession, input.turns),
+    topicSource: "deterministic"
+  });
+}
+
+export async function summarizeSessionWithOptionalLlmTopic(
+  input: SummarizeSessionInput,
+  options: OptionalLlmTopicOptions = {}
+): Promise<Summary> {
+  const deterministicTopic = deriveTopic(input.sourceSession, input.turns);
+  if (options.llmTopic !== true || !isLowSignalTopic(deterministicTopic)) {
+    return summarizeSessionWithTopic(input, {
+      topic: deterministicTopic,
+      topicSource: "deterministic"
+    });
+  }
+
+  const generateTopic = options.generateTopic ?? generateTopicWithOpenRouter;
+  const llmTopic = normalizeGeneratedTopic(
+    await generateTopic({
+      deterministicTopic,
+      sourceSession: input.sourceSession,
+      turns: input.turns
+    })
+  );
+
+  return summarizeSessionWithTopic(input, {
+    topic: llmTopic,
+    topicSource: "llm"
+  });
+}
+
+function summarizeSessionWithTopic(
+  input: SummarizeSessionInput,
+  topicInput: { topic: string; topicSource: TopicSource }
+): Summary {
   const decisions = uniquePreservingOrder(
     input.events
       .filter((event) => event.type === "decision")
@@ -52,7 +104,8 @@ export function summarizeSession(input: SummarizeSessionInput): Summary {
       (input.projectLearnings ?? []).map((learning) => learning.statement)
     ),
     session_id: input.sourceSession.session_id,
-    topic: deriveTopic(input.sourceSession, input.turns),
+    topic: topicInput.topic,
+    topic_source: topicInput.topicSource,
     useful_commands: usefulCommands,
     user_learnings: uniquePreservingOrder((input.userLearnings ?? []).map((learning) => learning.statement)),
     what_failed: failures,
@@ -61,6 +114,39 @@ export function summarizeSession(input: SummarizeSessionInput): Summary {
   } satisfies Summary;
 
   return summarySchema.parse(summary);
+}
+
+export function isLowSignalTopic(topic: string): boolean {
+  const normalized = topic.replace(/\s+/g, " ").trim();
+  if (normalized.length === 0) {
+    return true;
+  }
+
+  if (isHarnessOrBootLine(normalized) || isHarnessTopicLine(normalized)) {
+    return true;
+  }
+
+  if (/^Session summary for\b/i.test(normalized)) {
+    return true;
+  }
+
+  if (/^Base directory for this skill\b/i.test(normalized)) {
+    return true;
+  }
+
+  if (isGenericInitPrompt(normalized)) {
+    return true;
+  }
+
+  if (looksLikePathOrPathInstruction(normalized)) {
+    return true;
+  }
+
+  if (looksLikeBareCommand(normalized)) {
+    return true;
+  }
+
+  return isTooShortOrGeneric(normalized);
 }
 
 function deriveTopic(sourceSession: SourceSession, turns: readonly Turn[]): string {
@@ -241,6 +327,19 @@ function truncateInline(value: string, maxLength: number): string {
   return `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
 }
 
+function normalizeGeneratedTopic(topic: string): string {
+  const sanitized = sanitizeHarnessLeakText(topic);
+  const normalized = (sanitized.length > 0 ? sanitized : topic)
+    .replace(/^["']|["']$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (normalized.length === 0) {
+    throw new Error("LLM topic generation returned an empty topic");
+  }
+
+  return truncateInline(normalized, 120);
+}
+
 function normalizeSummaryLine(value: string): string {
   const sanitized = sanitizeHarnessLeakText(value);
   const normalized = (sanitized.length > 0 ? sanitized : value)
@@ -287,6 +386,72 @@ function isPromptNoiseLine(line: string): boolean {
     /^Tests\b/i.test(line) ||
     /^Start at\b/i.test(line) ||
     /^Duration\b/i.test(line)
+  );
+}
+
+function isGenericInitPrompt(topic: string): boolean {
+  return (
+    /^\/init\b/i.test(topic) ||
+    /^init$/i.test(topic) ||
+    /^(?:please\s+)?(?:analyze|scan|inspect)\s+(?:this\s+)?(?:repo|repository|codebase)\b/i.test(topic) &&
+      /\b(?:AGENTS|CLAUDE)\.md\b/i.test(topic)
+  );
+}
+
+function looksLikePathOrPathInstruction(topic: string): boolean {
+  if (/^(?:~\/|\/|\.{1,2}\/|[A-Za-z]:[\\/])\S+$/.test(topic)) {
+    return true;
+  }
+
+  if (/^[\w.-]+(?:\/[\w .-]+)+\/?$/.test(topic)) {
+    return true;
+  }
+
+  if (/^[\w./~-]+\.(?:md|json|jsonl|toml|yaml|yml|ts|tsx|js|mjs|py|sh|swift|txt)$/i.test(topic)) {
+    return true;
+  }
+
+  return /^read\s+(?:\.agents-state\/handoff\.md|(?:~\/|\/|\.{1,2}\/|[\w.-]+\/)[^\s]+)\b/i.test(topic);
+}
+
+function looksLikeBareCommand(topic: string): boolean {
+  return /^(?:cd|ls|cat|sed|awk|rg|grep|git|gh|npm|pnpm|bun|node|python3?|uv|just|make|cargo|go|swift|xcodebuild|docker|curl)\b(?:\s|$)/i.test(topic);
+}
+
+function isTooShortOrGeneric(topic: string): boolean {
+  const lower = topic.toLowerCase();
+  const words = lower.match(/[a-z0-9]+/g) ?? [];
+  if (words.length <= 1) {
+    return true;
+  }
+
+  if (words.length <= 2) {
+    const genericWords = new Set([
+      "begin",
+      "bug",
+      "change",
+      "changes",
+      "continue",
+      "debug",
+      "fix",
+      "help",
+      "implement",
+      "issue",
+      "proceed",
+      "question",
+      "resume",
+      "review",
+      "start",
+      "task",
+      "test",
+      "update",
+      "work"
+    ]);
+    return words.every((word) => genericWords.has(word));
+  }
+
+  return /^(?:help with|work on|fix the|update the|continue the|review the|implement the|debug the|test the)\s+(?:task|code|project|repo|issue|bug|changes?)\.?$/i.test(
+    lower
   );
 }
 

@@ -18,12 +18,18 @@ export async function executeIngestSync(context: CommandContext, database: Datab
     ...(options.since === undefined ? {} : { since: options.since }),
     source: options.source
   });
-  const sessions = await processDiscoveredSessions(database, discovery.sessions, options.resume);
+  const sessions = await processDiscoveredSessions(
+    database,
+    discovery.sessions,
+    options.resume,
+    options.llmTopic
+  );
 
   context.output.info(
     JSON.stringify(
       {
         discovered_count: discovery.discoveredCount,
+        llm_topic: options.llmTopic,
         mode: "incremental",
         processed_count: sessions.length,
         selected_count: discovery.selectedCount,
