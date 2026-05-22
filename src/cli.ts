@@ -6,6 +6,7 @@ import { executeArchiveRun } from "./commands/archive-run.js";
 import { executeDeleteApply } from "./commands/delete-apply.js";
 import { executeDeleteCandidates } from "./commands/delete-candidates.js";
 import { executeExplain } from "./commands/explain.js";
+import { executeExportIndex } from "./commands/export-index.js";
 import { executeIngestBackfill } from "./commands/ingest-backfill.js";
 import { executeIngestSync } from "./commands/ingest-sync.js";
 import { executeMemoryExportWiki } from "./commands/memory-export-wiki.js";
@@ -130,6 +131,10 @@ const commandTree: Record<string, CommandDefinition> = {
 	search: {
 		description: "Search indexed distillery data.",
 		execute: async (context) => runStub(context, "index"),
+	},
+	"export-index": {
+		description: "Write a consolidated session index JSONL for summarized sessions.",
+		execute: async (context) => withLedger(context, executeExportIndex),
 	},
 	stats: {
 		description: "Report high-level distillery runtime statistics.",
