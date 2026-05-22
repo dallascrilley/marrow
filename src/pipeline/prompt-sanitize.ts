@@ -7,11 +7,13 @@ const pluginInfoPattern = /<plugin_info\b[^>]*>[\s\S]*?<\/plugin_info>/gi;
 const skillBlockPattern = /<skill\b[^>]*>[\s\S]*?(?:<\/skill>|$)/gi;
 const skillFilePathPattern = /(?:^|\s)[^\s]*\/SKILL\.md\b/gi;
 const taggedBlockPattern =
-	/<(instructions|environment_context|cursor_commands|skill|system_reminder|user_info|rules|agent_skills|mcp_instructions|open_and_recently_viewed_files|git_status|agent_transcripts|attached_files|code_selection|plugin_info)\b[^>]*>[\s\S]*?<\/\1>/gi;
+	/<(instructions|environment_context|cursor_commands|skill|system[-_]reminder|command-message|command-name|command-args|task-notification|local-command-(?:stdout|stderr)|user-prompt-submit-hook|bash-(?:input|stdout|stderr)|user_info|rules|agent_skills|mcp_instructions|open_and_recently_viewed_files|git_status|agent_transcripts|attached_files|code_selection|plugin_info)\b[^>]*>[\s\S]*?<\/\1>/gi;
 const genericXmlTagPattern = /<\/?[a-z_:-]+(?:\s+[^>]*)?>/gi;
 
-const agentsMdHeaderPattern = /^#\s*AGENTS\.md\b/i;
-const agentsMdInstructionsPattern = /^AGENTS\.md\s+instructions\s+for\b/i;
+const instructionsFileHeaderPattern = /^#\s*(?:AGENTS|CLAUDE)\.md\b/i;
+const instructionsFileNoticePattern = /^(?:AGENTS|CLAUDE)\.md\s+instructions\s+for\b/i;
+const wrapperNoticePattern =
+	/^(?:system[-_]reminder|environment_context|command-message|command-name|command-args|task-notification|local-command-(?:stdout|stderr)|user-prompt-submit-hook|bash-(?:input|stdout|stderr))\b/i;
 
 const noSignalPatterns: readonly RegExp[] = [
 	/^(?:hello|hi|hey|ping|test)\b[!.?]*$/i,
@@ -103,7 +105,27 @@ export function isHarnessOrBootLine(line: string): boolean {
 		return true;
 	}
 
-	if (agentsMdHeaderPattern.test(normalized) || agentsMdInstructionsPattern.test(normalized)) {
+	if (instructionsFileHeaderPattern.test(normalized) || instructionsFileNoticePattern.test(normalized)) {
+		return true;
+	}
+
+	if (wrapperNoticePattern.test(normalized)) {
+		return true;
+	}
+
+	if (/^turn_aborted$/i.test(normalized)) {
+		return true;
+	}
+
+	if (/^Caveat:/i.test(normalized)) {
+		return true;
+	}
+
+	if (/^\[Request interrupted by user\b/i.test(normalized)) {
+		return true;
+	}
+
+	if (/^\[Image:[^\]]+\]$/i.test(normalized)) {
 		return true;
 	}
 
