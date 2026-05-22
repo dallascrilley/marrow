@@ -171,6 +171,7 @@ test("export-index writes a consolidated v1 JSONL from manifests and summaries",
 			`${JSON.stringify({
 				session_id: "claude-session",
 				topic: "Review the launch proof.",
+				topic_source: "llm",
 				what_worked: [],
 				what_failed: [],
 				what_was_decided: [],
@@ -277,11 +278,13 @@ test("export-index writes a consolidated v1 JSONL from manifests and summaries",
 		assert.equal(codexRecord.source_uuid, "019e516f-5f85-7550-a1b9-adcbab812b33");
 		assert.equal(codexRecord.asd_session_id, "codex-session");
 		assert.equal(codexRecord.topic, "Read the handoff and complete tasks.");
+		assert.equal(codexRecord.topic_source, "deterministic");
 		assert.equal(codexRecord.summary_json_path, codexSummaryPath);
 
 		const claudeRecord = records.find((record) => record.source_tool === "claude-code");
 		assert.equal(claudeRecord.source_path, claudeSourcePath);
 		assert.equal(claudeRecord.source_uuid, "019e5000-0000-7000-9000-000000000001");
+		assert.equal(claudeRecord.topic_source, "llm");
 		assert.equal(claudeRecord.next_step, "Follow up on missing evidence.");
 	} finally {
 		await rm(sandbox, { force: true, recursive: true });

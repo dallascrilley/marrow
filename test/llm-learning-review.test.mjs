@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { sourceSessionFixture } from "../dist/models/canonical.js";
 import {
 	buildLearningReviewCacheKey,
+	generateTopicWithOpenRouter,
 	reviewLearningWithOpenRouter,
 } from "../dist/pipeline/llm-learning-review.js";
 
@@ -95,6 +96,47 @@ test("OpenRouter learning review sends strict JSON memory-lint request", async (
 	assert.deepEqual(body.response_format, { type: "json_object" });
 	assert.match(body.messages[0].content, /strict memory-lint judge/);
 	assert.match(body.messages[1].content, /keeping the rule/);
+});
+
+test("OpenRouter topic generation reuses chat completion client with strict JSON request", async () => {
+	const calls = [];
+	const fetchImpl = async (url, init) => {
+		calls.push({ url, init });
+		return {
+			ok: true,
+			status: 200,
+			async json() {
+				return {
+					choices: [
+						{
+							message: {
+								content: JSON.stringify({ topic: "gated LLM topic support" }),
+							},
+						},
+					],
+				};
+			},
+			async text() {
+				return "";
+			},
+		};
+	};
+
+	const topic = await generateTopicWithOpenRouter({
+		apiKey: "test-key",
+		deterministicTopic: "Read .agents-state/handoff.md in this worktree",
+		fetchImpl,
+		sourceSession: sourceSessionFixture,
+		turns: [],
+	});
+
+	assert.equal(topic, "gated LLM topic support");
+	assert.equal(calls.length, 1);
+	const body = JSON.parse(calls[0].init.body);
+	assert.equal(body.model, "openai/gpt-5.4-nano");
+	assert.deepEqual(body.response_format, { type: "json_object" });
+	assert.match(body.messages[0].content, /concise display topics/);
+	assert.match(body.messages[1].content, /deterministic_topic/);
 });
 
 test("OpenRouter learning review rejects invalid JSON schema", async () => {

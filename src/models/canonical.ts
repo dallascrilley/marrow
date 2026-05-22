@@ -157,6 +157,7 @@ export const learningSchema = z.object({
 export const summarySchema = z.object({
   session_id: nonEmptyStringSchema,
   topic: nonEmptyStringSchema,
+  topic_source: z.enum(["deterministic", "llm"]).default("deterministic"),
   what_worked: z.array(nonEmptyStringSchema),
   what_failed: z.array(nonEmptyStringSchema),
   what_was_decided: z.array(nonEmptyStringSchema),
@@ -271,6 +272,7 @@ export const learningFixture: Readonly<Learning> = deepFreeze({
 export const summaryFixture: Readonly<Summary> = deepFreeze({
   session_id: "session-0001",
   topic: "Canonical schema implementation",
+  topic_source: "deterministic",
   what_worked: ["TypeScript schemas compiled cleanly.", "Runtime validation tests passed."],
   what_failed: [],
   what_was_decided: ["Use one canonical schema module until the model surface becomes large enough to split."],

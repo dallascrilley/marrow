@@ -36,6 +36,9 @@ Required top-level fields:
   or `pi`.
 - `asd_session_id`: asd's internal summarized session id.
 - `topic`: title text from `summary.json`.
+- `topic_source`: topic derivation path from `summary.json`; either
+  `deterministic` or `llm`. Older summaries without this field are normalized
+  to `deterministic` during export.
 - `next_step`: next step text from `summary.json`.
 - `summary_json_path`: absolute path to the source `summary.json`.
 - `updated_at`: manifest generation timestamp.
@@ -48,6 +51,10 @@ Required top-level fields:
 - `codex-cli`: the UUID suffix from a rollout filename, with the leading
   `rollout-<timestamp>-` prefix removed when present.
 - `cursor` and `pi`: the `.jsonl` filename stem.
+
+`topic_source` is additive and does not change `v`: consumers that do not need
+topic provenance can safely ignore it, and old summary artifacts parse as
+`deterministic`.
 
 Consumers that join against live session files must use `source_path`, not
 `source_uuid`, as the primary key. `source_path` is intentionally preserved
@@ -64,6 +71,7 @@ does not normalize or rewrite it.
   "source_tool": "codex-cli",
   "asd_session_id": "rollout-2026-05-22T15-45-14-019e516f-5f85-7550-a1b9-adcbab812b33",
   "topic": "Read the handoff and complete tasks.",
+  "topic_source": "deterministic",
   "next_step": "No open next step recorded.",
   "summary_json_path": "/Users/example/.agent-session-distillery/summaries/by-session/rollout-2026-05-22T15-45-14-019e516f-5f85-7550-a1b9-adcbab812b33/summary.json",
   "updated_at": "2026-05-22T20:00:00.000Z"
@@ -95,4 +103,3 @@ Current proof is covered by:
 
 - `node --test test/cli.test.mjs`
 - `node dist/cli.js export-index`
-
