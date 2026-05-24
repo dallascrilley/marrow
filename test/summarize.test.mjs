@@ -285,8 +285,53 @@ test("low-signal topic heuristic is conservative but catches harness paths and c
   assert.equal(isLowSignalTopic("/init"), true);
   assert.equal(isLowSignalTopic("npm run build"), true);
   assert.equal(isLowSignalTopic("/Users/example/Code/demo/AGENTS.md"), true);
+  assert.equal(isLowSignalTopic("brainstorming"), true);
+  assert.equal(isLowSignalTopic("whats-next"), true);
+  assert.equal(isLowSignalTopic("# Writing Plans"), true);
+  assert.equal(isLowSignalTopic("# PATH Doctor"), true);
+  assert.equal(isLowSignalTopic("$brainstorming given the following pieces of"), true);
   assert.equal(isLowSignalTopic("Fix export-index contract topic provenance"), false);
   assert.equal(isLowSignalTopic("Automation: macOS stability scan"), false);
+});
+
+test("summarizeSession skips skill-wrapper-only prompts for topic selection", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "agent-session-distillery",
+    session_id: "skill-wrapper-topic"
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Explored options.",
+      commands_seen: [],
+      ended_at: "2026-05-22T20:10:00.000Z",
+      files_touched: [],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-22T20:09:00.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt:
+        '<skill name="brainstorming" location="/tmp/brainstorming/SKILL.md">Explore options.</skill>',
+      verification_seen: false
+    }),
+    turnSchema.parse({
+      assistant_summary: "Shipped export-index.",
+      commands_seen: [],
+      ended_at: "2026-05-22T20:11:00.000Z",
+      files_touched: ["src/commands/export-index.ts"],
+      index: 1,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-22T20:10:30.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0001`,
+      user_prompt: "Add export-index command for Tether session search.",
+      verification_seen: false
+    })
+  ];
+
+  const summary = summarizeSession({ events: [], sourceSession, turns });
+  assert.equal(summary.topic, "Add export-index command for Tether session search.");
 });
 
 test("optional LLM topic stays off by default even for weak deterministic topics", async () => {

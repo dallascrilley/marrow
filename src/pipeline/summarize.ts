@@ -4,6 +4,9 @@ import {
   extractSubstantivePrompt,
   firstSubstantivePromptFromTurns,
   isHarnessOrBootLine,
+  isNoSignalPrompt,
+  isSkillWrapperOnlyPrompt,
+  looksLikeSkillHarnessLeak,
   sanitizeHarnessLeakText,
 } from "./prompt-sanitize.js";
 import { generateTopicWithOpenRouter } from "./llm-learning-review.js";
@@ -156,17 +159,54 @@ export function isLowSignalTopic(topic: string): boolean {
     return true;
   }
 
-  return isTooShortOrGeneric(normalized);
+  if (isTooShortOrGeneric(normalized)) {
+    return true;
+  }
+
+  if (looksLikeBareSkillSlugTopic(normalized)) {
+    return true;
+  }
+
+  if (looksLikeSkillHarnessLeak(normalized)) {
+    return true;
+  }
+
+  if (looksLikeMarkdownSkillHeaderTopic(normalized)) {
+    return true;
+  }
+
+  if (looksLikeSlashCommandTopic(normalized)) {
+    return true;
+  }
+
+  return false;
+}
+
+function looksLikeMarkdownSkillHeaderTopic(topic: string): boolean {
+  return /^#\s+[A-Za-z][^\n`]{0,120}$/.test(topic.trim());
+}
+
+function looksLikeSlashCommandTopic(topic: string): boolean {
+  return /^\$[a-z][a-z0-9-]*(?:\s|$)/i.test(topic.trim());
 }
 
 function deriveTopic(sourceSession: SourceSession, turns: readonly Turn[]): string {
-  const substantive =
-    firstSubstantivePromptFromTurns(turns) ??
-    extractSubstantivePrompt(turns[0]?.user_prompt ?? "");
+  const substantive = firstSubstantivePromptFromTurns(turns);
 
   if (substantive !== null && substantive.length > 0) {
     const topicLine = selectTopicLine(substantive);
     return truncateInline(topicLine, 120);
+  }
+
+  for (const turn of turns) {
+    if (isSkillWrapperOnlyPrompt(turn.user_prompt)) {
+      continue;
+    }
+
+    const fallback = extractSubstantivePrompt(turn.user_prompt);
+    if (fallback !== null && fallback.length > 0 && !isNoSignalPrompt(fallback)) {
+      return truncateInline(selectTopicLine(fallback), 120);
+    }
   }
 
   return `Session summary for ${sourceSession.project_key}`;
@@ -426,6 +466,23 @@ function looksLikePathOrPathInstruction(topic: string): boolean {
 
 function looksLikeBareCommand(topic: string): boolean {
   return /^(?:cd|ls|cat|sed|awk|rg|grep|git|gh|npm|pnpm|bun|node|python3?|uv|just|make|cargo|go|swift|xcodebuild|docker|curl)\b(?:\s|$)/i.test(topic);
+}
+
+function looksLikeBareSkillSlugTopic(topic: string): boolean {
+  const normalized = topic.trim();
+  if (!/^[a-z][a-z0-9-]*$/i.test(normalized)) {
+    return false;
+  }
+
+  if (
+    /\b(?:fix|add|implement|export|session|index|test|build|merge|review|update|create|remove|delete|ingest|memory|vault|launch|proof|adapter|pipeline|command|cli)\b/i.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+
+  return normalized.length <= 32;
 }
 
 function isTooShortOrGeneric(topic: string): boolean {

@@ -302,10 +302,37 @@ export function looksLikeSkillHarnessLeak(text: string): boolean {
 	return isSkillHarnessLine(normalized);
 }
 
+export function isSkillWrapperOnlyPrompt(raw: string): boolean {
+	const substantive = extractSubstantivePrompt(raw);
+	if (substantive === null) {
+		return true;
+	}
+
+	const lines = substantive
+		.split(/\n+/)
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0);
+
+	if (lines.length === 0) {
+		return true;
+	}
+
+	return lines.every(
+		(line) =>
+			isHarnessOrBootLine(line) ||
+			isSkillHarnessLine(line) ||
+			looksLikeSkillHarnessLeak(line),
+	);
+}
+
 export function firstSubstantivePromptFromTurns(
 	turns: ReadonlyArray<{ user_prompt: string }>,
 ): string | null {
 	for (const turn of turns) {
+		if (isSkillWrapperOnlyPrompt(turn.user_prompt)) {
+			continue;
+		}
+
 		const substantive = extractSubstantivePrompt(turn.user_prompt);
 		if (substantive !== null && !isNoSignalPrompt(substantive)) {
 			return substantive;

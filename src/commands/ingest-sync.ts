@@ -18,7 +18,7 @@ export async function executeIngestSync(context: CommandContext, database: Datab
     ...(options.since === undefined ? {} : { since: options.since }),
     source: options.source
   });
-  const sessions = await processDiscoveredSessions(
+  const batch = await processDiscoveredSessions(
     database,
     discovery.sessions,
     options.resume,
@@ -29,11 +29,13 @@ export async function executeIngestSync(context: CommandContext, database: Datab
     JSON.stringify(
       {
         discovered_count: discovery.discoveredCount,
+        failed_count: batch.failed_count,
+        failures: batch.failures,
         llm_topic: options.llmTopic,
         mode: "incremental",
-        processed_count: sessions.length,
+        processed_count: batch.sessions.length,
         selected_count: discovery.selectedCount,
-        sessions,
+        sessions: batch.sessions,
         source: options.source
       },
       null,

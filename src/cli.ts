@@ -14,6 +14,7 @@ import { executeMemoryPushWiki } from "./commands/memory-push-wiki.js";
 import { executeMigrateProjectIds } from "./commands/migrate-project-ids.js";
 import { executeQualityAudit } from "./commands/quality-audit.js";
 import { executeQualityApplyLearningReview } from "./commands/quality-apply-learning-review.js";
+import { executeQualityResummarize } from "./commands/quality-resummarize.js";
 import { executeQualityReviewLearnings } from "./commands/quality-review-learnings.js";
 import { executeReviewQueue } from "./commands/review-queue.js";
 import { executeReviewShow } from "./commands/review-show.js";
@@ -85,6 +86,12 @@ const commandTree: Record<string, CommandDefinition> = {
 					"Apply an LLM learning-review sidecar into knowledge/projects-reviewed without mutating originals.",
 				execute: async (context) =>
 					withLedger(context, executeQualityApplyLearningReview),
+			},
+			resummarize: {
+				description:
+					"Regenerate summary topics for archived sessions without mutating manifests; optional --low-signal-only, --llm-topic, --export-index, --dry-run.",
+				execute: async (context) =>
+					withLedger(context, executeQualityResummarize),
 			},
 		},
 	},

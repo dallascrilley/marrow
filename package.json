@@ -13,6 +13,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "memory:pipeline:dry-run": "node scripts/memory-pipeline-dry-run.mjs",
+    "corpus:resummarize": "npm run build && node scripts/resummarize-corpus.mjs",
+    "corpus:resummarize:dry-run": "npm run build && node scripts/resummarize-corpus.mjs --dry-run",
     "proof:smoke": "npm run build && node scripts/proof-smoke.mjs",
     "test": "npm run build && node --test $(find test -name '*.test.mjs' -print)",
     "test:smoke": "npm run build && node --test test/cli.test.mjs"

@@ -78,6 +78,51 @@ retention workflows.
   validated_on: 2026-05-18
   proof: docs/launch-proof-index.md
 
+- id: session-index-export
+  feature: `export-index` writes valid `asd.session_index.v1` JSONL from manifests and summaries.
+  test: Run `node dist/cli.js export-index` against a sandbox with at least one archived session manifest and summary pair.
+  proof_required: JSONL export path plus records validating schema version, topic, topic_source, and absolute summary paths.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-23
+  proof: test/cli.test.mjs (export-index test)
+
+- id: llm-topic-low-signal-gate
+  feature: `--llm-topic` rescues low-signal deterministic topics on ingest/resummarize without breaking core ingest.
+  test: Run `npm test` — `test/summarize.test.mjs` optional LLM topic cases and `isLowSignalTopic` regression fixtures (wrapper leaks, bare skill slugs).
+  proof_required: Passing unit tests showing low-signal detection and LLM fail-safe fallback.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-23
+  proof: test/summarize.test.mjs
+
+- id: resummarize-corpus-upgrade
+  feature: Operators can upgrade topics for archived sessions without mutating immutable manifests.
+  test: Run `node dist/cli.js quality resummarize --session-id <id>` against a fixture with a low-signal topic; verify summary.json topic changes and manifest bytes are unchanged. Bulk path: `npm run corpus:resummarize:dry-run` then `npm run corpus:resummarize`.
+  proof_required: Passing `test/resummarize.test.mjs`, `test/cli.test.mjs`, and `test/resummarize-corpus.test.mjs` plus command output showing processed_count and unchanged manifest hash.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-23
+  proof: test/resummarize.test.mjs, test/cli.test.mjs (quality resummarize CLI), test/resummarize-corpus.test.mjs
+
+- id: session-index-no-wrapper-topics
+  feature: Session index topics exclude bare skill slugs and wrapper-only harness text (e.g. `brainstorming`, `whats-next`).
+  test: Run `npm test` — `test/summarize.test.mjs` and `test/resummarize.test.mjs` assert `isLowSignalTopic` rejects bare slugs and `summarizeSession` skips skill-wrapper-only prompts.
+  proof_required: Passing unit tests with wrapper-leak regression fixtures from issue #16.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-23
+  proof: test/summarize.test.mjs, test/resummarize.test.mjs
+
+- id: ingest-batch-resilience
+  feature: Per-session ingest failures do not abort an entire backfill batch.
+  test: Run `npm test` — `test/ingest-backfill-isolation.test.mjs`.
+  proof_required: Passing test showing failures array populated while batch completes.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-23
+  proof: test/ingest-backfill-isolation.test.mjs
+
 ## P2 - Fast-follow
 
 - id: background-agent-source-research
