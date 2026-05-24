@@ -34,6 +34,7 @@ test("asd --help lists every Task 1 command", () => {
 		"quality audit",
 		"quality review-learnings",
 		"quality apply-learning-review",
+		"quality resummarize",
 		"review queue",
 		"review show",
 		"archive run",
@@ -287,6 +288,460 @@ test("export-index writes a consolidated v1 JSONL from manifests and summaries",
 		assert.equal(claudeRecord.topic_source, "llm");
 		assert.equal(claudeRecord.next_step, "Follow up on missing evidence.");
 	} finally {
+		await rm(sandbox, { force: true, recursive: true });
+	}
+});
+
+test("quality resummarize upgrades a low-signal topic via CLI", async () => {
+	const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-cli-"));
+	const runtimeRoot = join(sandbox, "runtime-root");
+	const { createLedger, upsertSourceSession } = await import("../dist/db/ledger.js");
+	const { writeSessionSummary } = await import("../dist/writers/summary-writer.js");
+	const { writeSessionManifest } = await import("../dist/writers/manifest-writer.js");
+	const { turnSchema } = await import("../dist/models/canonical.js");
+
+	try {
+		process.env[runtimeOverrideEnvVar] = runtimeRoot;
+		const database = await createLedger();
+		const sessionId = "cli-resummarize-fixture";
+		const sourcePath = join(sandbox, "fixture.jsonl");
+		await writeFile(sourcePath, '{"type":"session"}\n', "utf8");
+
+		const upserted = upsertSourceSession(database, {
+			conversation_id: `demo:${sessionId}`,
+			ingest_status: "archived",
+			project_key: "demo",
+			retention_status: "kept",
+			session_id: sessionId,
+			source_format: "jsonl",
+			source_hash: "sha256:cli-resummarize",
+			source_path: sourcePath,
+			source_tool: "cursor",
+			started_at: "2026-05-22T19:00:00.000Z",
+			updated_at: "2026-05-22T20:00:00.000Z",
+			workspace_path: "/Users/example/Code/demo",
+		});
+
+		const summary = await writeSessionSummary({
+			session_id: sessionId,
+			topic: "brainstorming",
+			topic_source: "deterministic",
+			what_worked: [],
+			what_failed: [],
+			what_was_decided: [],
+			useful_commands: [],
+			files_of_interest: [],
+			next_step: "No open next step recorded.",
+			project_learnings: [],
+			user_learnings: [],
+			deletion_readiness: "ready",
+		});
+
+		await writeSessionManifest({
+			artifactPaths: {
+				project_knowledge_jsonl_path: null,
+				retention_receipt_path: join(runtimeRoot, "reports", "receipt.json"),
+				summary_json_path: summary.summaryPath,
+				summary_markdown_path: summary.markdownPath,
+				user_knowledge_jsonl_path: null,
+			},
+			events: [],
+			sourceSession: {
+				conversation_id: upserted.sourceSession.conversation_id,
+				ingest_status: upserted.sourceSession.ingest_status,
+				project_key: upserted.sourceSession.project_key,
+				retention_status: upserted.sourceSession.retention_status,
+				session_id: sessionId,
+				source_format: upserted.sourceSession.source_format,
+				source_hash: upserted.sourceSession.source_hash,
+				source_path: sourcePath,
+				source_tool: upserted.sourceSession.source_tool,
+				started_at: upserted.sourceSession.started_at,
+				updated_at: upserted.sourceSession.updated_at,
+				workspace_path: upserted.sourceSession.workspace_path,
+			},
+			turns: [],
+		});
+
+		const reducedArtifact = join(runtimeRoot, "staging", sessionId, "reduced-session.json");
+		await mkdir(join(runtimeRoot, "staging", sessionId), { recursive: true });
+		await writeFile(
+			reducedArtifact,
+			JSON.stringify({
+				events: [],
+				turns: [
+					turnSchema.parse({
+						assistant_summary: "Shipped export-index.",
+						commands_seen: [],
+						ended_at: "2026-05-22T20:11:00.000Z",
+						files_touched: ["src/commands/export-index.ts"],
+						index: 0,
+						session_id: sessionId,
+						started_at: "2026-05-22T20:10:30.000Z",
+						tool_stub_count: 0,
+						turn_id: `${sessionId}:turn-0000`,
+						user_prompt: "Add export-index command for Tether session search.",
+						verification_seen: false,
+					}),
+				],
+			}),
+			"utf8",
+		);
+
+		const result = runCli(["quality", "resummarize", "--session-id", sessionId], {
+			[runtimeOverrideEnvVar]: runtimeRoot,
+		});
+
+		assert.equal(result.status, 0, result.stderr);
+		const payload = JSON.parse(result.stdout.trim());
+		assert.equal(payload.processed_count, 1);
+		assert.equal(payload.failed_count, 0);
+		assert.equal(
+			payload.sessions[0].topic,
+			"Add export-index command for Tether session search.",
+		);
+
+		const upgraded = JSON.parse(await readFile(summary.summaryPath, "utf8"));
+		assert.equal(upgraded.topic, "Add export-index command for Tether session search.");
+	} finally {
+		delete process.env[runtimeOverrideEnvVar];
+		await rm(sandbox, { force: true, recursive: true });
+	}
+});
+
+test("quality resummarize --low-signal-only skips high-signal topics via CLI", async () => {
+	const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-cli-filter-"));
+	const runtimeRoot = join(sandbox, "runtime-root");
+	const { createLedger, upsertSourceSession } = await import("../dist/db/ledger.js");
+	const { writeSessionSummary } = await import("../dist/writers/summary-writer.js");
+	const { writeSessionManifest } = await import("../dist/writers/manifest-writer.js");
+	const { turnSchema } = await import("../dist/models/canonical.js");
+
+	async function seed(database, sessionId, topic, userPrompt) {
+		const sourcePath = join(sandbox, `${sessionId}.jsonl`);
+		await writeFile(sourcePath, '{"type":"session"}\n', "utf8");
+		const upserted = upsertSourceSession(database, {
+			conversation_id: `demo:${sessionId}`,
+			ingest_status: "archived",
+			project_key: "demo",
+			retention_status: "kept",
+			session_id: sessionId,
+			source_format: "jsonl",
+			source_hash: `sha256:${sessionId}`,
+			source_path: sourcePath,
+			source_tool: "cursor",
+			started_at: "2026-05-22T19:00:00.000Z",
+			updated_at: "2026-05-22T20:00:00.000Z",
+			workspace_path: "/Users/example/Code/demo",
+		});
+		const summary = await writeSessionSummary({
+			session_id: sessionId,
+			topic,
+			topic_source: "deterministic",
+			what_worked: [],
+			what_failed: [],
+			what_was_decided: [],
+			useful_commands: [],
+			files_of_interest: [],
+			next_step: "No open next step recorded.",
+			project_learnings: [],
+			user_learnings: [],
+			deletion_readiness: "ready",
+		});
+		await writeSessionManifest({
+			artifactPaths: {
+				project_knowledge_jsonl_path: null,
+				retention_receipt_path: join(runtimeRoot, "reports", `${sessionId}.json`),
+				summary_json_path: summary.summaryPath,
+				summary_markdown_path: summary.markdownPath,
+				user_knowledge_jsonl_path: null,
+			},
+			events: [],
+			sourceSession: {
+				conversation_id: upserted.sourceSession.conversation_id,
+				ingest_status: upserted.sourceSession.ingest_status,
+				project_key: upserted.sourceSession.project_key,
+				retention_status: upserted.sourceSession.retention_status,
+				session_id: sessionId,
+				source_format: upserted.sourceSession.source_format,
+				source_hash: upserted.sourceSession.source_hash,
+				source_path: sourcePath,
+				source_tool: upserted.sourceSession.source_tool,
+				started_at: upserted.sourceSession.started_at,
+				updated_at: upserted.sourceSession.updated_at,
+				workspace_path: upserted.sourceSession.workspace_path,
+			},
+			turns: [],
+		});
+		const reducedArtifact = join(runtimeRoot, "staging", sessionId, "reduced-session.json");
+		await mkdir(join(runtimeRoot, "staging", sessionId), { recursive: true });
+		await writeFile(
+			reducedArtifact,
+			JSON.stringify({
+				events: [],
+				turns: [
+					turnSchema.parse({
+						assistant_summary: "Shipped export-index.",
+						commands_seen: [],
+						ended_at: "2026-05-22T20:11:00.000Z",
+						files_touched: ["src/commands/export-index.ts"],
+						index: 0,
+						session_id: sessionId,
+						started_at: "2026-05-22T20:10:30.000Z",
+						tool_stub_count: 0,
+						turn_id: `${sessionId}:turn-0000`,
+						user_prompt: userPrompt,
+						verification_seen: false,
+					}),
+				],
+			}),
+			"utf8",
+		);
+	}
+
+	try {
+		process.env[runtimeOverrideEnvVar] = runtimeRoot;
+		const database = await createLedger();
+		await seed(database, "cli-low", "brainstorming", "Add export-index command for Tether session search.");
+		await seed(
+			database,
+			"cli-high",
+			"Fix export-index contract topic provenance",
+			"Fix export-index contract topic provenance",
+		);
+
+		const result = runCli(["quality", "resummarize", "--low-signal-only"], {
+			[runtimeOverrideEnvVar]: runtimeRoot,
+		});
+
+		assert.equal(result.status, 0, result.stderr);
+		const payload = JSON.parse(result.stdout.trim());
+		assert.equal(payload.processed_count, 1);
+		assert.equal(payload.skipped_count, 1);
+		assert.equal(payload.skipped[0]?.reason, "high_signal_topic");
+	} finally {
+		delete process.env[runtimeOverrideEnvVar];
+		await rm(sandbox, { force: true, recursive: true });
+	}
+});
+
+test("quality resummarize --export-index refreshes session-index.jsonl via CLI", async () => {
+	const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-cli-export-"));
+	const runtimeRoot = join(sandbox, "runtime-root");
+	const { createLedger, upsertSourceSession } = await import("../dist/db/ledger.js");
+	const { writeSessionSummary } = await import("../dist/writers/summary-writer.js");
+	const { writeSessionManifest } = await import("../dist/writers/manifest-writer.js");
+	const { turnSchema } = await import("../dist/models/canonical.js");
+
+	try {
+		process.env[runtimeOverrideEnvVar] = runtimeRoot;
+		const database = await createLedger();
+		const sessionId = "cli-export-index";
+		const sourcePath = join(sandbox, "fixture.jsonl");
+		await writeFile(sourcePath, '{"type":"session"}\n', "utf8");
+		const upserted = upsertSourceSession(database, {
+			conversation_id: `demo:${sessionId}`,
+			ingest_status: "archived",
+			project_key: "demo",
+			retention_status: "kept",
+			session_id: sessionId,
+			source_format: "jsonl",
+			source_hash: "sha256:cli-export-index",
+			source_path: sourcePath,
+			source_tool: "cursor",
+			started_at: "2026-05-22T19:00:00.000Z",
+			updated_at: "2026-05-22T20:00:00.000Z",
+			workspace_path: "/Users/example/Code/demo",
+		});
+		const summary = await writeSessionSummary({
+			session_id: sessionId,
+			topic: "brainstorming",
+			topic_source: "deterministic",
+			what_worked: [],
+			what_failed: [],
+			what_was_decided: [],
+			useful_commands: [],
+			files_of_interest: [],
+			next_step: "No open next step recorded.",
+			project_learnings: [],
+			user_learnings: [],
+			deletion_readiness: "ready",
+		});
+		await writeSessionManifest({
+			artifactPaths: {
+				project_knowledge_jsonl_path: null,
+				retention_receipt_path: join(runtimeRoot, "reports", "receipt.json"),
+				summary_json_path: summary.summaryPath,
+				summary_markdown_path: summary.markdownPath,
+				user_knowledge_jsonl_path: null,
+			},
+			events: [],
+			sourceSession: {
+				conversation_id: upserted.sourceSession.conversation_id,
+				ingest_status: upserted.sourceSession.ingest_status,
+				project_key: upserted.sourceSession.project_key,
+				retention_status: upserted.sourceSession.retention_status,
+				session_id: sessionId,
+				source_format: upserted.sourceSession.source_format,
+				source_hash: upserted.sourceSession.source_hash,
+				source_path: sourcePath,
+				source_tool: upserted.sourceSession.source_tool,
+				started_at: upserted.sourceSession.started_at,
+				updated_at: upserted.sourceSession.updated_at,
+				workspace_path: upserted.sourceSession.workspace_path,
+			},
+			turns: [],
+		});
+		const reducedArtifact = join(runtimeRoot, "staging", sessionId, "reduced-session.json");
+		await mkdir(join(runtimeRoot, "staging", sessionId), { recursive: true });
+		await writeFile(
+			reducedArtifact,
+			JSON.stringify({
+				events: [],
+				turns: [
+					turnSchema.parse({
+						assistant_summary: "Shipped export-index.",
+						commands_seen: [],
+						ended_at: "2026-05-22T20:11:00.000Z",
+						files_touched: ["src/commands/export-index.ts"],
+						index: 0,
+						session_id: sessionId,
+						started_at: "2026-05-22T20:10:30.000Z",
+						tool_stub_count: 0,
+						turn_id: `${sessionId}:turn-0000`,
+						user_prompt: "Add export-index command for Tether session search.",
+						verification_seen: false,
+					}),
+				],
+			}),
+			"utf8",
+		);
+
+		const result = runCli(
+			["quality", "resummarize", "--session-id", sessionId, "--export-index"],
+			{ [runtimeOverrideEnvVar]: runtimeRoot },
+		);
+
+		assert.equal(result.status, 0, result.stderr);
+		const exportPath = join(runtimeRoot, "index", "session-index.jsonl");
+		const records = (await readFile(exportPath, "utf8"))
+			.trim()
+			.split("\n")
+			.map((line) => JSON.parse(line));
+		const record = records.find((entry) => entry.asd_session_id === sessionId);
+		assert.equal(record.topic, "Add export-index command for Tether session search.");
+	} finally {
+		delete process.env[runtimeOverrideEnvVar];
+		await rm(sandbox, { force: true, recursive: true });
+	}
+});
+
+test("quality resummarize --dry-run reports would_process_count via CLI", async () => {
+	const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-cli-dry-"));
+	const runtimeRoot = join(sandbox, "runtime-root");
+	const { createLedger, upsertSourceSession } = await import("../dist/db/ledger.js");
+	const { writeSessionSummary } = await import("../dist/writers/summary-writer.js");
+	const { writeSessionManifest } = await import("../dist/writers/manifest-writer.js");
+	const { turnSchema } = await import("../dist/models/canonical.js");
+
+	try {
+		process.env[runtimeOverrideEnvVar] = runtimeRoot;
+		const database = await createLedger();
+		const sessionId = "cli-dry-run";
+		const sourcePath = join(sandbox, "fixture.jsonl");
+		await writeFile(sourcePath, '{"type":"session"}\n', "utf8");
+		const upserted = upsertSourceSession(database, {
+			conversation_id: `demo:${sessionId}`,
+			ingest_status: "archived",
+			project_key: "demo",
+			retention_status: "kept",
+			session_id: sessionId,
+			source_format: "jsonl",
+			source_hash: "sha256:cli-dry-run",
+			source_path: sourcePath,
+			source_tool: "cursor",
+			started_at: "2026-05-22T19:00:00.000Z",
+			updated_at: "2026-05-22T20:00:00.000Z",
+			workspace_path: "/Users/example/Code/demo",
+		});
+		const summary = await writeSessionSummary({
+			session_id: sessionId,
+			topic: "brainstorming",
+			topic_source: "deterministic",
+			what_worked: [],
+			what_failed: [],
+			what_was_decided: [],
+			useful_commands: [],
+			files_of_interest: [],
+			next_step: "No open next step recorded.",
+			project_learnings: [],
+			user_learnings: [],
+			deletion_readiness: "ready",
+		});
+		await writeSessionManifest({
+			artifactPaths: {
+				project_knowledge_jsonl_path: null,
+				retention_receipt_path: join(runtimeRoot, "reports", "receipt.json"),
+				summary_json_path: summary.summaryPath,
+				summary_markdown_path: summary.markdownPath,
+				user_knowledge_jsonl_path: null,
+			},
+			events: [],
+			sourceSession: {
+				conversation_id: upserted.sourceSession.conversation_id,
+				ingest_status: upserted.sourceSession.ingest_status,
+				project_key: upserted.sourceSession.project_key,
+				retention_status: upserted.sourceSession.retention_status,
+				session_id: sessionId,
+				source_format: upserted.sourceSession.source_format,
+				source_hash: upserted.sourceSession.source_hash,
+				source_path: sourcePath,
+				source_tool: upserted.sourceSession.source_tool,
+				started_at: upserted.sourceSession.started_at,
+				updated_at: upserted.sourceSession.updated_at,
+				workspace_path: upserted.sourceSession.workspace_path,
+			},
+			turns: [],
+		});
+		await mkdir(join(runtimeRoot, "staging", sessionId), { recursive: true });
+		await writeFile(
+			join(runtimeRoot, "staging", sessionId, "reduced-session.json"),
+			JSON.stringify({
+				events: [],
+				turns: [
+					turnSchema.parse({
+						assistant_summary: "Shipped export-index.",
+						commands_seen: [],
+						ended_at: "2026-05-22T20:11:00.000Z",
+						files_touched: ["src/commands/export-index.ts"],
+						index: 0,
+						session_id: sessionId,
+						started_at: "2026-05-22T20:10:30.000Z",
+						tool_stub_count: 0,
+						turn_id: `${sessionId}:turn-0000`,
+						user_prompt: "Add export-index command for Tether session search.",
+						verification_seen: false,
+					}),
+				],
+			}),
+			"utf8",
+		);
+		const before = JSON.parse(await readFile(summary.summaryPath, "utf8"));
+
+		const result = runCli(
+			["quality", "resummarize", "--low-signal-only", "--dry-run"],
+			{ [runtimeOverrideEnvVar]: runtimeRoot },
+		);
+
+		assert.equal(result.status, 0, result.stderr);
+		const payload = JSON.parse(result.stdout.trim());
+		assert.equal(payload.dry_run, true);
+		assert.equal(payload.would_process_count, 1);
+		assert.equal(payload.processed_count, 0);
+		const after = JSON.parse(await readFile(summary.summaryPath, "utf8"));
+		assert.equal(after.topic, before.topic);
+	} finally {
+		delete process.env[runtimeOverrideEnvVar];
 		await rm(sandbox, { force: true, recursive: true });
 	}
 });

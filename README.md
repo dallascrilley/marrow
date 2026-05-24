@@ -85,6 +85,14 @@ Codex sessions are date-partitioned, not workspace-partitioned. The adapter read
 
 Design and source-surface research: [`docs/research/codex-cli-source-strategy.md`](docs/research/codex-cli-source-strategy.md).
 
+### Kimi (`--source kimi`)
+
+Local Kimi Code CLI data only. Transcript inputs:
+
+- `~/.kimi/sessions/<md5-workspace-path>/<session-uuid>/wire.jsonl`
+
+The `<md5-workspace-path>` segment is the MD5 hex digest of the absolute workspace path. The adapter reads `~/.kimi/kimi.json` to map MD5 slugs back to real workspace paths when available. Classifier maps `TurnBegin` → `user_message`, `ContentPart` → `assistant_message`, `ToolCall` → `tool_use_stub`, and `ToolResult` → `tool_result_stub`; everything else (metadata, `StepBegin`, `StatusUpdate`, `TurnEnd`) becomes `event`.
+
 ### Pi / Zosma (`--source pi`)
 
 Local Pi session files only. Transcript inputs:
@@ -207,6 +215,22 @@ node dist/cli.js quality apply-learning-review
 ```
 
 This writes `knowledge/projects-reviewed/` and `reports/llm-learning-review-apply.json` without mutating `knowledge/projects/`. The apply step keeps only durable keep/rewrite verdicts that pass strict post-validation.
+
+Upgrade topics for already-archived sessions without re-ingesting transcripts (manifests stay immutable; summaries and `export-index` output refresh):
+
+```bash
+# Preview how many low-signal sessions would upgrade (no writes)
+node dist/cli.js quality resummarize --low-signal-only --dry-run
+
+# Bulk remediation for Tether Session Search / session-index consumers
+npm run corpus:resummarize
+npm run corpus:resummarize:dry-run
+
+node dist/cli.js quality resummarize --low-signal-only --llm-topic --export-index
+node dist/cli.js quality resummarize --session-id <session-id>
+```
+
+Sessions without manifests are skipped (not failed) so bulk runs continue; re-run ingest through archive for orphan sessions.
 
 Run the local memory value loop as a single dry-run command:
 

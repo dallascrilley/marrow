@@ -13,6 +13,8 @@ memory pipeline proof. Canonical gate definitions:
 
 **v2:** P0 validated — five atomic-instinct + vault-render gates.
 
+**P1 (session index):** export-index, LLM topic low-signal gate, resummarize corpus upgrade (incl. `npm run corpus:resummarize`), ingest batch resilience — validated 2026-05-23 via unit tests.
+
 Remaining out of scope: remote Cursor background-agent chats.
 
 ## Proof Artifacts
@@ -25,6 +27,10 @@ Remaining out of scope: remote Cursor background-agent chats.
 | Reviewed memory export | apply-learning-review + export-wiki JSONL. | `/tmp/agent-session-distillery/2026-05-18_reviewed-memory-export/SUMMARY.md` |
 | v2 memory pipeline e2e | ingest → apply-learning-review → instinct store → export-wiki → push-wiki + MEMORY.md. | `/tmp/agent-session-distillery/2026-05-22_v2-memory-pipeline/SUMMARY.md` |
 | v2 unit tests | Instinct store, project-id, bundle replay, render, decay. | `npm test` (`test/v2-*.test.mjs`) |
+| Session index export | `export-index` writes `asd.session_index.v1`. | `test/cli.test.mjs` |
+| LLM topic + resummarize | Low-signal detection, wrapper skip, manifest-safe resummarize. | `test/summarize.test.mjs`, `test/resummarize.test.mjs` |
+| Session index no wrapper topics | Bare skill slugs rejected; deriveTopic skips wrappers. | `test/summarize.test.mjs`, `test/resummarize.test.mjs` |
+| Ingest batch resilience | Per-session failures isolated in backfill. | `test/ingest-backfill-isolation.test.mjs` |
 
 ## Rerun (turnkey)
 
