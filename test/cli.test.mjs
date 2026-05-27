@@ -70,23 +70,92 @@ test("missing subcommand exits non-zero and prints available subcommands", () =>
 	assert.match(result.stdout, /Usage: asd/);
 });
 
-test("stub dispatch succeeds and reports the prepared runtime path", async () => {
-	const runtimeRoot = await mkdtemp(join(tmpdir(), "asd-dispatch-"));
+test("search finds sessions in the exported session index", async () => {
+	const sandbox = await mkdtemp(join(tmpdir(), "asd-search-"));
+	const runtimeRoot = join(sandbox, "runtime-root");
+	const indexDir = join(runtimeRoot, "index");
+	const indexPath = join(indexDir, "session-index.jsonl");
 
 	try {
-		const result = runCli(["search", "alpha"], {
+		await mkdir(indexDir, { recursive: true });
+		await writeFile(
+			indexPath,
+			[
+				JSON.stringify({
+					v: 1,
+					source_path: "/tmp/codex.jsonl",
+					source_uuid: "019e516f-5f85-7550-a1b9-adcbab812b33",
+					source_tool: "codex-cli",
+					asd_session_id: "codex-session",
+					topic: "Add export-index command for Tether session search.",
+					topic_source: "deterministic",
+					next_step: "Ship search command.",
+					summary_json_path: join(runtimeRoot, "summaries", "by-session", "codex-session", "summary.json"),
+					updated_at: "2026-05-22T20:00:00.000Z",
+				}),
+				JSON.stringify({
+					v: 1,
+					source_path: "/tmp/claude.jsonl",
+					source_uuid: "019e5000-0000-7000-9000-000000000001",
+					source_tool: "claude-code",
+					asd_session_id: "claude-session",
+					topic: "Review the launch proof.",
+					topic_source: "llm",
+					next_step: "Follow up on missing evidence.",
+					summary_json_path: join(runtimeRoot, "summaries", "by-session", "claude-session", "summary.json"),
+					updated_at: "2026-05-22T21:00:00.000Z",
+				}),
+			].join("\n") + "\n",
+			"utf8",
+		);
+
+		const result = runCli(["search", "export-index"], {
 			[runtimeOverrideEnvVar]: runtimeRoot,
 		});
 
 		assert.equal(result.status, 0, result.stderr);
-		assert.match(result.stdout, /^search alpha/m);
-		assert.match(
-			result.stdout,
-			new RegExp(
-				`Runtime path ready: ${runtimeRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/index`,
-			),
-		);
-		assert.match(result.stdout, /Command scaffolded for Task 1\./);
+		assert.match(result.stdout, /codex-session/);
+		assert.match(result.stdout, /Add export-index command for Tether session search\./);
+		assert.doesNotMatch(result.stdout, /claude-session/);
+
+		const jsonResult = runCli(["search", "claude", "--json"], {
+			[runtimeOverrideEnvVar]: runtimeRoot,
+		});
+
+		assert.equal(jsonResult.status, 0, jsonResult.stderr);
+		const payload = JSON.parse(jsonResult.stdout.trim());
+		assert.equal(payload.length, 1);
+		assert.equal(payload[0].asd_session_id, "claude-session");
+
+		const emptyResult = runCli(["search", "missing-topic"], {
+			[runtimeOverrideEnvVar]: runtimeRoot,
+		});
+
+		assert.equal(emptyResult.status, 0, emptyResult.stderr);
+		assert.match(emptyResult.stdout, /No sessions matched "missing-topic"\./);
+	} finally {
+		await rm(sandbox, { force: true, recursive: true });
+	}
+});
+
+test("search without query exits non-zero", () => {
+	const result = runCli(["search"]);
+
+	assert.equal(result.status, 1);
+	assert.match(result.stderr, /search requires a query argument/);
+});
+
+test("search reports missing session index", async () => {
+	const runtimeRoot = await mkdtemp(join(tmpdir(), "asd-search-missing-index-"));
+
+	try {
+		const result = runCli(["search", "topic"], {
+			[runtimeOverrideEnvVar]: runtimeRoot,
+		});
+
+		assert.equal(result.status, 1, result.stderr);
+		assert.match(result.stderr, /Session index not found/);
+		assert.match(result.stderr, /export-index/);
 	} finally {
 		await rm(runtimeRoot, { force: true, recursive: true });
 	}

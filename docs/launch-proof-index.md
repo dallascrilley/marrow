@@ -1,6 +1,6 @@
 # Launch Proof Index
 
-Date: 2026-05-22
+Date: 2026-05-27
 Repo: `/Users/operator/Code/agent-session-distillery`
 
 Operator-facing index for v1 local transcript launch proof and v2 atomic-instinct
@@ -14,6 +14,8 @@ memory pipeline proof. Canonical gate definitions:
 **v2:** P0 validated — five atomic-instinct + vault-render gates.
 
 **P1 (session index):** export-index, LLM topic low-signal gate, resummarize corpus upgrade (incl. `npm run corpus:resummarize`), ingest batch resilience — validated 2026-05-23 via unit tests.
+
+**P2 (Kimi adapter):** kimi-adapter-source-research, kimi-adapter — validated 2026-05-27 via integration and unit tests.
 
 Remaining out of scope: remote Cursor background-agent chats.
 
@@ -31,6 +33,9 @@ Remaining out of scope: remote Cursor background-agent chats.
 | LLM topic + resummarize | Low-signal detection, wrapper skip, manifest-safe resummarize. | `test/summarize.test.mjs`, `test/resummarize.test.mjs` |
 | Session index no wrapper topics | Bare skill slugs rejected; deriveTopic skips wrappers. | `test/summarize.test.mjs`, `test/resummarize.test.mjs` |
 | Ingest batch resilience | Per-session failures isolated in backfill. | `test/ingest-backfill-isolation.test.mjs` |
+| Kimi adapter source research | On-disk wire.jsonl paths and classifier documented. | `docs/research/kimi-source-strategy.md` |
+| Kimi adapter ingest | End-to-end ingest via `--source kimi`. | `test/integration/kimi-ingest.test.mjs`, `test/kimi-*.test.mjs` |
+| Corpus resummarize (operator runtime) | Dry-run + full pass on 140-session live corpus; zero failures. | `/tmp/agent-session-distillery/2026-05-27_corpus-resummarize/SUMMARY.md` |
 
 ## Rerun (turnkey)
 

@@ -16,7 +16,26 @@ ingest sync --resume --source <adapter>
 ```
 
 Repeat `ingest sync` per adapter you care about (`cursor`, `claude-code`,
-`codex-cli`, `pi`).
+`codex-cli`, `pi`, `kimi`).
+
+## Optional corpus health (weekly or before full resummarize)
+
+After `quality audit`, you can check whether archived sessions still have
+low-signal topics before mutating summaries:
+
+```bash
+npm run corpus:resummarize:dry-run
+```
+
+When the dry-run shows sessions worth upgrading, run the full pass (mutates
+summary topics and re-exports the session index; manifests stay immutable):
+
+```bash
+npm run corpus:resummarize
+```
+
+Run this on a weekly or monthly cadence — not on the same 6-hour ingest cron.
+Full resummarize may invoke `--llm-topic` when `OPENROUTER_API_KEY` is set.
 
 ## Environment
 

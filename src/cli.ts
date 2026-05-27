@@ -18,8 +18,9 @@ import { executeQualityResummarize } from "./commands/quality-resummarize.js";
 import { executeQualityReviewLearnings } from "./commands/quality-review-learnings.js";
 import { executeReviewQueue } from "./commands/review-queue.js";
 import { executeReviewShow } from "./commands/review-show.js";
+import { executeSearch } from "./commands/search.js";
 import { executeStats } from "./commands/stats.js";
-import { ensureRuntimePath, getRuntimeRoot } from "./config/paths.js";
+import { getRuntimeRoot } from "./config/paths.js";
 import { createLedger } from "./db/ledger.js";
 
 type Output = {
@@ -136,8 +137,8 @@ const commandTree: Record<string, CommandDefinition> = {
 		},
 	},
 	search: {
-		description: "Search indexed distillery data.",
-		execute: async (context) => runStub(context, "index"),
+		description: "Search the session index by topic, session id, or source tool.",
+		execute: async (context) => withLedger(context, executeSearch),
 	},
 	"export-index": {
 		description: "Write a consolidated session index JSONL for summarized sessions.",
@@ -235,21 +236,6 @@ function getSubcommandList(definition: CommandDefinition): string {
 	return Object.entries(definition.subcommands ?? {})
 		.map(([name, child]) => `${name}: ${child.description}`)
 		.join(", ");
-}
-
-async function runStub(
-	context: CommandContext,
-	runtimePathName: Parameters<typeof ensureRuntimePath>[0],
-): Promise<number> {
-	const runtimePath = await ensureRuntimePath(runtimePathName);
-	const commandName = context.commandPath.join(" ");
-	const suffix = context.args.length > 0 ? ` ${context.args.join(" ")}` : "";
-
-	context.output.info(`${commandName}${suffix}`);
-	context.output.info(`Runtime path ready: ${runtimePath}`);
-	context.output.info("Command scaffolded for Task 1.");
-
-	return 0;
 }
 
 function resolveCommand(argv: string[]): ResolvedCommand | { error: string } {
