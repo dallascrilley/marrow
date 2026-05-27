@@ -1,7 +1,7 @@
 ---
 project: agent-session-distillery
 owner: dallascrilley
-last_reviewed: 2026-05-22
+last_reviewed: 2026-05-27
 version: 1.1.0
 ---
 
@@ -214,6 +214,24 @@ retention workflows.
   status: validated
   validated_on: 2026-05-18
   proof: /tmp/agent-session-distillery/2026-05-18_f1g-pi-adapter/SUMMARY.md
+
+- id: kimi-adapter-source-research
+  feature: The Kimi adapter has a researched source strategy citing real on-disk paths, wire.jsonl classifier handling, and the documented MD5 workspace-path mapping strategy before any code lands.
+  test: Read docs/research/kimi-source-strategy.md; verify the cited paths resolve on this machine and the classifier covers all probed type values (TurnBegin, ContentPart, ToolCall, ToolResult).
+  proof_required: Research note checked in, citing real on-disk paths and the wire.jsonl classifier table.
+  proof_level: C
+  status: validated
+  validated_on: 2026-05-27
+  proof: docs/research/kimi-source-strategy.md
+
+- id: kimi-adapter
+  feature: asd ingests local Kimi (Kimi Code CLI) wire.jsonl files via `ingest backfill --source kimi` end-to-end, mapping TurnBegin/ContentPart/ToolCall/ToolResult records into user/assistant/tool kinds.
+  test: Run `node dist/cli.js ingest backfill --source kimi` against the smoke fixture at test/fixtures/kimi/sessions/. Verify the session is discovered, parsed, summarised, has a learning extracted, and is archived.
+  proof_required: Unit tests (workspace-map, discover, parse) plus integration test (ingest-backfill via CLI subprocess) passing under `npm test`; live end-to-end run against the fixture HOME.
+  proof_level: B
+  status: validated
+  validated_on: 2026-05-27
+  proof: test/integration/kimi-ingest.test.mjs, test/kimi-discover.test.mjs, test/kimi-parse-transcript.test.mjs, test/kimi-workspace-map.test.mjs
 
 ## P0 — v2 launch blockers (atomic instincts + vault render)
 

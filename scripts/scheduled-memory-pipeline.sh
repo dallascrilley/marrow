@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLI=(node "$ROOT/dist/cli.js")
-ADAPTERS=(cursor claude-code codex-cli pi)
+ADAPTERS=(cursor claude-code codex-cli pi kimi)
 
 if [[ ! -f "$ROOT/dist/cli.js" ]]; then
   echo "missing dist/cli.js — run npm run build in $ROOT" >&2
