@@ -15,8 +15,8 @@ for adapter in "${ADAPTERS[@]}"; do
   "${CLI[@]}" ingest sync --resume --source "$adapter"
 done
 
-echo "[asd] pipeline gate"
-"${CLI[@]}" pipeline gate --max-per "${ASD_LLM_MAX_PER:-5/24h}"
+echo "[asd] pipeline gate (--skip-ingest; ingest already ran above)"
+"${CLI[@]}" pipeline gate --skip-ingest --max-per "${ASD_LLM_MAX_PER:-5/24h}"
 
 echo "[asd] quality audit"
 "${CLI[@]}" quality audit --limit 100
