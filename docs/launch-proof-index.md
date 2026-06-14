@@ -39,6 +39,7 @@ Remaining out of scope: remote Cursor background-agent chats.
 | Kimi adapter ingest | End-to-end ingest via `--source kimi`. | `test/integration/kimi-ingest.test.mjs`, `test/kimi-*.test.mjs` |
 | Corpus resummarize (operator runtime) | Dry-run + full pass on live corpus; zero failures. | `/tmp/agent-session-distillery/2026-05-27_corpus-resummarize/SUMMARY.md` |
 | Unattended memory loop (partial) | Hook dry-run + claude-code ingest → audit → export-index → vault push; exit 0. | `/tmp/agent-session-distillery/2026-06-14_unattended-loop/SUMMARY.md` |
+| Unattended memory loop (scheduled tail) | Script tail: gate --skip-ingest → audit → apply → export/push-wiki; single-adapter ingest; exit 0. | `/tmp/agent-session-distillery/2026-06-16_unattended-loop-full/SUMMARY.md` |
 | SessionEnd hook install | Hook script + settings merge via `hooks install`. | `test/hooks-install.test.mjs` |
 | Pipeline gate (daemon-LLM separation) | Cheap pending-work + budget JSON before OpenRouter. | `test/pipeline-gate.test.mjs`, `test/llm-budget.test.mjs`, ADR-0007 |
 | Skill evidence + adherence report | Corpus skill mentions and checklist scoring. | `test/skill-report.test.mjs`, `docs/recipes/skill-adherence-report.md` |
