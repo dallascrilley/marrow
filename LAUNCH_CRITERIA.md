@@ -1,7 +1,7 @@
 ---
 project: agent-session-distillery
 owner: dallascrilley
-last_reviewed: 2026-05-27
+last_reviewed: 2026-06-14
 version: 1.1.0
 ---
 
@@ -232,6 +232,33 @@ retention workflows.
   status: validated
   validated_on: 2026-05-27
   proof: test/integration/kimi-ingest.test.mjs, test/kimi-discover.test.mjs, test/kimi-parse-transcript.test.mjs, test/kimi-workspace-map.test.mjs
+
+- id: session-end-hook
+  feature: Operators can install a Claude Code SessionEnd hook that triggers asd ingest after each session.
+  test: Run `npm test` — `test/hooks-install.test.mjs`. Operator smoke: `node dist/cli.js hooks install --dry-run` in a project checkout.
+  proof_required: Passing hook install/merge tests plus unattended-loop proof showing hook dry-run and ingest chain exit 0.
+  proof_level: B
+  status: validated
+  validated_on: 2026-06-14
+  proof: test/hooks-install.test.mjs, /tmp/agent-session-distillery/2026-06-14_unattended-loop/SUMMARY.md
+
+- id: skill-adherence-report
+  feature: Operators can list skill mentions in the exported session index and score checklist adherence per skill.
+  test: Run `npm test` — `test/skill-report.test.mjs`. Operator smoke: `node dist/cli.js skill evidence <skill-id>` and `node dist/cli.js skill report <skill-id>` after `export-index`.
+  proof_required: Passing adherence/evidence unit tests plus operator recipe documenting the workflow.
+  proof_level: B
+  status: validated
+  validated_on: 2026-06-14
+  proof: test/skill-report.test.mjs, docs/recipes/skill-adherence-report.md
+
+- id: quality-audit-topic-distribution
+  feature: Operators can rank corpus topic quality per project and get resummarize remediation hints.
+  test: Run `npm test` — `test/quality-audit.test.mjs` topic-distribution case. Operator smoke: `node dist/cli.js quality audit --topic-distribution`.
+  proof_required: Passing aggregation test showing low-signal rate, wrapper-leak count, LLM rescue coverage, and remediation commands.
+  proof_level: B
+  status: validated
+  validated_on: 2026-06-14
+  proof: test/quality-audit.test.mjs
 
 ## P0 — v2 launch blockers (atomic instincts + vault render)
 

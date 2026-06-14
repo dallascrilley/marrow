@@ -9,7 +9,6 @@ in-flight notes.
 
 ## Next (whats-next 2026-06-14)
 
-- `td-984616` — automation LAUNCH_CRITERIA gates (R4)
 - `td-504382` — close v2 epic (R5)
 
 ## Deferred (anti-goal 2026-06-14)
@@ -19,6 +18,7 @@ in-flight notes.
 
 ## Done (foundational v2 + post-ship hygiene)
 
+- `td-984616` — automation LAUNCH_CRITERIA gates (R4)
 - `td-3efc5e` — quality audit `--topic-distribution` (whats-next R2)
 - Whats-next report: `docs/whats-next/2026-06-14.md`
 - SessionEnd hook — `asd hooks install` (td-0633d9, PR #24)
