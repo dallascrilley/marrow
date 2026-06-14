@@ -28,7 +28,7 @@ Launch proof and criteria: [`LAUNCH_CRITERIA.md`](LAUNCH_CRITERIA.md), [`docs/la
 
 ## Key decisions
 
-- **Vault carve-out (v2):** asd may write only eight named paths under `~/vault/wiki/projects/<project-id>/` — see [`CLAUDE.md`](CLAUDE.md). Enforced in `src/v2/vault/` and vault writer allowlist.
+- **Vault carve-out (v2):** asd may write only eight named paths under `~/vault/wiki/projects/<project-id>/` — see [`CLAUDE.md`](CLAUDE.md). Enforced structurally: `src/pipeline/vault-push.ts` and `src/v2/vault/render-memory.ts` hardcode carve-out paths (no generic vault writer).
 - **Project ID:** git-remote-hash with fallback chain — [`docs/decisions/`](docs/decisions/) ADR-0002.
 - **Deletion safety:** lifecycle blocked until summary, knowledge, manifest, and retention receipt exist — never silent delete.
 - **Deterministic vs reviewed learnings:** project JSONL is deterministic; LLM-reviewed sidecar is non-mutating export input.

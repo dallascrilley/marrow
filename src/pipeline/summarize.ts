@@ -40,6 +40,14 @@ export function summarizeSession(input: SummarizeSessionInput): Summary {
   });
 }
 
+export function shouldAttemptLlmTopic(
+  sourceSession: SourceSession,
+  turns: readonly Turn[],
+  llmTopicEnabled: boolean,
+): boolean {
+  return llmTopicEnabled === true && isLowSignalTopic(deriveTopic(sourceSession, turns));
+}
+
 export async function summarizeSessionWithOptionalLlmTopic(
   input: SummarizeSessionInput,
   options: OptionalLlmTopicOptions = {},

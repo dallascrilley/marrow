@@ -9,6 +9,10 @@ export async function executeQualityResummarize(
   database: DatabaseSync,
 ): Promise<number> {
   const options = parseResummarizeOptions(context.args);
+  if (options.maxPer !== undefined && options.llmTopic !== true) {
+    console.warn("[asd] quality resummarize: --max-per has no effect without --llm-topic");
+  }
+
   const result = await resummarizeSessions(database, options);
 
   if (options.exportIndex === true && !options.dryRun && result.processed_count > 0) {
@@ -25,6 +29,7 @@ function parseResummarizeOptions(args: readonly string[]): {
   limit?: number;
   llmTopic?: boolean;
   lowSignalOnly?: boolean;
+  maxPer?: string;
   projectKeys?: string[];
   sessionIds?: string[];
 } {
@@ -33,6 +38,7 @@ function parseResummarizeOptions(args: readonly string[]): {
   let llmTopic = false;
   let lowSignalOnly = false;
   let limit: number | undefined;
+  let maxPer: string | undefined;
   const projectKeys: string[] = [];
   const sessionIds: string[] = [];
 
@@ -51,6 +57,12 @@ function parseResummarizeOptions(args: readonly string[]): {
 
     if (arg === "--llm-topic") {
       llmTopic = true;
+      continue;
+    }
+
+    if (arg === "--max-per") {
+      maxPer = requireOptionValue("--max-per", args[index + 1]);
+      index += 1;
       continue;
     }
 
@@ -89,6 +101,7 @@ function parseResummarizeOptions(args: readonly string[]): {
     ...(exportIndex ? { exportIndex: true } : {}),
     ...(llmTopic ? { llmTopic: true } : {}),
     ...(lowSignalOnly ? { lowSignalOnly: true } : {}),
+    ...(maxPer === undefined ? {} : { maxPer }),
     ...(limit === undefined ? {} : { limit }),
     ...(projectKeys.length > 0 ? { projectKeys } : {}),
     ...(sessionIds.length > 0 ? { sessionIds } : {}),
