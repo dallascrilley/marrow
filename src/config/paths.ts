@@ -19,16 +19,14 @@ const runtimePathSuffixes = {
   summaries: "summaries/by-session",
   wikiMemoryExports: "exports/wiki-memory",
   instinctsProjects: "instincts",
-  instinctsGlobal: "instincts-global"
+  instinctsGlobal: "instincts-global",
 } as const;
 
 export type RuntimePathName = keyof typeof runtimePathSuffixes;
 
 export function getRuntimeRoot(): string {
   const override = process.env[runtimeRootOverrideEnvVar];
-  return override && override.length > 0
-    ? override
-    : join(homedir(), ".agent-session-distillery");
+  return override && override.length > 0 ? override : join(homedir(), ".agent-session-distillery");
 }
 
 export function getRuntimePath(name: RuntimePathName): string {

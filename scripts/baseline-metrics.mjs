@@ -9,7 +9,7 @@
 //   node scripts/baseline-metrics.mjs --root /tmp/asd-demo
 //   node scripts/baseline-metrics.mjs --json > baseline.json
 
-import { readdir, stat, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
@@ -20,8 +20,7 @@ const runtimeRoot =
   process.env.AGENT_SESSION_DISTILLERY_ROOT ??
   join(process.env.HOME ?? "", ".agent-session-distillery");
 
-const vaultRoot =
-  process.env.ASD_VAULT_ROOT ?? join(process.env.HOME ?? "", "vault");
+const vaultRoot = process.env.ASD_VAULT_ROOT ?? join(process.env.HOME ?? "", "vault");
 
 const out = {
   captured_at: new Date().toISOString(),
@@ -58,15 +57,7 @@ async function measureRuntime(root) {
   if (!(await exists(root))) {
     return { present: false };
   }
-  const dirs = [
-    "deletes",
-    "knowledge",
-    "ledger",
-    "reports",
-    "sources",
-    "staging",
-    "summaries",
-  ];
+  const dirs = ["deletes", "knowledge", "ledger", "reports", "sources", "staging", "summaries"];
   const result = { present: true };
   for (const d of dirs) {
     result[d] = await measureDir(join(root, d));
@@ -122,8 +113,7 @@ async function measureDir(path) {
     file_count: fileCount,
     total_bytes: totalBytes,
     largest_file_bytes: largestBytes,
-    mean_bytes:
-      fileCount > 0 ? Math.round(totalBytes / fileCount) : 0,
+    mean_bytes: fileCount > 0 ? Math.round(totalBytes / fileCount) : 0,
   };
 }
 
@@ -190,9 +180,7 @@ function prettyPrint(o) {
   if (!o.vault.present) {
     lines.push("  (no projects/ dir)");
   } else {
-    lines.push(
-      `  projects with asd-learnings: ${o.vault.projects_with_learnings}`,
-    );
+    lines.push(`  projects with asd-learnings: ${o.vault.projects_with_learnings}`);
     for (const p of o.vault.learnings_per_project) {
       lines.push(
         `    ${p.project.padEnd(40)} files=${String(p.file_count).padStart(4)} total=${formatBytes(p.total_bytes)}`,
@@ -200,9 +188,7 @@ function prettyPrint(o) {
     }
   }
   lines.push("");
-  lines.push(
-    "Re-run after each v2 milestone. Diff the JSON form to track change.",
-  );
+  lines.push("Re-run after each v2 milestone. Diff the JSON form to track change.");
   process.stdout.write(lines.join("\n") + "\n");
 }
 

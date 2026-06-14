@@ -15,13 +15,10 @@ export const eventTypes = [
   "failure",
   "fix",
   "verification",
-  "next_step"
+  "next_step",
 ] as const;
 
-export const learningScopes = [
-  "project",
-  "user"
-] as const;
+export const learningScopes = ["project", "user"] as const;
 
 export const learningKinds = [
   "decision",
@@ -29,7 +26,7 @@ export const learningKinds = [
   "preference",
   "workflow",
   "failure_mode",
-  "verification_rule"
+  "verification_rule",
 ] as const;
 
 export const ingestStatuses = [
@@ -41,21 +38,12 @@ export const ingestStatuses = [
   "archived",
   "deletion_candidate",
   "deleted",
-  "error"
+  "error",
 ] as const;
 
-export const retentionStatuses = [
-  "kept",
-  "archived",
-  "eligible_for_delete",
-  "deleted"
-] as const;
+export const retentionStatuses = ["kept", "archived", "eligible_for_delete", "deleted"] as const;
 
-export const confidenceLevels = [
-  "high",
-  "medium",
-  "low"
-] as const;
+export const confidenceLevels = ["high", "medium", "low"] as const;
 
 export type EventType = (typeof eventTypes)[number];
 export type LearningScope = (typeof learningScopes)[number];
@@ -79,8 +67,8 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
     z.boolean(),
     z.null(),
     z.array(jsonValueSchema),
-    z.record(z.string(), jsonValueSchema)
-  ])
+    z.record(z.string(), jsonValueSchema),
+  ]),
 );
 
 export const eventTypeSchema = z.enum(eventTypes);
@@ -96,7 +84,7 @@ export const sourceRefSchema = z.object({
   session_id: nonEmptyStringSchema,
   turn_id: nonEmptyStringSchema.nullable(),
   event_id: nonEmptyStringSchema.nullable(),
-  line: z.number().int().nonnegative().nullable()
+  line: z.number().int().nonnegative().nullable(),
 });
 
 export const sourceSessionSchema = z.object({
@@ -111,7 +99,7 @@ export const sourceSessionSchema = z.object({
   started_at: isoTimestampSchema,
   updated_at: isoTimestampSchema,
   ingest_status: ingestStatusSchema,
-  retention_status: retentionStatusSchema
+  retention_status: retentionStatusSchema,
 });
 
 export const turnSchema = z.object({
@@ -125,7 +113,7 @@ export const turnSchema = z.object({
   commands_seen: z.array(nonEmptyStringSchema),
   verification_seen: z.boolean(),
   started_at: isoTimestampSchema,
-  ended_at: isoTimestampSchema
+  ended_at: isoTimestampSchema,
 });
 
 export const eventSchema = z.object({
@@ -137,8 +125,8 @@ export const eventSchema = z.object({
   confidence: confidenceLevelSchema,
   source_offsets: z.object({
     start_line: z.number().int().nonnegative().nullable(),
-    end_line: z.number().int().nonnegative().nullable()
-  })
+    end_line: z.number().int().nonnegative().nullable(),
+  }),
 });
 
 export const learningSchema = z.object({
@@ -151,7 +139,7 @@ export const learningSchema = z.object({
   evidence: z.array(nonEmptyStringSchema),
   confidence: confidenceLevelSchema,
   promotion_basis: nonEmptyStringSchema,
-  source_refs: z.array(sourceRefSchema)
+  source_refs: z.array(sourceRefSchema),
 });
 
 export const summarySchema = z.object({
@@ -166,7 +154,7 @@ export const summarySchema = z.object({
   next_step: nonEmptyStringSchema,
   project_learnings: z.array(nonEmptyStringSchema),
   user_learnings: z.array(nonEmptyStringSchema),
-  deletion_readiness: nonEmptyStringSchema
+  deletion_readiness: nonEmptyStringSchema,
 });
 
 export const retentionReceiptSchema = z.object({
@@ -178,7 +166,7 @@ export const retentionReceiptSchema = z.object({
   user_learnings_written: z.boolean(),
   archive_copy_written: z.boolean(),
   safe_to_delete: z.boolean(),
-  reason_if_not: z.string()
+  reason_if_not: z.string(),
 });
 
 export type SourceRef = z.infer<typeof sourceRefSchema>;
@@ -215,7 +203,7 @@ export const sourceSessionFixture: Readonly<SourceSession> = deepFreeze({
   started_at: "2026-05-16T08:30:00Z",
   updated_at: "2026-05-16T08:33:00Z",
   ingest_status: "summarized",
-  retention_status: "kept"
+  retention_status: "kept",
 });
 
 export const turnFixture: Readonly<Turn> = deepFreeze({
@@ -229,7 +217,7 @@ export const turnFixture: Readonly<Turn> = deepFreeze({
   commands_seen: ["npm run build", "npm test"],
   verification_seen: true,
   started_at: "2026-05-16T08:30:00Z",
-  ended_at: "2026-05-16T08:30:03Z"
+  ended_at: "2026-05-16T08:30:03Z",
 });
 
 export const eventFixture: Readonly<Event> = deepFreeze({
@@ -238,13 +226,13 @@ export const eventFixture: Readonly<Event> = deepFreeze({
   type: "decision",
   summary: "Kept the canonical model in one module for now.",
   payload_small: {
-    rationale: "Single import surface while the model set is still compact."
+    rationale: "Single import surface while the model set is still compact.",
   },
   confidence: "high",
   source_offsets: {
     start_line: 1,
-    end_line: 3
-  }
+    end_line: 3,
+  },
 });
 
 export const learningFixture: Readonly<Learning> = deepFreeze({
@@ -253,7 +241,8 @@ export const learningFixture: Readonly<Learning> = deepFreeze({
   scope_key: "agent-session-distillery",
   kind: "decision",
   title: "Canonical model lives in one file during early slices",
-  statement: "Keep the canonical contract in one focused module until adapters and pipeline code justify splitting it.",
+  statement:
+    "Keep the canonical contract in one focused module until adapters and pipeline code justify splitting it.",
   evidence: ["Task 2 implementation grouped all model contracts under src/models/canonical.ts."],
   confidence: "high",
   promotion_basis: "Explicit implementation decision captured during scaffolding.",
@@ -264,9 +253,9 @@ export const learningFixture: Readonly<Learning> = deepFreeze({
       session_id: sourceSessionFixture.session_id,
       turn_id: turnFixture.turn_id,
       event_id: eventFixture.event_id,
-      line: 1
-    }
-  ]
+      line: 1,
+    },
+  ],
 });
 
 export const summaryFixture: Readonly<Summary> = deepFreeze({
@@ -275,13 +264,15 @@ export const summaryFixture: Readonly<Summary> = deepFreeze({
   topic_source: "deterministic",
   what_worked: ["TypeScript schemas compiled cleanly.", "Runtime validation tests passed."],
   what_failed: [],
-  what_was_decided: ["Use one canonical schema module until the model surface becomes large enough to split."],
+  what_was_decided: [
+    "Use one canonical schema module until the model surface becomes large enough to split.",
+  ],
   useful_commands: ["npm run build", "npm test"],
   files_of_interest: ["src/models/canonical.ts", "test/canonical.test.mjs"],
   next_step: "Implement the ledger database and migration layer.",
   project_learnings: [learningFixture.statement],
   user_learnings: [],
-  deletion_readiness: "not_ready"
+  deletion_readiness: "not_ready",
 });
 
 export const retentionReceiptFixture: Readonly<RetentionReceipt> = deepFreeze({
@@ -293,5 +284,5 @@ export const retentionReceiptFixture: Readonly<RetentionReceipt> = deepFreeze({
   user_learnings_written: false,
   archive_copy_written: false,
   safe_to_delete: false,
-  reason_if_not: "Archive copy has not been written yet."
+  reason_if_not: "Archive copy has not been written yet.",
 });

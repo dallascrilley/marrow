@@ -10,7 +10,7 @@ export function parseJsonLine(
   line: string,
   sourcePath: string,
   lineNumber: number,
-  sourceLabel: string = "JSONL"
+  sourceLabel: string = "JSONL",
 ): JsonRecord {
   let parsed: unknown;
 
@@ -20,7 +20,7 @@ export function parseJsonLine(
     throw new Error(
       `Failed to parse ${sourceLabel} at ${sourcePath}:${lineNumber}: ${
         error instanceof Error ? error.message : String(error)
-      }`
+      }`,
     );
   }
 

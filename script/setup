@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#
+# script/setup — get the project into a runnable state (install deps, etc.).
+# Run after cloning. Idempotent.
+. "$(dirname "$0")/lib/common.sh"
+log "setup: preparing project"
+run_setup "$@"

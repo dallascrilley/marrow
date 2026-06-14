@@ -1,8 +1,8 @@
-import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import test from "node:test";
 
 import { replayBundles, saveSessionBundle } from "../dist/v2/instinct/bundle.js";
 import { sessionBundleSchema } from "../dist/v2/instinct/schema.js";

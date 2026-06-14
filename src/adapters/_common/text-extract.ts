@@ -23,7 +23,7 @@ export const windowsPathPattern = /[A-Za-z]:\\[^\s"'`]+/g;
  */
 export function readValueAtPath(
   value: JsonValue,
-  path: ReadonlyArray<string>
+  path: ReadonlyArray<string>,
 ): JsonValue | undefined {
   let current: JsonValue | undefined = value;
 
@@ -44,7 +44,7 @@ export function readValueAtPath(
  */
 export function pickFirstString(
   value: JsonRecord,
-  paths: ReadonlyArray<ReadonlyArray<string>>
+  paths: ReadonlyArray<ReadonlyArray<string>>,
 ): string | null {
   for (const path of paths) {
     const candidate = readValueAtPath(value, path);
@@ -128,7 +128,7 @@ export function extractToolInputText(parsedLine: JsonRecord): string | null {
     ["arguments", "path"],
     ["input"],
     ["command"],
-    ["path"]
+    ["path"],
   ]);
 
   return candidate?.trim() || null;
@@ -143,7 +143,7 @@ export function extractTimestampHint(parsedLine: JsonRecord): string | null {
       ["updatedAt"],
       ["time"],
       ["ts"],
-      ["date"]
+      ["date"],
     ]) ?? null
   );
 }
@@ -205,7 +205,7 @@ export function detectRedaction(parsedLine: JsonRecord): boolean {
 export function collectFocusedStringSources(
   parsedLine: JsonRecord,
   messageText: string | null,
-  toolInputText: string | null
+  toolInputText: string | null,
 ): string[] {
   const sources: string[] = [];
 
@@ -223,7 +223,7 @@ export function collectFocusedStringSources(
     ["metadata", "path"],
     ["metadata", "cwd"],
     ["path"],
-    ["cwd"]
+    ["cwd"],
   ] satisfies ReadonlyArray<ReadonlyArray<string>>) {
     const candidate = pickFirstString(parsedLine, [path]);
 
@@ -239,13 +239,13 @@ export function collectFocusedStringSources(
 export function extractFilePaths(
   parsedLine: JsonRecord,
   messageText: string | null,
-  toolInputText: string | null
+  toolInputText: string | null,
 ): string[] {
   const paths: string[] = [];
 
   for (const value of collectFocusedStringSources(parsedLine, messageText, toolInputText)) {
-    paths.push(...value.match(posixPathPattern) ?? []);
-    paths.push(...value.match(windowsPathPattern) ?? []);
+    paths.push(...(value.match(posixPathPattern) ?? []));
+    paths.push(...(value.match(windowsPathPattern) ?? []));
   }
 
   return paths;
@@ -255,7 +255,7 @@ export function extractFilePaths(
 export function extractCommandStrings(
   parsedLine: JsonRecord,
   messageText: string | null,
-  toolInputText: string | null
+  toolInputText: string | null,
 ): string[] {
   const commands: string[] = [];
 

@@ -29,8 +29,12 @@ export async function writeKnowledgeArtifacts(input: {
   sessionId: string;
   userLearnings: readonly Learning[];
 }): Promise<KnowledgeWriteResult> {
-  const normalizedProjectLearnings = input.projectLearnings.map((learning) => learningSchema.parse(learning));
-  const normalizedUserLearnings = input.userLearnings.map((learning) => learningSchema.parse(learning));
+  const normalizedProjectLearnings = input.projectLearnings.map((learning) =>
+    learningSchema.parse(learning),
+  );
+  const normalizedUserLearnings = input.userLearnings.map((learning) =>
+    learningSchema.parse(learning),
+  );
   const projectPath =
     normalizedProjectLearnings.length > 0
       ? getProjectKnowledgeSessionPath(normalizedProjectLearnings[0]!.scope_key, input.sessionId)
@@ -41,19 +45,21 @@ export async function writeKnowledgeArtifacts(input: {
       : null;
 
   await Promise.all([
-    projectPath === null ? Promise.resolve() : writeJsonlFile(projectPath, normalizedProjectLearnings),
-    userPath === null ? Promise.resolve() : writeJsonlFile(userPath, normalizedUserLearnings)
+    projectPath === null
+      ? Promise.resolve()
+      : writeJsonlFile(projectPath, normalizedProjectLearnings),
+    userPath === null ? Promise.resolve() : writeJsonlFile(userPath, normalizedUserLearnings),
   ]);
 
   return {
     project: {
       count: normalizedProjectLearnings.length,
-      path: projectPath
+      path: projectPath,
     },
     user: {
       count: normalizedUserLearnings.length,
-      path: userPath
-    }
+      path: userPath,
+    },
   };
 }
 

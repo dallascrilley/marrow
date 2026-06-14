@@ -4,15 +4,22 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
 import { getRuntimePath } from "../config/paths.js";
-import { listDeletionCandidates, markDeletionCandidateApplied, transitionPhase } from "../db/ledger.js";
+import {
+  listDeletionCandidates,
+  markDeletionCandidateApplied,
+  transitionPhase,
+} from "../db/ledger.js";
 
-export async function executeDeleteApply(context: CommandContext, database: DatabaseSync): Promise<number> {
+export async function executeDeleteApply(
+  context: CommandContext,
+  database: DatabaseSync,
+): Promise<number> {
   const apply = context.args.includes("--apply");
   const ready = listDeletionCandidates(database).filter(
     (candidate) =>
       candidate.safe_to_delete === 1 &&
       (candidate.candidate_state === "ready" ||
-        candidate.candidate_state === "discardable_no_signal")
+        candidate.candidate_state === "discardable_no_signal"),
   );
 
   if (!apply) {
@@ -23,7 +30,11 @@ export async function executeDeleteApply(context: CommandContext, database: Data
   const applied: Array<Record<string, unknown>> = [];
 
   for (const candidate of ready) {
-    const tombstonePath = join(getRuntimePath("deletes"), "tombstones", `${candidate.session_id}.json`);
+    const tombstonePath = join(
+      getRuntimePath("deletes"),
+      "tombstones",
+      `${candidate.session_id}.json`,
+    );
     await mkdir(dirname(tombstonePath), { recursive: true });
     await writeFile(
       tombstonePath,
@@ -32,26 +43,26 @@ export async function executeDeleteApply(context: CommandContext, database: Data
           applied_at: new Date().toISOString(),
           reason: candidate.reason,
           session_id: candidate.session_id,
-          source_hash: candidate.source_hash
+          source_hash: candidate.source_hash,
         },
         null,
-        2
+        2,
       )}\n`,
-      "utf8"
+      "utf8",
     );
     markDeletionCandidateApplied(database, candidate.source_session_id);
     transitionPhase(database, {
       detailsJson: JSON.stringify({
-        tombstone_path: tombstonePath
+        tombstone_path: tombstonePath,
       }),
       phaseName: "deleted",
       phaseState: "completed",
       sourceHash: candidate.source_hash,
-      sourceSessionId: candidate.source_session_id
+      sourceSessionId: candidate.source_session_id,
     });
     applied.push({
       session_id: candidate.session_id,
-      tombstone_path: tombstonePath
+      tombstone_path: tombstonePath,
     });
   }
 

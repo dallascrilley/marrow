@@ -1,10 +1,9 @@
 import { lstat, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { extname, join, resolve } from "node:path";
-
-import { hashFileContents } from "../_common/hash.js";
 import { pathExists } from "../_common/fs.js";
-import { deriveCursorWorkspaceMapping, type CursorWorkspaceMapping } from "./workspace-map.js";
+import { hashFileContents } from "../_common/hash.js";
+import { type CursorWorkspaceMapping, deriveCursorWorkspaceMapping } from "./workspace-map.js";
 
 export const cursorTranscriptExtensions = [".jsonl", ".txt"] as const;
 
@@ -37,12 +36,15 @@ export type DiscoverCursorInputsOptions = {
 };
 
 export async function discoverCursorInputs(
-  options: DiscoverCursorInputsOptions = {}
+  options: DiscoverCursorInputsOptions = {},
 ): Promise<CursorDiscoveryResult> {
   const homeDir = resolve(options.homeDir ?? homedir());
-  const cursorProjectsRoot = resolve(options.cursorProjectsRoot ?? join(homeDir, ".cursor", "projects"));
+  const cursorProjectsRoot = resolve(
+    options.cursorProjectsRoot ?? join(homeDir, ".cursor", "projects"),
+  );
   const cursorUserStateRoot = resolve(
-    options.cursorUserStateRoot ?? join(homeDir, "Library", "Application Support", "Cursor", "User")
+    options.cursorUserStateRoot ??
+      join(homeDir, "Library", "Application Support", "Cursor", "User"),
   );
   const transcriptPaths = await discoverTranscriptPaths(cursorProjectsRoot);
   const transcripts = await Promise.all(
@@ -50,7 +52,7 @@ export async function discoverCursorInputs(
       const [metadata, sourceHash, workspaceMapping] = await Promise.all([
         stat(transcriptPath),
         hashFileContents(transcriptPath),
-        deriveCursorWorkspaceMapping(transcriptPath, { cursorProjectsRoot })
+        deriveCursorWorkspaceMapping(transcriptPath, { cursorProjectsRoot }),
       ]);
 
       return {
@@ -59,15 +61,15 @@ export async function discoverCursorInputs(
         sizeBytes: metadata.size,
         sourceFormat: normalizeTranscriptFormat(transcriptPath),
         sourceHash,
-        sourcePath: transcriptPath
+        sourcePath: transcriptPath,
       };
-    })
+    }),
   );
   const supportDatabases = await discoverSupportDatabases(cursorUserStateRoot);
 
   return {
     supportDatabases,
-    transcripts
+    transcripts,
   };
 }
 
@@ -102,7 +104,10 @@ async function walkCursorProjects(directoryPath: string, discoveredPaths: string
   }
 }
 
-async function collectTranscriptFiles(directoryPath: string, discoveredPaths: string[]): Promise<void> {
+async function collectTranscriptFiles(
+  directoryPath: string,
+  discoveredPaths: string[],
+): Promise<void> {
   const directoryEntries = await readdir(directoryPath, { withFileTypes: true });
   directoryEntries.sort((left, right) => left.name.localeCompare(right.name));
 
@@ -124,7 +129,9 @@ async function collectTranscriptFiles(directoryPath: string, discoveredPaths: st
 
     const extension = extname(entry.name).toLowerCase();
 
-    if (!cursorTranscriptExtensions.includes(extension as (typeof cursorTranscriptExtensions)[number])) {
+    if (
+      !cursorTranscriptExtensions.includes(extension as (typeof cursorTranscriptExtensions)[number])
+    ) {
       continue;
     }
 
@@ -136,14 +143,16 @@ async function collectTranscriptFiles(directoryPath: string, discoveredPaths: st
   }
 }
 
-async function discoverSupportDatabases(cursorUserStateRoot: string): Promise<CursorSupportDatabaseDiscovery[]> {
+async function discoverSupportDatabases(
+  cursorUserStateRoot: string,
+): Promise<CursorSupportDatabaseDiscovery[]> {
   const discoveries: CursorSupportDatabaseDiscovery[] = [];
   const globalStatePath = join(cursorUserStateRoot, "globalStorage", "state.vscdb");
 
   if (await pathExists(globalStatePath)) {
     discoveries.push({
       kind: "global-state",
-      path: globalStatePath
+      path: globalStatePath,
     });
   }
 
@@ -166,7 +175,7 @@ async function discoverSupportDatabases(cursorUserStateRoot: string): Promise<Cu
     if (await pathExists(trackingDatabasePath)) {
       discoveries.push({
         kind: "tracking",
-        path: trackingDatabasePath
+        path: trackingDatabasePath,
       });
     }
   }

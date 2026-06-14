@@ -1,8 +1,8 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import test from "node:test";
 
 import { deriveCursorWorkspaceMapping } from "../dist/adapters/cursor/workspace-map.js";
 
@@ -25,7 +25,7 @@ test("derives project_key from local workspace hints before falling back to slug
       cursorProjectsRoot,
       workspaceSlug,
       "agent-transcripts",
-      "composer-2026-05-16T08-30-00.000Z.jsonl"
+      "composer-2026-05-16T08-30-00.000Z.jsonl",
     );
 
     await mkdir(workspacePath, { recursive: true });
@@ -33,7 +33,7 @@ test("derives project_key from local workspace hints before falling back to slug
     await writeFile(
       join(cursorProjectsRoot, workspaceSlug, "metadata.json"),
       JSON.stringify({ folders: [{ path: workspacePath }] }, null, 2),
-      "utf8"
+      "utf8",
     );
     await writeFile(transcriptPath, '{"ok":true}\n', "utf8");
 
@@ -43,7 +43,7 @@ test("derives project_key from local workspace hints before falling back to slug
       cursorProjectPath: join(cursorProjectsRoot, workspaceSlug),
       projectKey: "distillery",
       workspacePath,
-      workspaceSlug
+      workspaceSlug,
     });
   });
 });
@@ -56,7 +56,7 @@ test("falls back to the workspace slug when no local workspace hint resolves", a
       cursorProjectsRoot,
       workspaceSlug,
       "agent-transcripts",
-      "chat-2026-05-16T08-45-00.000Z.txt"
+      "chat-2026-05-16T08-45-00.000Z.txt",
     );
 
     await mkdir(dirname(transcriptPath), { recursive: true });
@@ -68,7 +68,7 @@ test("falls back to the workspace slug when no local workspace hint resolves", a
       cursorProjectPath: join(cursorProjectsRoot, workspaceSlug),
       projectKey: "forum-documented-sample",
       workspacePath: null,
-      workspaceSlug
+      workspaceSlug,
     });
   });
 });

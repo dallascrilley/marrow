@@ -6,8 +6,8 @@
 // for the v2 implementation once td-839bd1 lands.
 
 import {
-  CONFIDENCE_MIN,
   CONFIDENCE_MAX,
+  CONFIDENCE_MIN,
   type Maturity,
   type MaturityState,
   type Observation,
@@ -37,7 +37,7 @@ const MS_PER_DAY = 86_400_000;
  */
 export function decayFactor(ageDays: number): number {
   if (ageDays <= 0) return 1;
-  return Math.pow(0.5, ageDays / HALF_LIFE_DAYS);
+  return 0.5 ** (ageDays / HALF_LIFE_DAYS);
 }
 
 export function daysBetween(from: string, to: string): number {
@@ -85,9 +85,7 @@ export function maturityStateFrom(
   const reinforcing = observations.filter((o) => o.reinforcing).length;
   const correction = observations.length - reinforcing;
   const ageDays =
-    observations.length > 0
-      ? Math.max(...observations.map((o) => daysBetween(o.at, now)))
-      : 0;
+    observations.length > 0 ? Math.max(...observations.map((o) => daysBetween(o.at, now))) : 0;
   const survived = survivedContradiction(observations);
   return {
     confidence: confidenceFromObservations(observations, now),
@@ -117,10 +115,7 @@ function survivedContradiction(observations: readonly Observation[]): boolean {
  * Real transitions are gated by the state machine in production code; this
  * function answers "what is the highest legal maturity right now?"
  */
-export function proposedMaturity(
-  current: Maturity,
-  state: MaturityState,
-): Maturity {
+export function proposedMaturity(current: Maturity, state: MaturityState): Maturity {
   if (current === "deprecated") {
     return state.confidence > CONFIDENCE_MIN + 0.1 ? "candidate" : "deprecated";
   }
@@ -133,11 +128,7 @@ export function proposedMaturity(
   ) {
     return "proven";
   }
-  if (
-    state.confidence >= 0.6 &&
-    state.age_days >= 7 &&
-    state.reinforcing_count >= 2
-  ) {
+  if (state.confidence >= 0.6 && state.age_days >= 7 && state.reinforcing_count >= 2) {
     return "established";
   }
   return "candidate";

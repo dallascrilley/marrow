@@ -1,13 +1,12 @@
 import { lstat, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, extname, join, resolve } from "node:path";
-
-import { hashFileContents } from "../_common/hash.js";
 import { pathExists } from "../_common/fs.js";
+import { hashFileContents } from "../_common/hash.js";
 import type {
   PiDiscoveryResult,
   PiTranscriptDiscovery,
-  PiTranscriptFormat
+  PiTranscriptFormat,
 } from "./intermediate.js";
 import { derivePiWorkspaceMapping, readPiSessionMeta } from "./workspace-map.js";
 
@@ -33,11 +32,11 @@ export type PiDiscoverSkipReason = "ephemeral_path" | "test_session_name";
  * phase.
  */
 export async function discoverPiInputs(
-  options: DiscoverPiInputsOptions = {}
+  options: DiscoverPiInputsOptions = {},
 ): Promise<PiDiscoveryResult> {
   const homeDir = resolve(options.homeDir ?? homedir());
   const piSessionsRoot = resolve(
-    options.piSessionsRoot ?? join(homeDir, ".pi", "agent", "sessions")
+    options.piSessionsRoot ?? join(homeDir, ".pi", "agent", "sessions"),
   );
   const sessionPaths = await discoverSessionPaths(piSessionsRoot);
   const transcripts: PiTranscriptDiscovery[] = [];
@@ -60,7 +59,7 @@ export async function discoverPiInputs(
     const [metadata, sourceHash, sessionMeta] = await Promise.all([
       stat(sessionPath),
       hashFileContents(sessionPath),
-      readPiSessionMeta(sessionPath)
+      readPiSessionMeta(sessionPath),
     ]);
     const workspaceMapping = derivePiWorkspaceMapping(sessionPath, sessionMeta);
 
@@ -70,7 +69,7 @@ export async function discoverPiInputs(
       sizeBytes: metadata.size,
       sourceFormat: normalizeTranscriptFormat(sessionPath),
       sourceHash,
-      sourcePath: sessionPath
+      sourcePath: sessionPath,
     });
   }
 
@@ -130,7 +129,10 @@ async function discoverSessionPaths(piSessionsRoot: string): Promise<string[]> {
   return discoveredPaths.sort((left, right) => left.localeCompare(right));
 }
 
-async function collectSessionFiles(directoryPath: string, discoveredPaths: string[]): Promise<void> {
+async function collectSessionFiles(
+  directoryPath: string,
+  discoveredPaths: string[],
+): Promise<void> {
   const directoryEntries = await readdir(directoryPath, { withFileTypes: true });
   directoryEntries.sort((left, right) => left.name.localeCompare(right.name));
 

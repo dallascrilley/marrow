@@ -5,9 +5,7 @@ export type EnrichCursorStateDbOptions = {
   databasePath: string;
 };
 
-export function enrichCursorStateDb(
-  options: EnrichCursorStateDbOptions
-): CursorStateDbEnrichment {
+export function enrichCursorStateDb(options: EnrichCursorStateDbOptions): CursorStateDbEnrichment {
   const attribution = collectAttribution(readCursorKvRowsReadOnly(options.databasePath));
 
   return {
@@ -15,6 +13,6 @@ export function enrichCursorStateDb(
     conversationIds: [...attribution.conversationIds],
     matchedKeys: attribution.matchedKeys,
     workspaceIds: [...attribution.workspaceIds],
-    workspacePaths: [...attribution.workspacePaths]
+    workspacePaths: [...attribution.workspacePaths],
   };
 }

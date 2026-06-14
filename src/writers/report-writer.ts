@@ -49,20 +49,22 @@ export function getBatchReportMarkdownPath(reportName = "retention-readiness"): 
   return join(getRuntimePath("reports"), `${reportName}.md`);
 }
 
-export async function writeRetentionReceipt(receipt: RetentionReceipt): Promise<RetentionReceiptWriteResult> {
+export async function writeRetentionReceipt(
+  receipt: RetentionReceipt,
+): Promise<RetentionReceiptWriteResult> {
   const normalizedReceipt = retentionReceiptSchema.parse(receipt);
   const path = getRetentionReceiptPath(normalizedReceipt.session_id);
   await writeTextFile(path, `${JSON.stringify(normalizedReceipt, null, 2)}\n`);
 
   return {
     path,
-    receipt: normalizedReceipt
+    receipt: normalizedReceipt,
   };
 }
 
 export async function writeRetentionBatchReport(
   evaluations: readonly RetentionEvaluation[],
-  reportName = "retention-readiness"
+  reportName = "retention-readiness",
 ): Promise<BatchReportWriteResult> {
   const report = buildBatchReport(evaluations);
   const jsonPath = getBatchReportJsonPath(reportName);
@@ -70,13 +72,13 @@ export async function writeRetentionBatchReport(
 
   await Promise.all([
     writeTextFile(jsonPath, `${JSON.stringify(report, null, 2)}\n`),
-    writeTextFile(markdownPath, renderBatchReportMarkdown(report))
+    writeTextFile(markdownPath, renderBatchReportMarkdown(report)),
   ]);
 
   return {
     jsonPath,
     markdownPath,
-    report
+    report,
   };
 }
 
@@ -88,7 +90,7 @@ function buildBatchReport(evaluations: readonly RetentionEvaluation[]): Retentio
     safe_to_delete: evaluation.receipt.safe_to_delete,
     session_id: evaluation.receipt.session_id,
     summary_written: evaluation.receipt.summary_written,
-    user_learnings_written: evaluation.receipt.user_learnings_written
+    user_learnings_written: evaluation.receipt.user_learnings_written,
   }));
   const readyCount = sessions.filter((session) => session.safe_to_delete).length;
 
@@ -97,7 +99,7 @@ function buildBatchReport(evaluations: readonly RetentionEvaluation[]): Retentio
     generated_at: new Date().toISOString(),
     ready_count: readyCount,
     sessions,
-    total_sessions: sessions.length
+    total_sessions: sessions.length,
   };
 }
 
@@ -110,7 +112,7 @@ function renderBatchReportMarkdown(report: RetentionBatchReport): string {
     `- Ready to delete: ${report.ready_count}`,
     `- Blocked: ${report.blocked_count}`,
     "",
-    "## Sessions"
+    "## Sessions",
   ];
 
   if (report.sessions.length === 0) {
@@ -119,7 +121,9 @@ function renderBatchReportMarkdown(report: RetentionBatchReport): string {
   }
 
   for (const session of report.sessions) {
-    lines.push(`- ${session.session_id}: ${session.safe_to_delete ? "ready" : session.reason_if_not}`);
+    lines.push(
+      `- ${session.session_id}: ${session.safe_to_delete ? "ready" : session.reason_if_not}`,
+    );
   }
 
   lines.push("");

@@ -6,13 +6,13 @@ import type { DatabaseSync } from "node:sqlite";
 import type { CommandContext } from "../cli.js";
 import { getRuntimePath } from "../config/paths.js";
 import {
+  type PushAllResult,
   pushAll,
   readWikiMemoryJsonl,
   vaultExists,
-  type PushAllResult,
 } from "../pipeline/vault-push.js";
-import { executeMemoryExportWiki } from "./memory-export-wiki.js";
 import { renderProjectMemoryToVault } from "../v2/vault/render-memory.js";
+import { executeMemoryExportWiki } from "./memory-export-wiki.js";
 
 export const vaultRootEnvVar = "ASD_VAULT_ROOT";
 
@@ -77,16 +77,11 @@ export async function executeMemoryPushWiki(
   }
 
   if (!(await vaultExists(options.vaultRoot))) {
-    context.output.info(
-      `Vault not present at ${options.vaultRoot}; skipping push (no error).`,
-    );
+    context.output.info(`Vault not present at ${options.vaultRoot}; skipping push (no error).`);
     return 0;
   }
 
-  const exportPath = join(
-    getRuntimePath("wikiMemoryExports"),
-    "reviewed-memory.jsonl",
-  );
+  const exportPath = join(getRuntimePath("wikiMemoryExports"), "reviewed-memory.jsonl");
   const records = await readWikiMemoryJsonl(exportPath);
 
   if (records.length === 0) {
@@ -115,9 +110,7 @@ export async function executeMemoryPushWiki(
     );
   }
 
-  context.output.info(
-    formatSummary(result, options, memoryRenders),
-  );
+  context.output.info(formatSummary(result, options, memoryRenders));
   return 0;
 }
 

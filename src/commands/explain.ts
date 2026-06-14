@@ -8,11 +8,14 @@ import {
   getReviewQueueEntryBySessionId,
   getSourceSessionBySessionId,
   listPhaseCheckpoints,
-  listRunHistory
+  listRunHistory,
 } from "../db/ledger.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
 
-export async function executeExplain(context: CommandContext, database: DatabaseSync): Promise<number> {
+export async function executeExplain(
+  context: CommandContext,
+  database: DatabaseSync,
+): Promise<number> {
   const sessionId = context.args[0];
 
   if (!sessionId) {
@@ -36,11 +39,11 @@ export async function executeExplain(context: CommandContext, database: Database
         review_queue: getReviewQueueEntryBySessionId(database, sessionId),
         run_history: listRunHistory(database, session.id),
         session,
-        summary_preview: summaryPreview
+        summary_preview: summaryPreview,
       },
       null,
-      2
-    )
+      2,
+    ),
   );
   return 0;
 }
@@ -55,7 +58,7 @@ async function readSummaryPreview(sessionId: string): Promise<Record<string, unk
       next_step: parsed.next_step ?? null,
       topic: parsed.topic ?? null,
       what_failed_count: Array.isArray(parsed.what_failed) ? parsed.what_failed.length : null,
-      what_worked_count: Array.isArray(parsed.what_worked) ? parsed.what_worked.length : null
+      what_worked_count: Array.isArray(parsed.what_worked) ? parsed.what_worked.length : null,
     };
   } catch (error) {
     if (

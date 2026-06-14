@@ -7,7 +7,7 @@ import { pickFirstString, readValueAtPath } from "../_common/text-extract.js";
 import type {
   CodexCliRolloutTreeRoot,
   CodexCliSessionMeta,
-  CodexCliWorkspaceMapping
+  CodexCliWorkspaceMapping,
 } from "./intermediate.js";
 
 /**
@@ -21,7 +21,7 @@ import type {
  * lightweight: it reads only the first non-empty line.
  */
 export async function readCodexCliSessionMeta(
-  rolloutPath: string
+  rolloutPath: string,
 ): Promise<CodexCliSessionMeta | null> {
   const stream = createReadStream(rolloutPath, { encoding: "utf8" });
   const lines = createInterface({ crlfDelay: Infinity, input: stream });
@@ -67,7 +67,7 @@ export async function readCodexCliSessionMeta(
             ? pickFirstString(subagent, [["agent_role"]])
             : null,
         subagentDepth: typeof depth === "number" ? depth : null,
-        timestamp: pickFirstString(payload, [["timestamp"]])
+        timestamp: pickFirstString(payload, [["timestamp"]]),
       };
       break;
     }
@@ -92,7 +92,7 @@ export async function readCodexCliSessionMeta(
 export async function deriveCodexCliWorkspaceMapping(
   rolloutPath: string,
   rolloutTreeRoot: CodexCliRolloutTreeRoot,
-  sessionMeta: CodexCliSessionMeta | null
+  sessionMeta: CodexCliSessionMeta | null,
 ): Promise<CodexCliWorkspaceMapping> {
   const workspacePath = sessionMeta?.cwd ?? null;
   const filenameWithoutExt = basename(rolloutPath, ".jsonl");
@@ -103,7 +103,7 @@ export async function deriveCodexCliWorkspaceMapping(
     rolloutPath,
     rolloutTreeRoot,
     workspacePath,
-    workspaceSlug: workspacePath ?? filenameWithoutExt
+    workspaceSlug: workspacePath ?? filenameWithoutExt,
   };
 }
 

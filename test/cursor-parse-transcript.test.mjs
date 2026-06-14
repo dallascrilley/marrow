@@ -1,8 +1,8 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import test from "node:test";
 
 import { parseCursorTranscript } from "../dist/adapters/cursor/parse-transcript.js";
 
@@ -30,7 +30,7 @@ function summarize(record) {
     commandStrings: record.commandStrings,
     filePaths: record.filePaths,
     toolName: record.toolUse?.name ?? null,
-    toolCallId: record.toolUse?.callId ?? null
+    toolCallId: record.toolUse?.callId ?? null,
   };
 }
 
@@ -43,10 +43,10 @@ test("parses Cursor transcript JSONL as adapter-local intermediate records with 
         content: [
           {
             type: "text",
-            text: "Open /Users/example/Code/distillery/src/main.ts and run npm test"
-          }
-        ]
-      }
+            text: "Open /Users/example/Code/distillery/src/main.ts and run npm test",
+          },
+        ],
+      },
     }),
     JSON.stringify({
       role: "assistant",
@@ -55,10 +55,10 @@ test("parses Cursor transcript JSONL as adapter-local intermediate records with 
         content: [
           {
             type: "text",
-            text: "I'll inspect /Users/example/Code/distillery/src/main.ts before running `npm test`."
-          }
-        ]
-      }
+            text: "I'll inspect /Users/example/Code/distillery/src/main.ts before running `npm test`.",
+          },
+        ],
+      },
     }),
     JSON.stringify({
       type: "tool_call",
@@ -66,22 +66,22 @@ test("parses Cursor transcript JSONL as adapter-local intermediate records with 
       id: "tool-001",
       arguments: {
         command: "npm test",
-        cwd: "/Users/example/Code/distillery"
-      }
+        cwd: "/Users/example/Code/distillery",
+      },
     }),
     JSON.stringify({
       type: "tool_result",
       toolName: "read_file",
       metadata: {
-        path: "/Users/example/Code/distillery/src/main.ts"
-      }
-    })
+        path: "/Users/example/Code/distillery/src/main.ts",
+      },
+    }),
   ].join("\n");
 
   await withTranscript(transcriptContent, async (transcriptPath) => {
     const parsed = await parseCursorTranscript({
       sourceHash: "sha256:fixture-transcript",
-      sourcePath: transcriptPath
+      sourcePath: transcriptPath,
     });
 
     assert.equal(parsed.records.length, 4);
@@ -96,19 +96,20 @@ test("parses Cursor transcript JSONL as adapter-local intermediate records with 
         commandStrings: ["npm test"],
         filePaths: ["/Users/example/Code/distillery/src/main.ts"],
         toolName: null,
-        toolCallId: null
+        toolCallId: null,
       },
       {
         kind: "assistant_message",
         rawType: "assistant",
         lineNumber: 2,
         timestampHint: "2026-05-16T08:30:02.000Z",
-        messageText: "I'll inspect /Users/example/Code/distillery/src/main.ts before running `npm test`.",
+        messageText:
+          "I'll inspect /Users/example/Code/distillery/src/main.ts before running `npm test`.",
         contentRedacted: false,
         commandStrings: ["npm test"],
         filePaths: ["/Users/example/Code/distillery/src/main.ts"],
         toolName: null,
-        toolCallId: null
+        toolCallId: null,
       },
       {
         kind: "tool_use_stub",
@@ -120,7 +121,7 @@ test("parses Cursor transcript JSONL as adapter-local intermediate records with 
         commandStrings: ["npm test"],
         filePaths: ["/Users/example/Code/distillery"],
         toolName: "run_terminal_command",
-        toolCallId: "tool-001"
+        toolCallId: "tool-001",
       },
       {
         kind: "tool_result_stub",
@@ -132,8 +133,8 @@ test("parses Cursor transcript JSONL as adapter-local intermediate records with 
         commandStrings: [],
         filePaths: ["/Users/example/Code/distillery/src/main.ts"],
         toolName: "read_file",
-        toolCallId: null
-      }
+        toolCallId: null,
+      },
     ]);
     assert.equal(parsed.records[0].provenance.sourcePath, transcriptPath);
     assert.equal(parsed.records[0].provenance.sourceHash, "sha256:fixture-transcript");
@@ -145,25 +146,25 @@ test("tolerates missing fields, redacted content, and partial tool metadata", as
     JSON.stringify({
       type: "assistant",
       message: {
-        content: "[redacted]"
+        content: "[redacted]",
       },
-      isRedacted: true
+      isRedacted: true,
     }),
     JSON.stringify({
       type: "tool_call",
       arguments: {
-        path: "/Users/example/Code/distillery/src/partial.ts"
-      }
+        path: "/Users/example/Code/distillery/src/partial.ts",
+      },
     }),
     JSON.stringify({
-      type: "assistant"
-    })
+      type: "assistant",
+    }),
   ].join("\n");
 
   await withTranscript(transcriptContent, async (transcriptPath) => {
     const parsed = await parseCursorTranscript({
       sourceHash: "sha256:fixture-transcript-variants",
-      sourcePath: transcriptPath
+      sourcePath: transcriptPath,
     });
 
     assert.deepEqual(parsed.records.map(summarize), [
@@ -177,7 +178,7 @@ test("tolerates missing fields, redacted content, and partial tool metadata", as
         commandStrings: [],
         filePaths: [],
         toolName: null,
-        toolCallId: null
+        toolCallId: null,
       },
       {
         kind: "tool_use_stub",
@@ -189,7 +190,7 @@ test("tolerates missing fields, redacted content, and partial tool metadata", as
         commandStrings: [],
         filePaths: ["/Users/example/Code/distillery/src/partial.ts"],
         toolName: null,
-        toolCallId: null
+        toolCallId: null,
       },
       {
         kind: "assistant_message",
@@ -201,8 +202,8 @@ test("tolerates missing fields, redacted content, and partial tool metadata", as
         commandStrings: [],
         filePaths: [],
         toolName: null,
-        toolCallId: null
-      }
+        toolCallId: null,
+      },
     ]);
   });
 });
@@ -222,11 +223,11 @@ test("prefers user_query content over attachment wrappers and avoids prose-only 
               "<user_query>",
               "Implement the plan as specified.",
               "Run `uv run pytest -v` when verification is needed.",
-              "</user_query>"
-            ].join("\n")
-          }
-        ]
-      }
+              "</user_query>",
+            ].join("\n"),
+          },
+        ],
+      },
     }),
     JSON.stringify({
       role: "assistant",
@@ -234,17 +235,17 @@ test("prefers user_query content over attachment wrappers and avoids prose-only 
         content: [
           {
             type: "text",
-            text: "surely we can make these tests go faster"
-          }
-        ]
-      }
-    })
+            text: "surely we can make these tests go faster",
+          },
+        ],
+      },
+    }),
   ].join("\n");
 
   await withTranscript(transcriptContent, async (transcriptPath) => {
     const parsed = await parseCursorTranscript({
       sourceHash: "sha256:fixture-transcript-user-query",
-      sourcePath: transcriptPath
+      sourcePath: transcriptPath,
     });
 
     assert.deepEqual(parsed.records.map(summarize), [
@@ -253,12 +254,13 @@ test("prefers user_query content over attachment wrappers and avoids prose-only 
         rawType: "user",
         lineNumber: 1,
         timestampHint: null,
-        messageText: "Implement the plan as specified.\nRun `uv run pytest -v` when verification is needed.",
+        messageText:
+          "Implement the plan as specified.\nRun `uv run pytest -v` when verification is needed.",
         contentRedacted: false,
         commandStrings: ["uv run pytest -v"],
         filePaths: [],
         toolName: null,
-        toolCallId: null
+        toolCallId: null,
       },
       {
         kind: "assistant_message",
@@ -270,8 +272,8 @@ test("prefers user_query content over attachment wrappers and avoids prose-only 
         commandStrings: [],
         filePaths: [],
         toolName: null,
-        toolCallId: null
-      }
+        toolCallId: null,
+      },
     ]);
   });
 });

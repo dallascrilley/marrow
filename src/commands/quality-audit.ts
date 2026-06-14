@@ -3,7 +3,10 @@ import type { DatabaseSync } from "node:sqlite";
 import type { CommandContext } from "../cli.js";
 import { auditQuality } from "../pipeline/quality-audit.js";
 
-export async function executeQualityAudit(context: CommandContext, database: DatabaseSync): Promise<number> {
+export async function executeQualityAudit(
+  context: CommandContext,
+  database: DatabaseSync,
+): Promise<number> {
   const limit = parseLimit(context.args);
   const report = await auditQuality(database, limit === undefined ? {} : { limit });
 

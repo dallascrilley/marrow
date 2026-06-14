@@ -7,26 +7,26 @@ import type { JsonValue } from "../../models/canonical.js";
  * branches on this discriminator.
  */
 export const transcriptRecordKinds = [
-	"user_message",
-	"assistant_message",
-	"tool_use_stub",
-	"tool_result_stub",
-	"event",
+  "user_message",
+  "assistant_message",
+  "tool_use_stub",
+  "tool_result_stub",
+  "event",
 ] as const;
 
 export type TranscriptRecordKind = (typeof transcriptRecordKinds)[number];
 
 export type TranscriptProvenance = {
-	lineNumber: number;
-	sourceHash: string;
-	sourcePath: string;
+  lineNumber: number;
+  sourceHash: string;
+  sourcePath: string;
 };
 
 export type ToolUseStub = {
-	callId: string | null;
-	inputText: string | null;
-	name: string | null;
-	status: string | null;
+  callId: string | null;
+  inputText: string | null;
+  name: string | null;
+  status: string | null;
 };
 
 /**
@@ -34,40 +34,40 @@ export type ToolUseStub = {
  * shared across adapters so the pipeline can stay adapter-agnostic.
  */
 export type TranscriptRecord = {
-	commandStrings: string[];
-	contentRedacted: boolean;
-	filePaths: string[];
-	kind: TranscriptRecordKind;
-	messageText: string | null;
-	provenance: TranscriptProvenance;
-	rawEvent: JsonValue;
-	rawType: string | null;
-	timestampHint: string | null;
-	toolUse: ToolUseStub | null;
+  commandStrings: string[];
+  contentRedacted: boolean;
+  filePaths: string[];
+  kind: TranscriptRecordKind;
+  messageText: string | null;
+  provenance: TranscriptProvenance;
+  rawEvent: JsonValue;
+  rawType: string | null;
+  timestampHint: string | null;
+  toolUse: ToolUseStub | null;
 };
 
 export type ParseTranscriptOptions = {
-	sourceHash: string;
-	sourcePath: string;
+  sourceHash: string;
+  sourcePath: string;
 };
 
 export type ParseTranscriptResult = {
-	records: TranscriptRecord[];
+  records: TranscriptRecord[];
 };
 
 /** Shared workspace-mapping shape. Per-adapter mappings may extend this. */
 export type WorkspaceMapping = {
-	projectKey: string;
-	workspacePath: string | null;
-	workspaceSlug: string;
+  projectKey: string;
+  workspacePath: string | null;
+  workspaceSlug: string;
 };
 
 /** Shared transcript-discovery shape. Per-adapter discoveries may extend this. */
 export type TranscriptDiscovery = WorkspaceMapping & {
-	modifiedAt: string;
-	sessionId?: string;
-	sizeBytes: number;
-	sourceFormat: string;
-	sourceHash: string;
-	sourcePath: string;
+  modifiedAt: string;
+  sessionId?: string;
+  sizeBytes: number;
+  sourceFormat: string;
+  sourceHash: string;
+  sourcePath: string;
 };

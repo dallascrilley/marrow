@@ -1,9 +1,9 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -11,7 +11,7 @@ import {
   getDeletionCandidateBySessionId,
   getReviewQueueEntryBySessionId,
   getSourceSessionBySessionId,
-  listPhaseCheckpoints
+  listPhaseCheckpoints,
 } from "../../dist/db/ledger.js";
 
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
@@ -24,7 +24,7 @@ const fixtureTranscriptPath = join(
   "fixtures",
   "cursor",
   "transcripts",
-  "session-e2e.jsonl"
+  "session-e2e.jsonl",
 );
 
 function runCli(args, env) {
@@ -33,8 +33,8 @@ function runCli(args, env) {
     encoding: "utf8",
     env: {
       ...process.env,
-      ...env
-    }
+      ...env,
+    },
   });
 }
 
@@ -50,7 +50,7 @@ test("ingest backfill advances a fixture transcript through deletion-candidate l
     "projects",
     encodedSlug,
     "agent-transcripts",
-    "session-e2e.jsonl"
+    "session-e2e.jsonl",
   );
   const transcriptContents = await readFile(fixtureTranscriptPath, "utf8");
   const previousHome = process.env.HOME;
@@ -65,27 +65,27 @@ test("ingest backfill advances a fixture transcript through deletion-candidate l
     await writeFile(
       join(homeDir, ".cursor", "projects", encodedSlug, "workspace.json"),
       `${JSON.stringify({ workspacePath }, null, 2)}\n`,
-      "utf8"
+      "utf8",
     );
     await mkdir(dirname(transcriptDestination), { recursive: true });
     await writeFile(transcriptDestination, transcriptContents, "utf8");
 
     const ingestResult = runCli(["ingest", "backfill", "--source", "cursor"], {
       HOME: homeDir,
-      [runtimeOverrideEnvVar]: runtimeRoot
+      [runtimeOverrideEnvVar]: runtimeRoot,
     });
     assert.equal(ingestResult.status, 0, ingestResult.stderr);
 
     const reviewQueueResult = runCli(["review", "queue"], {
       HOME: homeDir,
-      [runtimeOverrideEnvVar]: runtimeRoot
+      [runtimeOverrideEnvVar]: runtimeRoot,
     });
     assert.equal(reviewQueueResult.status, 0, reviewQueueResult.stderr);
     assert.match(reviewQueueResult.stdout, /summary/);
 
     const deleteDryRun = runCli(["delete", "apply"], {
       HOME: homeDir,
-      [runtimeOverrideEnvVar]: runtimeRoot
+      [runtimeOverrideEnvVar]: runtimeRoot,
     });
     assert.equal(deleteDryRun.status, 0, deleteDryRun.stderr);
     assert.match(deleteDryRun.stdout, /"apply": false/);
@@ -100,7 +100,7 @@ test("ingest backfill advances a fixture transcript through deletion-candidate l
       const checkpoints = listPhaseCheckpoints(database, session.id);
       assert.deepEqual(
         checkpoints.map((checkpoint) => checkpoint.phase_name),
-        ["archived", "deletion_candidate", "extracted", "parsed", "reduced", "summarized"]
+        ["archived", "deletion_candidate", "extracted", "parsed", "reduced", "summarized"],
       );
       assert.ok(checkpoints.every((checkpoint) => checkpoint.phase_state === "completed"));
 
@@ -116,7 +116,7 @@ test("ingest backfill advances a fixture transcript through deletion-candidate l
 
       const explainResult = runCli(["explain", "session-e2e"], {
         HOME: homeDir,
-        [runtimeOverrideEnvVar]: runtimeRoot
+        [runtimeOverrideEnvVar]: runtimeRoot,
       });
       assert.equal(explainResult.status, 0, explainResult.stderr);
       assert.match(explainResult.stdout, /deletion_candidate/);

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#
+# script/test — run the test suite. Extra args pass through to the runner.
+. "$(dirname "$0")/lib/common.sh"
+log "test: running suite"
+run_test "$@"

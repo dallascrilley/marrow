@@ -1,3 +1,4 @@
+import { maturityStateFrom, proposedMaturity } from "../math/decay.js";
 import {
   CONFIDENCE_MAX,
   CONFIDENCE_MIN,
@@ -5,10 +6,6 @@ import {
   type Instinct,
   type Maturity,
 } from "./schema.js";
-import {
-  maturityStateFrom,
-  proposedMaturity,
-} from "../math/decay.js";
 
 export type InstinctMap = Map<string, Instinct>;
 
@@ -28,11 +25,15 @@ export function applyDelta(
   switch (delta.op) {
     case "create": {
       if (next.has(delta.instinct_id)) {
-        return applyDelta(next, {
-          op: "reinforce",
-          instinct_id: delta.instinct_id,
-          delta: { confidence: 0 },
-        }, context);
+        return applyDelta(
+          next,
+          {
+            op: "reinforce",
+            instinct_id: delta.instinct_id,
+            delta: { confidence: 0 },
+          },
+          context,
+        );
       }
       const instinct: Instinct = {
         schema_version: 1,
@@ -77,10 +78,7 @@ export function applyDelta(
           at: now,
         },
       ];
-      next.set(
-        delta.instinct_id,
-        recomputeInstinct(existing, observations, now),
-      );
+      next.set(delta.instinct_id, recomputeInstinct(existing, observations, now));
       return next;
     }
     case "correct": {
@@ -118,10 +116,7 @@ export function applyDelta(
       const source = next.get(delta.instinct_id);
       const target = next.get(delta.into);
       if (source && target && target.maturity !== "deprecated") {
-        const observations = [
-          ...target.source.observations,
-          ...source.source.observations,
-        ];
+        const observations = [...target.source.observations, ...source.source.observations];
         next.set(delta.into, recomputeInstinct(target, observations, now));
       }
       next.delete(delta.instinct_id);
@@ -156,11 +151,7 @@ export function applyDeltas(
   return current;
 }
 
-export function finalizeInstinct(
-  instinct: Instinct,
-  projectId: string,
-  now: string,
-): Instinct {
+export function finalizeInstinct(instinct: Instinct, projectId: string, now: string): Instinct {
   const observations =
     instinct.source.observations.length > 0
       ? instinct.source.observations
@@ -185,8 +176,7 @@ export function finalizeInstinct(
     ...recomputed,
     source: {
       ...recomputed.source,
-      first_session:
-        recomputed.source.first_session || instinct.source.first_session,
+      first_session: recomputed.source.first_session || instinct.source.first_session,
     },
   };
 }
@@ -198,9 +188,7 @@ function recomputeInstinct(
 ): Instinct {
   const state = maturityStateFrom(observations, now);
   const maturity: Maturity =
-    instinct.maturity === "deprecated"
-      ? "deprecated"
-      : proposedMaturity(instinct.maturity, state);
+    instinct.maturity === "deprecated" ? "deprecated" : proposedMaturity(instinct.maturity, state);
 
   return {
     ...instinct,

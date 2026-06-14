@@ -5,10 +5,10 @@
 import { z } from "zod";
 import {
   domainSchema,
+  type Instinct,
   instinctIdSchema,
   maturitySchema,
   scopeSchema,
-  type Instinct,
 } from "../instinct/schema.js";
 
 // Hard cap on the number of tools the MCP server exposes. New tools require
@@ -100,10 +100,7 @@ export interface McpToolDescriptor<I, O> {
   outputContract: string;
 }
 
-export const searchInstinctsTool: McpToolDescriptor<
-  SearchInstinctsInput,
-  SearchInstinctsOutput
-> = {
+export const searchInstinctsTool: McpToolDescriptor<SearchInstinctsInput, SearchInstinctsOutput> = {
   name: "search_instincts",
   description:
     "Semantic search across distilled instincts. Use to find prior learnings related to a topic or problem.",
@@ -122,10 +119,7 @@ export const instinctsForFileTool: McpToolDescriptor<
   outputContract: "InstinctsForFileOutput",
 };
 
-export const recentInstinctsTool: McpToolDescriptor<
-  RecentInstinctsInput,
-  RecentInstinctsOutput
-> = {
+export const recentInstinctsTool: McpToolDescriptor<RecentInstinctsInput, RecentInstinctsOutput> = {
   name: "recent_instincts",
   description:
     "List instincts created or updated within a recent time window. Use for catching up after time away.",
@@ -133,18 +127,14 @@ export const recentInstinctsTool: McpToolDescriptor<
   outputContract: "RecentInstinctsOutput",
 };
 
-export const allTools = [
-  searchInstinctsTool,
-  instinctsForFileTool,
-  recentInstinctsTool,
-] as const;
+export const allTools = [searchInstinctsTool, instinctsForFileTool, recentInstinctsTool] as const;
 
 // Runtime assertion: never exceed the cap without amending ADR-0005.
 // Kept as a literal compile-time check, since `allTools` is a const tuple.
-type AssertLength<T extends readonly unknown[], N extends number> =
-  T["length"] extends N ? true : never;
-const _toolCountCheck: AssertLength<typeof allTools, typeof MAX_MCP_TOOLS> =
-  true;
+type AssertLength<T extends readonly unknown[], N extends number> = T["length"] extends N
+  ? true
+  : never;
+const _toolCountCheck: AssertLength<typeof allTools, typeof MAX_MCP_TOOLS> = true;
 void _toolCountCheck;
 
 // Usage-log entry. Required so the 4th-tool decision is data-driven.

@@ -19,12 +19,12 @@ const workspaceHintFileNames = [
   "workspace-path.txt",
   "workspace.txt",
   "project.json",
-  "metadata.json"
+  "metadata.json",
 ] as const;
 
 export async function deriveCursorWorkspaceMapping(
   transcriptPath: string,
-  options: DeriveCursorWorkspaceMappingOptions = {}
+  options: DeriveCursorWorkspaceMappingOptions = {},
 ): Promise<CursorWorkspaceMapping> {
   const absoluteTranscriptPath = resolve(transcriptPath);
   const cursorProjectsRoot = options.cursorProjectsRoot
@@ -34,13 +34,17 @@ export async function deriveCursorWorkspaceMapping(
   const relativeSegments = relativePath.split(/[\\/]/).filter((segment) => segment.length > 0);
 
   if (relativeSegments.length < 3) {
-    throw new Error(`Transcript path is not nested under a Cursor project: ${absoluteTranscriptPath}`);
+    throw new Error(
+      `Transcript path is not nested under a Cursor project: ${absoluteTranscriptPath}`,
+    );
   }
 
   const [workspaceSlug, ...remainingSegments] = relativeSegments;
 
   if (!workspaceSlug || !remainingSegments.includes("agent-transcripts")) {
-    throw new Error(`Transcript path is not nested under a Cursor project: ${absoluteTranscriptPath}`);
+    throw new Error(
+      `Transcript path is not nested under a Cursor project: ${absoluteTranscriptPath}`,
+    );
   }
 
   const cursorProjectPath = join(cursorProjectsRoot, workspaceSlug);
@@ -50,7 +54,7 @@ export async function deriveCursorWorkspaceMapping(
     cursorProjectPath,
     projectKey: deriveProjectKey(workspaceSlug, workspacePath),
     workspacePath,
-    workspaceSlug
+    workspaceSlug,
   };
 }
 
@@ -67,7 +71,7 @@ function inferCursorProjectsRoot(transcriptPath: string): string {
 
 async function resolveWorkspacePath(
   cursorProjectPath: string,
-  workspaceSlug: string
+  workspaceSlug: string,
 ): Promise<string | null> {
   const slugCandidate = await normalizeWorkspaceCandidate(decodeWorkspaceSlug(workspaceSlug));
 

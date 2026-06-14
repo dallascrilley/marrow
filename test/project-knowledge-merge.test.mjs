@@ -1,5 +1,5 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import test from "node:test";
 
 import { learningFixture } from "../dist/models/canonical.js";
 import { dedupeProjectLearnings } from "../dist/pipeline/project-knowledge-merge.js";

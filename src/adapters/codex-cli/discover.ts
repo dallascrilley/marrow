@@ -1,19 +1,15 @@
 import { lstat, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { extname, join, resolve } from "node:path";
-
-import { hashFileContents } from "../_common/hash.js";
 import { pathExists } from "../_common/fs.js";
+import { hashFileContents } from "../_common/hash.js";
 import type {
   CodexCliDiscoveryResult,
   CodexCliRolloutTreeRoot,
   CodexCliTranscriptDiscovery,
-  CodexCliTranscriptFormat
+  CodexCliTranscriptFormat,
 } from "./intermediate.js";
-import {
-  deriveCodexCliWorkspaceMapping,
-  readCodexCliSessionMeta
-} from "./workspace-map.js";
+import { deriveCodexCliWorkspaceMapping, readCodexCliSessionMeta } from "./workspace-map.js";
 
 export const codexCliTranscriptExtensions = [".jsonl"] as const;
 
@@ -35,7 +31,7 @@ export type DiscoverCodexCliInputsOptions = {
  * mapping; the full file is streamed later by the parse phase.
  */
 export async function discoverCodexCliInputs(
-  options: DiscoverCodexCliInputsOptions = {}
+  options: DiscoverCodexCliInputsOptions = {},
 ): Promise<CodexCliDiscoveryResult> {
   const homeDir = resolve(options.homeDir ?? homedir());
   const codexHome = resolve(options.codexHome ?? join(homeDir, ".codex"));
@@ -47,7 +43,7 @@ export async function discoverCodexCliInputs(
 
   const allPaths: Array<{ path: string; root: CodexCliRolloutTreeRoot }> = [
     ...datePartitionedPaths.map((path) => ({ path, root: "sessions" as const })),
-    ...flatPaths.map((path) => ({ path, root: "archived_sessions" as const }))
+    ...flatPaths.map((path) => ({ path, root: "archived_sessions" as const })),
   ];
 
   const transcripts = await Promise.all(
@@ -55,7 +51,7 @@ export async function discoverCodexCliInputs(
       const [metadata, sourceHash, sessionMeta] = await Promise.all([
         stat(path),
         hashFileContents(path),
-        readCodexCliSessionMeta(path)
+        readCodexCliSessionMeta(path),
       ]);
       const workspaceMapping = await deriveCodexCliWorkspaceMapping(path, root, sessionMeta);
 
@@ -65,9 +61,9 @@ export async function discoverCodexCliInputs(
         sizeBytes: metadata.size,
         sourceFormat: normalizeTranscriptFormat(path),
         sourceHash,
-        sourcePath: path
+        sourcePath: path,
       } satisfies CodexCliTranscriptDiscovery;
-    })
+    }),
   );
 
   return { transcripts };
@@ -122,13 +118,19 @@ async function discoverFlatRollouts(archivedRoot: string): Promise<string[]> {
   return discovered;
 }
 
-function isDateDir(entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean }, pattern: RegExp): boolean {
+function isDateDir(
+  entry: { name: string; isDirectory(): boolean; isSymbolicLink(): boolean },
+  pattern: RegExp,
+): boolean {
   if (entry.isSymbolicLink()) return false;
   if (!entry.isDirectory()) return false;
   return pattern.test(entry.name);
 }
 
-async function collectRolloutFiles(directoryPath: string, discoveredPaths: string[]): Promise<void> {
+async function collectRolloutFiles(
+  directoryPath: string,
+  discoveredPaths: string[],
+): Promise<void> {
   const directoryEntries = await readdir(directoryPath, { withFileTypes: true });
   directoryEntries.sort((left, right) => left.name.localeCompare(right.name));
 
@@ -139,7 +141,11 @@ async function collectRolloutFiles(directoryPath: string, discoveredPaths: strin
     if (!entry.name.startsWith("rollout-")) continue;
 
     const extension = extname(entry.name).toLowerCase();
-    if (!codexCliTranscriptExtensions.includes(extension as (typeof codexCliTranscriptExtensions)[number])) {
+    if (
+      !codexCliTranscriptExtensions.includes(
+        extension as (typeof codexCliTranscriptExtensions)[number],
+      )
+    ) {
       continue;
     }
 

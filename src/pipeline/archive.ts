@@ -4,19 +4,19 @@ import {
   insertRunHistory,
   transitionPhase,
   upsertDeletionCandidate,
-  upsertReviewQueueEntry
+  upsertReviewQueueEntry,
 } from "../db/ledger.js";
 import type { SourceSessionRow } from "../db/queries.js";
 import type { Event, Turn } from "../models/canonical.js";
-import { evaluateRetentionReadiness } from "./retention.js";
+import type { KnowledgeWriteResult } from "../writers/knowledge-writer.js";
 import { writeSessionManifest } from "../writers/manifest-writer.js";
 import {
   getRetentionReceiptPath,
   writeRetentionBatchReport,
-  writeRetentionReceipt
+  writeRetentionReceipt,
 } from "../writers/report-writer.js";
 import type { SummaryWriteResult } from "../writers/summary-writer.js";
-import type { KnowledgeWriteResult } from "../writers/knowledge-writer.js";
+import { evaluateRetentionReadiness } from "./retention.js";
 
 export type ArchivePhaseResult = {
   deletionCandidateState: string;
@@ -42,25 +42,25 @@ export async function runArchivePhase(input: {
         retention_receipt_path: receiptPath,
         summary_json_path: input.summary.summaryPath,
         summary_markdown_path: input.summary.markdownPath,
-        user_knowledge_jsonl_path: input.knowledge.user.path
+        user_knowledge_jsonl_path: input.knowledge.user.path,
       },
       events: input.events,
       sourceSession: sourceSessionModel,
-      turns: input.turns
+      turns: input.turns,
     });
 
     const preReceipt = await evaluateRetentionReadiness({
       currentLifecycleState: "extracted",
       sourceSession: sourceSessionModel,
       sourceSessionId: input.sourceSessionId,
-      turns: input.turns
+      turns: input.turns,
     });
     await writeRetentionReceipt(preReceipt.receipt);
 
     const archivedDetails = JSON.stringify({
       manifest_path: manifest.path,
       receipt_path: receiptPath,
-      summary_path: input.summary.summaryPath
+      summary_path: input.summary.summaryPath,
     });
     const archivedRun = insertRunHistory(input.database, {
       detailsJson: archivedDetails,
@@ -69,7 +69,7 @@ export async function runArchivePhase(input: {
       phaseState: "completed",
       sessionId: input.sourceSession.session_id,
       sourceHash: input.sourceSession.source_hash,
-      sourceSessionId: input.sourceSessionId
+      sourceSessionId: input.sourceSessionId,
     });
     transitionPhase(input.database, {
       detailsJson: archivedDetails,
@@ -77,19 +77,19 @@ export async function runArchivePhase(input: {
       phaseState: "completed",
       runId: archivedRun.id,
       sourceHash: input.sourceSession.source_hash,
-      sourceSessionId: input.sourceSessionId
+      sourceSessionId: input.sourceSessionId,
     });
 
     const postReceipt = await evaluateRetentionReadiness({
       currentLifecycleState: "archived",
       sourceSession: sourceSessionModel,
       sourceSessionId: input.sourceSessionId,
-      turns: input.turns
+      turns: input.turns,
     });
     const candidate = upsertDeletionCandidate(input.database, postReceipt.candidate);
     const report = await writeRetentionBatchReport(
       [postReceipt],
-      `archive-${input.sourceSession.session_id}`
+      `archive-${input.sourceSession.session_id}`,
     );
     upsertReviewQueueEntry(input.database, {
       currentLifecycleState: "deletion_candidate",
@@ -99,13 +99,13 @@ export async function runArchivePhase(input: {
       reviewKind: "summary",
       sessionId: input.sourceSession.session_id,
       sourceHash: input.sourceSession.source_hash,
-      sourceSessionId: input.sourceSessionId
+      sourceSessionId: input.sourceSessionId,
     });
 
     const deletionDetails = JSON.stringify({
       candidate_state: candidate.candidate_state,
       report_json_path: report.jsonPath,
-      safe_to_delete: candidate.safe_to_delete === 1
+      safe_to_delete: candidate.safe_to_delete === 1,
     });
     const deletionRun = insertRunHistory(input.database, {
       detailsJson: deletionDetails,
@@ -114,7 +114,7 @@ export async function runArchivePhase(input: {
       phaseState: "completed",
       sessionId: input.sourceSession.session_id,
       sourceHash: input.sourceSession.source_hash,
-      sourceSessionId: input.sourceSessionId
+      sourceSessionId: input.sourceSessionId,
     });
     transitionPhase(input.database, {
       detailsJson: deletionDetails,
@@ -122,17 +122,17 @@ export async function runArchivePhase(input: {
       phaseState: "completed",
       runId: deletionRun.id,
       sourceHash: input.sourceSession.source_hash,
-      sourceSessionId: input.sourceSessionId
+      sourceSessionId: input.sourceSessionId,
     });
 
     return {
       deletionCandidateState: candidate.candidate_state,
       reportPath: report.jsonPath,
-      safeToDelete: candidate.safe_to_delete === 1
+      safeToDelete: candidate.safe_to_delete === 1,
     };
   } catch (error) {
     const detailsJson = JSON.stringify({
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
     });
     const run = insertRunHistory(input.database, {
       detailsJson,
@@ -141,7 +141,7 @@ export async function runArchivePhase(input: {
       phaseState: "failed",
       sessionId: input.sourceSession.session_id,
       sourceHash: input.sourceSession.source_hash,
-      sourceSessionId: input.sourceSessionId
+      sourceSessionId: input.sourceSessionId,
     });
     transitionPhase(input.database, {
       detailsJson,
@@ -149,7 +149,7 @@ export async function runArchivePhase(input: {
       phaseState: "failed",
       runId: run.id,
       sourceHash: input.sourceSession.source_hash,
-      sourceSessionId: input.sourceSessionId
+      sourceSessionId: input.sourceSessionId,
     });
     throw error;
   }
@@ -172,6 +172,6 @@ function toSourceSessionModel(sourceSession: SourceSessionRow) {
     source_tool: sourceSession.source_tool,
     started_at: sourceSession.started_at,
     updated_at: sourceSession.updated_at,
-    workspace_path: sourceSession.workspace_path
+    workspace_path: sourceSession.workspace_path,
   };
 }

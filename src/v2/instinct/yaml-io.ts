@@ -2,10 +2,10 @@ import {
   CONFIDENCE_MAX,
   CONFIDENCE_MIN,
   type Delta,
-  type Instinct,
-  type SessionBundle,
   deltaSchema,
+  type Instinct,
   instinctSchema,
+  type SessionBundle,
   sessionBundleSchema,
 } from "./schema.js";
 
@@ -76,9 +76,7 @@ export function serializeInstinct(instinct: Instinct): string {
 
   lines.push(`created_at: ${yamlString(instinct.created_at)}`);
   lines.push(`updated_at: ${yamlString(instinct.updated_at)}`);
-  lines.push(
-    `last_promoted_at: ${yamlNullableString(instinct.last_promoted_at)}`,
-  );
+  lines.push(`last_promoted_at: ${yamlNullableString(instinct.last_promoted_at)}`);
 
   return `${lines.join("\n")}\n`;
 }
@@ -215,8 +213,8 @@ function parseSimpleYaml(content: string): YamlNode {
   const lines = content.split(/\r?\n/u);
   for (const line of lines) {
     if (blockKey !== null) {
-      if (/^  \S/u.test(line) || line.trim().length === 0) {
-        blockLines.push(line.replace(/^  /u, ""));
+      if (/^ {2}\S/u.test(line) || line.trim().length === 0) {
+        blockLines.push(line.replace(/^ {2}/u, ""));
         continue;
       }
       flushBlock();
@@ -303,9 +301,7 @@ function nodeToInstinct(node: YamlNode): Instinct {
   const observations = (source.observations as YamlNode[] | undefined) ?? [];
   const sourceRefs = (source.source_refs as YamlNode[] | undefined) ?? [];
   const relatedRaw = node.related;
-  const related = Array.isArray(relatedRaw)
-    ? relatedRaw.map(String)
-    : [];
+  const related = Array.isArray(relatedRaw) ? relatedRaw.map(String) : [];
 
   return instinctSchema.parse({
     schema_version: node.schema_version,
@@ -421,12 +417,8 @@ function nodeToSessionBundle(node: YamlNode): SessionBundle {
     source_adapter: node.source_adapter,
     source_transcript: node.source_transcript,
     ingested_at: node.ingested_at,
-    reviewed_at:
-      node.reviewed_at === null || node.reviewed_at === "null"
-        ? null
-        : node.reviewed_at,
-    reviewer:
-      node.reviewer === null || node.reviewer === "null" ? null : node.reviewer,
+    reviewed_at: node.reviewed_at === null || node.reviewed_at === "null" ? null : node.reviewed_at,
+    reviewer: node.reviewer === null || node.reviewer === "null" ? null : node.reviewer,
     diary: node.diary,
     deltas,
     extraction_cost,
