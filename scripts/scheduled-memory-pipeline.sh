@@ -15,13 +15,16 @@ for adapter in "${ADAPTERS[@]}"; do
   "${CLI[@]}" ingest sync --resume --source "$adapter"
 done
 
+echo "[asd] pipeline gate"
+"${CLI[@]}" pipeline gate --max-per "${ASD_LLM_MAX_PER:-5/24h}"
+
 echo "[asd] quality audit"
 "${CLI[@]}" quality audit --limit 100
 
 REVIEW_INPUT="${AGENT_SESSION_DISTILLERY_ROOT:-$HOME/.agent-session-distillery}/reports/llm-learning-review.jsonl"
 if [[ -n "${OPENROUTER_API_KEY:-}" ]]; then
-  echo "[asd] quality review-learnings"
-  "${CLI[@]}" quality review-learnings
+  echo "[asd] quality review-learnings (--if-new --max-per ${ASD_LLM_MAX_PER:-5/24h})"
+  "${CLI[@]}" quality review-learnings --if-new --max-per "${ASD_LLM_MAX_PER:-5/24h}"
 elif [[ -f "$REVIEW_INPUT" ]]; then
   echo "[asd] skipping review-learnings (no OPENROUTER_API_KEY; sidecar present)"
 else

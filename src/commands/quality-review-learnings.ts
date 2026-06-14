@@ -7,9 +7,15 @@ import { getRuntimePath } from "../config/paths.js";
 import { listSourceSessions } from "../db/ledger.js";
 import { type Learning, learningSchema } from "../models/canonical.js";
 import {
+  assessLlmBudget,
+  getDefaultMaxPerWindow,
+  recordLlmBudgetUse,
+} from "../pipeline/llm-budget.js";
+import {
   type ReviewedLearning,
   reviewProjectLearningsWithOpenRouter,
 } from "../pipeline/llm-learning-review.js";
+import { countPendingLlmReview } from "../pipeline/pipeline-gate.js";
 import { getProjectKnowledgeSessionPath } from "../writers/knowledge-writer.js";
 
 export async function executeQualityReviewLearnings(
@@ -17,6 +23,45 @@ export async function executeQualityReviewLearnings(
   database: DatabaseSync,
 ): Promise<number> {
   const options = parseOptions(context.args);
+
+  if (options.ifNew) {
+    const pending = await countPendingLlmReview();
+    if (pending.pending_learnings === 0) {
+      context.output.info(
+        JSON.stringify(
+          {
+            count: 0,
+            skipped: true,
+            skip_reason: "no_unreviewed_project_learnings",
+            total_reviewed_learnings: 0,
+          },
+          null,
+          2,
+        ),
+      );
+      return 0;
+    }
+  }
+
+  const maxPer = options.maxPer ?? getDefaultMaxPerWindow();
+  const budget = await assessLlmBudget(maxPer);
+  if (!budget.allowed) {
+    context.output.info(
+      JSON.stringify(
+        {
+          count: 0,
+          llm_budget: budget,
+          skipped: true,
+          skip_reason: "llm_budget_exhausted",
+          total_reviewed_learnings: 0,
+        },
+        null,
+        2,
+      ),
+    );
+    return 0;
+  }
+
   const sessions = listSourceSessions(database).slice(0, options.limit);
   const reviewed = [];
   let reviewedLearningCount = 0;
@@ -92,6 +137,10 @@ export async function executeQualityReviewLearnings(
     reviewedLearningCount += sessionReviews.length;
   }
 
+  if (reviewedLearningCount > 0) {
+    await recordLlmBudgetUse(maxPer);
+  }
+
   const outputPath = join(getRuntimePath("reports"), "llm-learning-review.jsonl");
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(
@@ -124,9 +173,11 @@ export async function executeQualityReviewLearnings(
 }
 
 type ReviewLearningsOptions = {
+  ifNew?: boolean | undefined;
   limit?: number | undefined;
   cacheDir?: string | undefined;
   maxLearnings?: number | undefined;
+  maxPer?: string | undefined;
   maxTotalLearnings?: number | undefined;
   model?: string | undefined;
   noCache?: boolean | undefined;
@@ -136,8 +187,10 @@ type ReviewLearningsOptions = {
 function parseOptions(args: readonly string[]): ReviewLearningsOptions {
   return {
     cacheDir: parseStringOption(args, "--cache-dir"),
+    ifNew: args.includes("--if-new"),
     limit: parseIntegerOption(args, "--limit"),
     maxLearnings: parseIntegerOption(args, "--max-learnings"),
+    maxPer: parseStringOption(args, "--max-per"),
     maxTotalLearnings: parseIntegerOption(args, "--max-total-learnings"),
     model: parseStringOption(args, "--model"),
     noCache: args.includes("--no-cache"),
