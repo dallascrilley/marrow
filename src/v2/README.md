@@ -15,5 +15,8 @@ points (discover, learning-review apply, memory push-wiki).
 
 ## Status
 
-Accepted for core three ADRs. Deferred: vault allowlist (0004), MCP server
-(0005), promotion queue (0006).
+Accepted: ADR-0001–0004 (storage, project id, MEMORY render, vault carve-out).
+`memory push-wiki` writes v1 pages via `pipeline/vault-push.ts` and v2 rollup
+via `vault/render-memory.ts` — both hardcode carve-out paths only.
+
+Deferred: MCP server (0005), promotion queue (0006).

@@ -35,9 +35,9 @@ If you are an agent working in this repo:
   `wiki/canvases/`, any `_index.md`, and `.raw/.manifest.json`.
   Those remain owned by `~/vault/` sessions.
 - The carve-out is keyed to the eight named paths above. The
-  enforcement is **code-level**: asd's vault writer asserts every
-  output path against the allowlist and refuses any write that does
-  not match.
+  enforcement is **structural**: vault push and memory render modules
+  hardcode those paths only; there is no generic vault writer that
+  can reach other `~/vault` locations.
 - `<project-id>` is resolved per ADR-0002 (git-remote-hash with
   fallback chain).
 

@@ -50,11 +50,12 @@ const commandTree: Record<string, CommandDefinition> = {
     subcommands: {
       backfill: {
         description:
-          "Ingest historical Cursor transcripts with optional since/limit/resume controls.",
+          "Ingest historical transcripts for --source (cursor, claude-code, codex-cli, kimi, pi) with optional since/limit/resume controls.",
         execute: async (context) => withLedger(context, executeIngestBackfill),
       },
       sync: {
-        description: "Ingest only new-or-changed Cursor transcripts.",
+        description:
+          "Ingest only new-or-changed transcripts for --source (cursor, claude-code, codex-cli, kimi, pi).",
         execute: async (context) => withLedger(context, executeIngestSync),
       },
     },
