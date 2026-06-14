@@ -1,6 +1,6 @@
 # Launch Proof Index
 
-Date: 2026-05-27
+Date: 2026-06-14
 Repo: `/Users/operator/Code/agent-session-distillery`
 
 Operator-facing index for v1 local transcript launch proof and v2 atomic-instinct
@@ -35,7 +35,8 @@ Remaining out of scope: remote Cursor background-agent chats.
 | Ingest batch resilience | Per-session failures isolated in backfill. | `test/ingest-backfill-isolation.test.mjs` |
 | Kimi adapter source research | On-disk wire.jsonl paths and classifier documented. | `docs/research/kimi-source-strategy.md` |
 | Kimi adapter ingest | End-to-end ingest via `--source kimi`. | `test/integration/kimi-ingest.test.mjs`, `test/kimi-*.test.mjs` |
-| Corpus resummarize (operator runtime) | Dry-run + full pass on 140-session live corpus; zero failures. | `/tmp/agent-session-distillery/2026-05-27_corpus-resummarize/SUMMARY.md` |
+| Corpus resummarize (operator runtime) | Dry-run + full pass on live corpus; zero failures. | `/tmp/agent-session-distillery/2026-05-27_corpus-resummarize/SUMMARY.md` |
+| Unattended memory loop (partial) | Hook dry-run + claude-code ingest → audit → export-index → vault push; exit 0. | `/tmp/agent-session-distillery/2026-06-14_unattended-loop/SUMMARY.md` |
 
 ## Rerun (turnkey)
 
