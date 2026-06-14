@@ -11,6 +11,8 @@ node_modules/
 !test/fixtures/codex-cli/**/*.jsonl
 !test/fixtures/pi/
 !test/fixtures/pi/**/*.jsonl
+!test/fixtures/kimi/
+!test/fixtures/kimi/**/*.jsonl
 .todos/
 
 # --- added by project-bootstrap ---
