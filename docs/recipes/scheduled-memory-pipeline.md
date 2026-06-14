@@ -8,7 +8,7 @@ Uses the v1 CLI surface today; v2 instinct sync happens inside
 
 ```text
 ingest sync --resume --source <adapter>
-  → pipeline gate --max-per 5/24h
+  → pipeline gate --skip-ingest --max-per 5/24h   # after ingest; LLM + budget only
   → quality audit --limit 100
   → [optional] quality review-learnings --if-new --max-per 5/24h   # requires OPENROUTER_API_KEY
   → quality apply-learning-review         # writes projects-reviewed + v2 instincts

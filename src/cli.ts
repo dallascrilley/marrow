@@ -189,7 +189,7 @@ const commandTree: Record<string, CommandDefinition> = {
     subcommands: {
       gate: {
         description:
-          "Report pending ingest work, unreviewed learnings, and LLM budget headroom without calling OpenRouter.",
+          "Report pending ingest work, unreviewed learnings, and LLM budget headroom without calling OpenRouter. Pass --skip-ingest after a sync loop to avoid re-scanning adapters.",
         execute: async (context) => withLedger(context, executePipelineGate),
       },
     },

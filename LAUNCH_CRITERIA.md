@@ -242,6 +242,15 @@ retention workflows.
   validated_on: 2026-06-14
   proof: test/hooks-install.test.mjs, /tmp/agent-session-distillery/2026-06-14_unattended-loop/SUMMARY.md
 
+- id: pipeline-gate
+  feature: Operators can run cheap pipeline gates before LLM-bound review passes (pending ingest, unreviewed learnings, sliding-window budget).
+  test: Run `npm test` — `test/pipeline-gate.test.mjs`, `test/llm-budget.test.mjs`. Operator smoke: `node dist/cli.js pipeline gate --max-per 5/24h`.
+  proof_required: Passing gate/budget unit tests; scheduled script calls gate; ADR-0007 accepted.
+  proof_level: B
+  status: validated
+  validated_on: 2026-06-14
+  proof: test/pipeline-gate.test.mjs, test/llm-budget.test.mjs, docs/decisions/0007-daemon-llm-separation.md
+
 - id: skill-adherence-report
   feature: Operators can list skill mentions in the exported session index and score checklist adherence per skill.
   test: Run `npm test` — `test/skill-report.test.mjs`. Operator smoke: `node dist/cli.js skill evidence <skill-id>` and `node dist/cli.js skill report <skill-id>` after `export-index`.

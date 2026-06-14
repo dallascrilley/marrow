@@ -17,6 +17,7 @@ export type PipelineGateReport = {
   ingest: {
     by_source: Record<string, IngestGateSource>;
     pending_sessions: number;
+    skipped: boolean;
   };
   llm_budget: LlmBudgetStatus;
   llm_review: {
@@ -34,25 +35,28 @@ export async function assessPipelineGate(
   database: DatabaseSync,
   options: {
     maxPer?: string;
+    skipIngest?: boolean;
     sources?: readonly SupportedSource[];
   } = {},
 ): Promise<PipelineGateReport> {
   const maxPer = options.maxPer ?? getDefaultMaxPerWindow();
-  const selectedSources = options.sources ?? supportedSources;
   const bySource: Record<string, IngestGateSource> = {};
   let pendingSessions = 0;
 
-  for (const source of selectedSources) {
-    const discovery = await runDiscoverPhase({
-      database,
-      onlyNewOrChanged: true,
-      source,
-    });
-    bySource[source] = {
-      discovered_count: discovery.discoveredCount,
-      pending_count: discovery.selectedCount,
-    };
-    pendingSessions += discovery.selectedCount;
+  if (!options.skipIngest) {
+    const selectedSources = options.sources ?? supportedSources;
+    for (const source of selectedSources) {
+      const discovery = await runDiscoverPhase({
+        database,
+        onlyNewOrChanged: true,
+        source,
+      });
+      bySource[source] = {
+        discovered_count: discovery.discoveredCount,
+        pending_count: discovery.selectedCount,
+      };
+      pendingSessions += discovery.selectedCount;
+    }
   }
 
   const llmReview = await countPendingLlmReview();
@@ -69,6 +73,7 @@ export async function assessPipelineGate(
     ingest: {
       by_source: bySource,
       pending_sessions: pendingSessions,
+      skipped: options.skipIngest === true,
     },
     llm_budget: llmBudget,
     llm_review: llmReview,
