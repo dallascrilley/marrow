@@ -30,7 +30,7 @@ export function parseSkillChecklist(markdown: string): SkillChecklistItem[] {
     }
 
     const text = bulletMatch[1].replace(/`/g, "").trim();
-    if (text.length < 8) {
+    if (text.length < 8 || !isScorableChecklistItem(text)) {
       continue;
     }
 
@@ -143,6 +143,15 @@ export function buildSkillSuggestions(input: {
     }
   }
 
+  const capped = suggestions.slice(0, 8);
+  if (suggestions.length > capped.length) {
+    capped.push(
+      `…and ${suggestions.length - capped.length} more checklist gaps (use --json for full list).`,
+    );
+  }
+  suggestions.length = 0;
+  suggestions.push(...capped);
+
   const summaryOnly = input.sessions.filter(
     (session) => session.evidence_fields.length > 0 && !session.invoked_in_transcript,
   ).length;
@@ -198,4 +207,25 @@ function checklistItemMatches(haystack: string, item: SkillChecklistItem): boole
   const hits = words.filter((word) => haystack.includes(word));
   const threshold = Math.max(2, Math.ceil(words.length * 0.5));
   return hits.length >= threshold;
+}
+
+export function isScorableChecklistItem(text: string): boolean {
+  const trimmed = text.trim();
+  if (/^\.\/(?:references|scripts)\//u.test(trimmed)) {
+    return false;
+  }
+
+  if (/^use\s+(?:\*\*)?\.\/(?:references|scripts)\//iu.test(trimmed)) {
+    return false;
+  }
+
+  const pathOnly = trimmed
+    .replace(/^use\s+(?:\*\*)?/iu, "")
+    .replace(/\*\*$/u, "")
+    .trim();
+  if (/^\.\/[\w./-]+\.(?:md|py|sh|mjs)$/iu.test(pathOnly)) {
+    return false;
+  }
+
+  return true;
 }

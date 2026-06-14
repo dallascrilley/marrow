@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   buildSkillSuggestions,
+  isScorableChecklistItem,
   parseSkillChecklist,
   reducedSessionText,
   scoreSessionAdherence,
@@ -20,6 +21,24 @@ const fixtureSkill = `# demo-skill
 - Capture proof in the response message
 - Do not commit unless the user explicitly asks
 `;
+
+test("parseSkillChecklist skips bundled reference path bullets", () => {
+  const items = parseSkillChecklist(`# skill
+
+- interpret broad git requests
+- ./references/philosophy.md
+- use **./references/commit.md**
+`);
+  assert.deepEqual(
+    items.map((item) => item.line),
+    ["interpret broad git requests"],
+  );
+});
+
+test("isScorableChecklistItem rejects reference-only lines", () => {
+  assert.equal(isScorableChecklistItem("./references/philosophy.md"), false);
+  assert.equal(isScorableChecklistItem("interpret broad git requests"), true);
+});
 
 test("parseSkillChecklist extracts actionable bullets", () => {
   const items = parseSkillChecklist(fixtureSkill);
