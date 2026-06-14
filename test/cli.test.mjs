@@ -35,6 +35,7 @@ test("asd --help lists every Task 1 command", () => {
     "quality review-learnings",
     "quality apply-learning-review",
     "quality resummarize",
+    "pipeline gate",
     "review queue",
     "review show",
     "archive run",
