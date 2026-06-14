@@ -92,3 +92,24 @@ test("assessPipelineGate reports budget and review recommendations", async () =>
     }
   });
 });
+
+test("assessPipelineGate skip-ingest avoids adapter discovery scans", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+
+    try {
+      const { assessPipelineGate } = await import("../dist/pipeline/pipeline-gate.js");
+      const report = await assessPipelineGate(database, {
+        maxPer: "3/24h",
+        skipIngest: true,
+      });
+
+      assert.equal(report.ingest.skipped, true);
+      assert.equal(report.ingest.pending_sessions, 0);
+      assert.deepEqual(report.ingest.by_source, {});
+      assert.equal(report.recommendations.run_ingest, false);
+    } finally {
+      database.close();
+    }
+  });
+});

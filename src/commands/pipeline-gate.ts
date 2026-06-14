@@ -12,6 +12,7 @@ export async function executePipelineGate(
   const options = parsePipelineGateOptions(context.args);
   const report = await assessPipelineGate(database, {
     maxPer: options.maxPer,
+    skipIngest: options.skipIngest,
     ...(options.sources === undefined ? {} : { sources: options.sources }),
   });
 
@@ -21,14 +22,21 @@ export async function executePipelineGate(
 
 function parsePipelineGateOptions(args: readonly string[]): {
   maxPer: string;
+  skipIngest: boolean;
   sources?: SupportedSource[];
 } {
   let maxPer: string | undefined;
+  let skipIngest = false;
   const sources: SupportedSource[] = [];
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === undefined) {
+      continue;
+    }
+
+    if (arg === "--skip-ingest") {
+      skipIngest = true;
       continue;
     }
 
@@ -66,6 +74,7 @@ function parsePipelineGateOptions(args: readonly string[]): {
 
   return {
     maxPer: maxPer ?? getDefaultMaxPerWindow(),
+    skipIngest,
     ...(sources.length > 0 ? { sources } : {}),
   };
 }
