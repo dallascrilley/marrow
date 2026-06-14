@@ -1,10 +1,7 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import test from "node:test";
 
-import {
-  applyDelta,
-  applyDeltas,
-} from "../dist/v2/instinct/apply-delta.js";
+import { applyDelta, applyDeltas } from "../dist/v2/instinct/apply-delta.js";
 
 const ctx = {
   now: "2026-05-19T12:00:00Z",
@@ -41,10 +38,7 @@ test("merge folds source observations into target and removes source", () => {
   const targetId = "target-instinct-bbbbbbbb";
   let map = applyDeltas(
     new Map(),
-    [
-      createDelta(sourceId, "Source finding."),
-      createDelta(targetId, "Target finding."),
-    ],
+    [createDelta(sourceId, "Source finding."), createDelta(targetId, "Target finding.")],
     ctx,
   );
 

@@ -6,12 +6,28 @@ Launch proof: [`docs/launch-proof-index.md`](docs/launch-proof-index.md)
 
 5-minute demo: [`docs/demo-local-cursor-ingestion.md`](docs/demo-local-cursor-ingestion.md)
 
+## Repository
+
+[dallascrilley/agent-session-distillery](https://github.com/dallascrilley/agent-session-distillery)
+
+## Development (Scripts to Rule Them All)
+
+Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
+
+| Task | Command |
+|------|---------|
+| Install deps | `script/setup` or `just setup` |
+| Run tests | `script/test` or `just test` |
+| CI parity | `script/cibuild` or `just cibuild` |
+| Lint / format | `npm run lint` / `npm run format` |
+
 ## Requirements
 
 - Node `22.x`
 - npm
 - Local Cursor transcript files on disk
 - Optional: `OPENROUTER_API_KEY` for LLM-gated project-learning review commands
+
 ## Install
 
 ```bash

@@ -1,16 +1,15 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-
-import { sourceSessionFixture, turnSchema } from "../dist/models/canonical.js";
-import { isLowSignalTopic, summarizeSession } from "../dist/pipeline/summarize.js";
-import { resummarizeSessions } from "../dist/pipeline/resummarize.js";
+import { join } from "node:path";
+import test from "node:test";
 import { buildSessionIndex } from "../dist/commands/export-index.js";
 import { createLedger, listSourceSessions, upsertSourceSession } from "../dist/db/ledger.js";
-import { writeSessionSummary } from "../dist/writers/summary-writer.js";
+import { sourceSessionFixture, turnSchema } from "../dist/models/canonical.js";
+import { resummarizeSessions } from "../dist/pipeline/resummarize.js";
+import { isLowSignalTopic, summarizeSession } from "../dist/pipeline/summarize.js";
 import { writeSessionManifest } from "../dist/writers/manifest-writer.js";
+import { writeSessionSummary } from "../dist/writers/summary-writer.js";
 
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
 
@@ -24,7 +23,7 @@ test("summarizeSession skips skill-wrapper-only user prompts for topic", () => {
   const sourceSession = {
     ...sourceSessionFixture,
     project_key: "agent-session-distillery",
-    session_id: "skill-wrapper-skip"
+    session_id: "skill-wrapper-skip",
   };
   const turns = [
     turnSchema.parse({
@@ -39,7 +38,7 @@ test("summarizeSession skips skill-wrapper-only user prompts for topic", () => {
       turn_id: `${sourceSession.session_id}:turn-0000`,
       user_prompt:
         '<skill name="brainstorming" location="/tmp/brainstorming/SKILL.md">Explore options before building.</skill>',
-      verification_seen: false
+      verification_seen: false,
     }),
     turnSchema.parse({
       assistant_summary: "Implemented session index export.",
@@ -52,8 +51,8 @@ test("summarizeSession skips skill-wrapper-only user prompts for topic", () => {
       tool_stub_count: 0,
       turn_id: `${sourceSession.session_id}:turn-0001`,
       user_prompt: "Add export-index command for Tether session search.",
-      verification_seen: false
-    })
+      verification_seen: false,
+    }),
   ];
 
   const summary = summarizeSession({ events: [], sourceSession, turns });
@@ -83,7 +82,7 @@ test("resummarizeSessions upgrades topic without touching manifest bytes", async
       source_tool: "cursor",
       started_at: "2026-05-22T19:00:00.000Z",
       updated_at: "2026-05-22T20:00:00.000Z",
-      workspace_path: "/Users/example/Code/demo"
+      workspace_path: "/Users/example/Code/demo",
     });
 
     const summary = await writeSessionSummary({
@@ -98,7 +97,7 @@ test("resummarizeSessions upgrades topic without touching manifest bytes", async
       next_step: "No open next step recorded.",
       project_learnings: [],
       user_learnings: [],
-      deletion_readiness: "ready"
+      deletion_readiness: "ready",
     });
 
     const manifestBefore = await writeSessionManifest({
@@ -107,7 +106,7 @@ test("resummarizeSessions upgrades topic without touching manifest bytes", async
         retention_receipt_path: join(runtimeRoot, "reports", "receipt.json"),
         summary_json_path: summary.summaryPath,
         summary_markdown_path: summary.markdownPath,
-        user_knowledge_jsonl_path: null
+        user_knowledge_jsonl_path: null,
       },
       events: [],
       sourceSession: {
@@ -122,9 +121,9 @@ test("resummarizeSessions upgrades topic without touching manifest bytes", async
         source_tool: upserted.sourceSession.source_tool,
         started_at: upserted.sourceSession.started_at,
         updated_at: upserted.sourceSession.updated_at,
-        workspace_path: upserted.sourceSession.workspace_path
+        workspace_path: upserted.sourceSession.workspace_path,
       },
-      turns: []
+      turns: [],
     });
 
     const manifestBytesBefore = await readFile(manifestBefore.path, "utf8");
@@ -147,16 +146,16 @@ test("resummarizeSessions upgrades topic without touching manifest bytes", async
             tool_stub_count: 0,
             turn_id: `${sessionId}:turn-0000`,
             user_prompt: "Add export-index command for Tether session search.",
-            verification_seen: false
-          })
-        ]
+            verification_seen: false,
+          }),
+        ],
       }),
-      "utf8"
+      "utf8",
     );
 
     const result = await resummarizeSessions(database, {
       sessionIds: [sessionId],
-      llmTopic: false
+      llmTopic: false,
     });
 
     assert.equal(result.processed_count, 1);
@@ -166,7 +165,7 @@ test("resummarizeSessions upgrades topic without touching manifest bytes", async
 
     const upgraded = JSON.parse(await readFile(summary.summaryPath, "utf8"));
     assert.equal(upgraded.topic, "Add export-index command for Tether session search.");
-    assert.equal((await readFile(manifestBefore.path, "utf8")), manifestBytesBefore);
+    assert.equal(await readFile(manifestBefore.path, "utf8"), manifestBytesBefore);
 
     const indexRecords = await buildSessionIndex();
     const record = indexRecords.find((entry) => entry.asd_session_id === sessionId);
@@ -334,8 +333,7 @@ test("resummarizeSessions --low-signal-only + llmTopic uses mocked generator", a
       sandbox,
       sessionId,
       topic: "brainstorming",
-      userPrompt:
-        "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.",
+      userPrompt: "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.",
     });
 
     const calls = [];

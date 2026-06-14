@@ -1,9 +1,9 @@
-import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import test from "node:test";
 
 import { discoverCursorInputs } from "../dist/adapters/cursor/discover.js";
 
@@ -46,14 +46,14 @@ test("discovers Cursor transcripts with hashes, metadata, and optional support d
       firstProjectRoot,
       "agent-transcripts",
       "composer-2026-05-16T08-30-00.000Z",
-      "composer-2026-05-16T08-30-00.000Z.jsonl"
+      "composer-2026-05-16T08-30-00.000Z.jsonl",
     );
     const secondTranscriptPath = join(
       secondProjectRoot,
       "agent-transcripts",
       "chat-2026-05-16T08-45-00.000Z",
       "subagents",
-      "chat-2026-05-16T08-45-00.000Z.txt"
+      "chat-2026-05-16T08-45-00.000Z.txt",
     );
     const firstTranscriptContent = '{"type":"user","message":"hello"}\n';
     const secondTranscriptContent = "assistant: hi there\n";
@@ -62,7 +62,7 @@ test("discovers Cursor transcripts with hashes, metadata, and optional support d
 
     await writeFixture(
       join(firstProjectRoot, "workspace.json"),
-      JSON.stringify({ workspacePath: workspaceOne }, null, 2)
+      JSON.stringify({ workspacePath: workspaceOne }, null, 2),
     );
     await writeFixture(firstTranscriptPath, firstTranscriptContent, firstModifiedAt);
     await writeFixture(secondTranscriptPath, secondTranscriptContent, secondModifiedAt);
@@ -74,9 +74,9 @@ test("discovers Cursor transcripts with hashes, metadata, and optional support d
         "Cursor",
         "User",
         "globalStorage",
-        "state.vscdb"
+        "state.vscdb",
       ),
-      "global-state"
+      "global-state",
     );
     await writeFixture(
       join(
@@ -87,13 +87,13 @@ test("discovers Cursor transcripts with hashes, metadata, and optional support d
         "User",
         "workspaceStorage",
         "workspace-0001",
-        "state.vscdb"
+        "state.vscdb",
       ),
-      "tracking-state"
+      "tracking-state",
     );
     await writeFixture(
       join(secondProjectRoot, "agent-transcripts", "ignore.md"),
-      "# not a transcript\n"
+      "# not a transcript\n",
     );
 
     const result = await discoverCursorInputs({ homeDir });
@@ -108,7 +108,7 @@ test("discovers Cursor transcripts with hashes, metadata, and optional support d
         sourceHash: entry.sourceHash,
         sourcePath: entry.sourcePath,
         workspacePath: entry.workspacePath,
-        workspaceSlug: entry.workspaceSlug
+        workspaceSlug: entry.workspaceSlug,
       })),
       [
         {
@@ -119,7 +119,7 @@ test("discovers Cursor transcripts with hashes, metadata, and optional support d
           sourceHash: sha256(firstTranscriptContent),
           sourcePath: firstTranscriptPath,
           workspacePath: workspaceOne,
-          workspaceSlug: encodedSlug
+          workspaceSlug: encodedSlug,
         },
         {
           modifiedAt: secondModifiedAt.toISOString(),
@@ -129,9 +129,9 @@ test("discovers Cursor transcripts with hashes, metadata, and optional support d
           sourceHash: sha256(secondTranscriptContent),
           sourcePath: secondTranscriptPath,
           workspacePath: null,
-          workspaceSlug: "secondary-workspace"
-        }
-      ]
+          workspaceSlug: "secondary-workspace",
+        },
+      ],
     );
 
     assert.deepEqual(result.supportDatabases, [
@@ -144,8 +144,8 @@ test("discovers Cursor transcripts with hashes, metadata, and optional support d
           "Cursor",
           "User",
           "globalStorage",
-          "state.vscdb"
-        )
+          "state.vscdb",
+        ),
       },
       {
         kind: "tracking",
@@ -157,9 +157,9 @@ test("discovers Cursor transcripts with hashes, metadata, and optional support d
           "User",
           "workspaceStorage",
           "workspace-0001",
-          "state.vscdb"
-        )
-      }
+          "state.vscdb",
+        ),
+      },
     ]);
   });
 });
@@ -174,7 +174,7 @@ test("missing Cursor tracking databases do not fail transcript discovery", async
       "solo-workspace",
       "agent-transcripts",
       "composer-2026-05-16T09-00-00.000Z",
-      "composer-2026-05-16T09-00-00.000Z.jsonl"
+      "composer-2026-05-16T09-00-00.000Z.jsonl",
     );
     const transcriptContent = '{"type":"assistant","message":"ok"}\n';
 

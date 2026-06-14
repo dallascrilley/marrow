@@ -3,14 +3,17 @@ import { access, readFile } from "node:fs/promises";
 import type { DeletionCandidateInput, LifecycleState } from "../db/queries.js";
 import type { RetentionReceipt, SourceSession, Summary, Turn } from "../models/canonical.js";
 import { retentionReceiptSchema, summarySchema } from "../models/canonical.js";
-import { defaultUserScopeKey } from "./extract.js";
-import { getSessionManifestPath } from "../writers/manifest-writer.js";
 import {
   getProjectKnowledgeSessionPath,
-  getUserKnowledgeSessionPath
+  getUserKnowledgeSessionPath,
 } from "../writers/knowledge-writer.js";
+import { getSessionManifestPath } from "../writers/manifest-writer.js";
 import { getRetentionReceiptPath } from "../writers/report-writer.js";
-import { getSessionSummaryJsonPath, getSessionSummaryMarkdownPath } from "../writers/summary-writer.js";
+import {
+  getSessionSummaryJsonPath,
+  getSessionSummaryMarkdownPath,
+} from "../writers/summary-writer.js";
+import { defaultUserScopeKey } from "./extract.js";
 import {
   firstSubstantivePromptFromTurns,
   isNoSignalPrompt,
@@ -45,21 +48,23 @@ export async function evaluateRetentionReadiness(input: {
   const userScopeKey = input.userScopeKey ?? defaultUserScopeKey;
   const summaryWritten = await hasSummaryArtifacts(sessionId);
   const summary = summaryWritten ? await readSummary(sessionId) : null;
-  const projectLearningsWritten = await fileExists(getProjectKnowledgeSessionPath(projectKey, sessionId));
-  const userLearningsWritten = await fileExists(getUserKnowledgeSessionPath(userScopeKey, sessionId));
+  const projectLearningsWritten = await fileExists(
+    getProjectKnowledgeSessionPath(projectKey, sessionId),
+  );
+  const userLearningsWritten = await fileExists(
+    getUserKnowledgeSessionPath(userScopeKey, sessionId),
+  );
   const manifestWritten = await fileExists(getSessionManifestPath(sessionId));
   const receiptPath = getRetentionReceiptPath(sessionId);
   const receiptWritten = await fileExists(receiptPath);
   const hasLearnings = projectLearningsWritten || userLearningsWritten;
-  const artifactsComplete =
-    summaryWritten && manifestWritten && receiptWritten;
+  const artifactsComplete = summaryWritten && manifestWritten && receiptWritten;
   const discardableNoSignal =
     artifactsComplete &&
     !hasLearnings &&
     summary !== null &&
     isDiscardableNoSignal(summary, input.turns);
-  const safeToDelete =
-    artifactsComplete && (hasLearnings || discardableNoSignal);
+  const safeToDelete = artifactsComplete && (hasLearnings || discardableNoSignal);
   const candidateState = safeToDelete
     ? hasLearnings
       ? "ready"
@@ -75,7 +80,7 @@ export async function evaluateRetentionReadiness(input: {
         receiptWritten,
         summary,
         summaryWritten,
-        userLearningsWritten
+        userLearningsWritten,
       });
   const receipt = retentionReceiptSchema.parse({
     archive_copy_written: manifestWritten,
@@ -86,7 +91,7 @@ export async function evaluateRetentionReadiness(input: {
     session_id: sessionId,
     source_hash: input.sourceHash ?? input.sourceSession.source_hash,
     summary_written: summaryWritten,
-    user_learnings_written: userLearningsWritten
+    user_learnings_written: userLearningsWritten,
   } satisfies RetentionReceipt);
 
   return {
@@ -95,7 +100,7 @@ export async function evaluateRetentionReadiness(input: {
       projectLearningsWritten,
       receiptWritten,
       summaryWritten,
-      userLearningsWritten
+      userLearningsWritten,
     },
     candidate: {
       candidateState,
@@ -105,10 +110,10 @@ export async function evaluateRetentionReadiness(input: {
       safeToDelete,
       sessionId,
       sourceHash: receipt.source_hash,
-      sourceSessionId: input.sourceSessionId
+      sourceSessionId: input.sourceSessionId,
     },
     receipt,
-    receiptPath
+    receiptPath,
   };
 }
 
@@ -143,7 +148,7 @@ export function isDiscardableNoSignal(
 async function hasSummaryArtifacts(sessionId: string): Promise<boolean> {
   const [jsonExists, markdownExists] = await Promise.all([
     fileExists(getSessionSummaryJsonPath(sessionId)),
-    fileExists(getSessionSummaryMarkdownPath(sessionId))
+    fileExists(getSessionSummaryMarkdownPath(sessionId)),
   ]);
 
   return jsonExists && markdownExists;

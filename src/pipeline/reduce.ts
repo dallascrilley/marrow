@@ -4,17 +4,13 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type { CursorTranscriptRecord } from "../adapters/cursor/intermediate.js";
 import { getRuntimePath } from "../config/paths.js";
-import {
-  getPhaseCheckpoint,
-  insertRunHistory,
-  transitionPhase
-} from "../db/ledger.js";
+import { getPhaseCheckpoint, insertRunHistory, transitionPhase } from "../db/ledger.js";
 import type { SourceSessionRow } from "../db/queries.js";
 import type { Event, Turn } from "../models/canonical.js";
 import { turnSchema } from "../models/canonical.js";
 import { extractCommandsByTurn } from "../reducers/command-extraction.js";
 import { tagTurnEvents } from "../reducers/event-tagging.js";
-import { groupRecordsIntoTurns, type GroupedTurn } from "../reducers/turn-grouping.js";
+import { type GroupedTurn, groupRecordsIntoTurns } from "../reducers/turn-grouping.js";
 
 export type ReducedArtifact = {
   events: Event[];
@@ -46,30 +42,35 @@ export async function runReducePhase(input: {
       artifactPath,
       events: resumed.events,
       resumed: true,
-      turns: resumed.turns
+      turns: resumed.turns,
     };
   }
 
   try {
     const groupedTurns = groupRecordsIntoTurns({
       records: [...input.parsedRecords],
-      sessionId: input.sourceSession.session_id
+      sessionId: input.sourceSession.session_id,
     });
     const commandResult = extractCommandsByTurn(groupedTurns);
     const taggedEvents = tagTurnEvents(groupedTurns);
     const turns = groupedTurns.map((turn) =>
-      toCanonicalTurn(turn, input.sourceSession, commandResult.byTurn[turn.turnId] ?? [], taggedEvents)
+      toCanonicalTurn(
+        turn,
+        input.sourceSession,
+        commandResult.byTurn[turn.turnId] ?? [],
+        taggedEvents,
+      ),
     );
     const artifact: ReducedArtifact = {
       events: taggedEvents,
-      turns
+      turns,
     };
 
     await writeJsonArtifact(artifactPath, artifact);
     const detailsJson = JSON.stringify({
       artifact_path: artifactPath,
       event_count: taggedEvents.length,
-      turn_count: turns.length
+      turn_count: turns.length,
     });
     const run = insertRunHistory(input.database, {
       detailsJson,
@@ -78,7 +79,7 @@ export async function runReducePhase(input: {
       phaseState: "completed",
       sessionId: input.sourceSession.session_id,
       sourceHash: input.sourceSession.source_hash,
-      sourceSessionId: input.sourceSession.id
+      sourceSessionId: input.sourceSession.id,
     });
 
     transitionPhase(input.database, {
@@ -87,18 +88,18 @@ export async function runReducePhase(input: {
       phaseState: "completed",
       runId: run.id,
       sourceHash: input.sourceSession.source_hash,
-      sourceSessionId: input.sourceSession.id
+      sourceSessionId: input.sourceSession.id,
     });
 
     return {
       artifactPath,
       events: taggedEvents,
       resumed: false,
-      turns
+      turns,
     };
   } catch (error) {
     const detailsJson = JSON.stringify({
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
     });
     const run = insertRunHistory(input.database, {
       detailsJson,
@@ -107,7 +108,7 @@ export async function runReducePhase(input: {
       phaseState: "failed",
       sessionId: input.sourceSession.session_id,
       sourceHash: input.sourceSession.source_hash,
-      sourceSessionId: input.sourceSession.id
+      sourceSessionId: input.sourceSession.id,
     });
     transitionPhase(input.database, {
       detailsJson,
@@ -115,7 +116,7 @@ export async function runReducePhase(input: {
       phaseState: "failed",
       runId: run.id,
       sourceHash: input.sourceSession.source_hash,
-      sourceSessionId: input.sourceSession.id
+      sourceSessionId: input.sourceSession.id,
     });
     throw error;
   }
@@ -129,9 +130,10 @@ function toCanonicalTurn(
   turn: GroupedTurn,
   sourceSession: SourceSessionRow,
   commandsSeen: readonly string[],
-  events: readonly Event[]
+  events: readonly Event[],
 ): Turn {
-  const assistantSummary = turn.assistantMessages.join(" ").trim() || "No assistant summary captured.";
+  const assistantSummary =
+    turn.assistantMessages.join(" ").trim() || "No assistant summary captured.";
   const turnEvents = events.filter((event) => event.turn_id === turn.turnId);
 
   return turnSchema.parse({
@@ -143,11 +145,11 @@ function toCanonicalTurn(
     session_id: sourceSession.session_id,
     started_at: turn.startedAtHint ?? sourceSession.started_at,
     tool_stub_count: turn.records.filter(
-      (record) => record.kind === "tool_use_stub" || record.kind === "tool_result_stub"
+      (record) => record.kind === "tool_use_stub" || record.kind === "tool_result_stub",
     ).length,
     turn_id: turn.turnId,
     user_prompt: turn.userPrompt,
-    verification_seen: turnEvents.some((event) => event.type === "verification")
+    verification_seen: turnEvents.some((event) => event.type === "verification"),
   });
 }
 

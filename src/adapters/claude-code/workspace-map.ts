@@ -21,7 +21,7 @@ export type DeriveClaudeCodeWorkspaceMappingOptions = {
  */
 export function deriveClaudeCodeWorkspaceMapping(
   transcriptPath: string,
-  options: DeriveClaudeCodeWorkspaceMappingOptions = {}
+  options: DeriveClaudeCodeWorkspaceMappingOptions = {},
 ): ClaudeCodeWorkspaceMapping {
   const absoluteTranscriptPath = resolve(transcriptPath);
   const claudeCodeProjectsRoot = options.claudeCodeProjectsRoot
@@ -32,7 +32,7 @@ export function deriveClaudeCodeWorkspaceMapping(
 
   if (relativeSegments.length < 2) {
     throw new Error(
-      `Transcript path is not nested under a Claude Code project: ${absoluteTranscriptPath}`
+      `Transcript path is not nested under a Claude Code project: ${absoluteTranscriptPath}`,
     );
   }
 
@@ -40,7 +40,7 @@ export function deriveClaudeCodeWorkspaceMapping(
 
   if (!workspaceSlug) {
     throw new Error(
-      `Transcript path is not nested under a Claude Code project: ${absoluteTranscriptPath}`
+      `Transcript path is not nested under a Claude Code project: ${absoluteTranscriptPath}`,
     );
   }
 
@@ -51,7 +51,7 @@ export function deriveClaudeCodeWorkspaceMapping(
     claudeCodeProjectPath,
     projectKey: deriveProjectKey(workspacePath, workspaceSlug),
     workspacePath,
-    workspaceSlug
+    workspaceSlug,
   };
 }
 
@@ -62,7 +62,7 @@ function inferClaudeCodeProjectsRoot(transcriptPath: string): string {
 
   if (markerIndex < 0) {
     throw new Error(
-      `Could not infer Claude Code projects root from transcript path: ${transcriptPath}`
+      `Could not infer Claude Code projects root from transcript path: ${transcriptPath}`,
     );
   }
 

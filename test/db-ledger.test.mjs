@@ -1,8 +1,8 @@
-import test from "node:test";
 import assert from "node:assert/strict";
 import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import test from "node:test";
 
 import {
   createLedger,
@@ -10,7 +10,7 @@ import {
   transitionPhase,
   upsertDeletionCandidate,
   upsertReviewQueueEntry,
-  upsertSourceSession
+  upsertSourceSession,
 } from "../dist/db/ledger.js";
 import { getLedgerDatabasePath, getLedgerDirectoryPath } from "../dist/db/migrations.js";
 import { sourceSessionFixture } from "../dist/models/canonical.js";
@@ -40,7 +40,7 @@ async function withRuntimeRoot(run) {
 function buildSession(overrides = {}) {
   return {
     ...sourceSessionFixture,
-    ...overrides
+    ...overrides,
   };
 }
 
@@ -59,7 +59,7 @@ test("ledger bootstrap creates the sqlite file and reopens idempotently", async 
           `SELECT name
            FROM sqlite_master
            WHERE type IN ('table', 'index')
-           ORDER BY name`
+           ORDER BY name`,
         )
         .all()
         .map((row) => row.name);
@@ -75,7 +75,7 @@ test("ledger bootstrap creates the sqlite file and reopens idempotently", async 
         "idx_source_sessions_source_tool",
         "idx_source_sessions_session_id",
         "idx_source_sessions_project_key",
-        "idx_source_sessions_lifecycle"
+        "idx_source_sessions_lifecycle",
       ]) {
         assert.ok(objectNames.includes(requiredName), `${requiredName} should exist`);
       }
@@ -93,7 +93,7 @@ test("ledger bootstrap creates the sqlite file and reopens idempotently", async 
       const persisted = reopened
         .prepare(
           `SELECT session_id, source_hash, current_lifecycle_state, content_revision
-           FROM source_sessions`
+           FROM source_sessions`,
         )
         .get();
 
@@ -118,12 +118,12 @@ test("changed source hashes mark downstream artifacts stale without duplicating 
       transitionPhase(database, {
         phaseName: "parsed",
         phaseState: "completed",
-        sourceSessionId: sessionId
+        sourceSessionId: sessionId,
       });
       transitionPhase(database, {
         phaseName: "summarized",
         phaseState: "completed",
-        sourceSessionId: sessionId
+        sourceSessionId: sessionId,
       });
 
       upsertReviewQueueEntry(database, {
@@ -134,7 +134,7 @@ test("changed source hashes mark downstream artifacts stale without duplicating 
         reviewKind: "summary",
         sessionId: inserted.sourceSession.session_id,
         sourceHash: inserted.sourceSession.source_hash,
-        sourceSessionId: sessionId
+        sourceSessionId: sessionId,
       });
 
       upsertDeletionCandidate(database, {
@@ -145,15 +145,15 @@ test("changed source hashes mark downstream artifacts stale without duplicating 
         safeToDelete: true,
         sessionId: inserted.sourceSession.session_id,
         sourceHash: inserted.sourceSession.source_hash,
-        sourceSessionId: sessionId
+        sourceSessionId: sessionId,
       });
 
       const changed = upsertSourceSession(
         database,
         buildSession({
           source_hash: "sha256:session-0002",
-          updated_at: "2026-05-16T08:40:00Z"
-        })
+          updated_at: "2026-05-16T08:40:00Z",
+        }),
       );
 
       assert.equal(changed.sourceChanged, true);
@@ -167,15 +167,15 @@ test("changed source hashes mark downstream artifacts stale without duplicating 
         checkpoints.map(({ phase_name, phase_state }) => ({ phase_name, phase_state })),
         [
           { phase_name: "parsed", phase_state: "stale" },
-          { phase_name: "summarized", phase_state: "stale" }
-        ]
+          { phase_name: "summarized", phase_state: "stale" },
+        ],
       );
 
       const reviewEntry = database
         .prepare(
           `SELECT queue_state, current_lifecycle_state
            FROM review_queue_entries
-           WHERE source_session_id = ?`
+           WHERE source_session_id = ?`,
         )
         .get(sessionId);
       assert.equal(reviewEntry.queue_state, "stale");
@@ -185,7 +185,7 @@ test("changed source hashes mark downstream artifacts stale without duplicating 
         .prepare(
           `SELECT candidate_state, current_lifecycle_state, safe_to_delete
            FROM deletion_candidates
-           WHERE source_session_id = ?`
+           WHERE source_session_id = ?`,
         )
         .get(sessionId);
       assert.equal(deletionCandidate.candidate_state, "stale");
@@ -196,8 +196,8 @@ test("changed source hashes mark downstream artifacts stale without duplicating 
         database,
         buildSession({
           source_hash: "sha256:session-0002",
-          updated_at: "2026-05-16T08:45:00Z"
-        })
+          updated_at: "2026-05-16T08:45:00Z",
+        }),
       );
 
       assert.equal(repeated.sourceChanged, false);

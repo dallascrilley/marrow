@@ -17,9 +17,12 @@
     "corpus:resummarize:dry-run": "npm run build && node scripts/resummarize-corpus.mjs --dry-run",
     "proof:smoke": "npm run build && node scripts/proof-smoke.mjs",
     "test": "npm run build && node --test $(find test -name '*.test.mjs' -print)",
-    "test:smoke": "npm run build && node --test test/cli.test.mjs"
+    "test:smoke": "npm run build && node --test test/cli.test.mjs",
+    "lint": "biome check src test scripts",
+    "format": "biome format --write src test scripts"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
     "@types/node": "^22.15.31",
     "typescript": "^5.8.3"
   },

@@ -1,0 +1,7 @@
+# <type>(<scope>): <subject>   (50 chars max; imperative mood)
+#
+# <body — what and why, wrapped at 72 chars>
+#
+# Types: feat fix refactor docs test chore perf ci
+# Breaking change: add "!" after type/scope and a BREAKING CHANGE: footer.
+# Reference issues in the footer: Fixes #123

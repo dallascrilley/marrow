@@ -1,9 +1,9 @@
 import type {
-	ParseTranscriptOptions,
-	ParseTranscriptResult,
-	TranscriptDiscovery,
-	TranscriptRecord,
-	WorkspaceMapping,
+  ParseTranscriptOptions,
+  ParseTranscriptResult,
+  TranscriptDiscovery,
+  TranscriptRecord,
+  WorkspaceMapping,
 } from "../_common/intermediate.js";
 
 /**
@@ -19,9 +19,8 @@ export type KimiWorkspaceMapping = WorkspaceMapping;
 
 export type KimiTranscriptFormat = "jsonl";
 
-export type KimiTranscriptDiscovery = KimiWorkspaceMapping &
-	TranscriptDiscovery;
+export type KimiTranscriptDiscovery = KimiWorkspaceMapping & TranscriptDiscovery;
 
 export type KimiDiscoveryResult = {
-	transcripts: readonly KimiTranscriptDiscovery[];
+  transcripts: readonly KimiTranscriptDiscovery[];
 };

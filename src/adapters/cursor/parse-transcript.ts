@@ -2,7 +2,7 @@ import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 
 import type { JsonValue } from "../../models/canonical.js";
-import { parseJsonLine, type JsonRecord } from "../_common/jsonl.js";
+import { type JsonRecord, parseJsonLine } from "../_common/jsonl.js";
 import {
   detectRedaction,
   extractCommandStrings,
@@ -13,13 +13,13 @@ import {
   looksRedacted,
   pickFirstString,
   readValueAtPath,
-  uniquePreservingOrder
+  uniquePreservingOrder,
 } from "../_common/text-extract.js";
 import type {
   CursorTranscriptRecord,
   CursorTranscriptRecordKind,
   ParseCursorTranscriptOptions,
-  ParseCursorTranscriptResult
+  ParseCursorTranscriptResult,
 } from "./intermediate.js";
 
 const attachedFilesPattern = /<attached_files>[\s\S]*?<\/attached_files>/gi;
@@ -28,13 +28,13 @@ const pluginInfoPattern = /<plugin_info\b[^>]*>[\s\S]*?<\/plugin_info>/gi;
 const xmlTagPattern = /<\/?[a-z_:-]+(?:\s+[^>]*)?>/gi;
 
 export async function parseCursorTranscript(
-  options: ParseCursorTranscriptOptions
+  options: ParseCursorTranscriptOptions,
 ): Promise<ParseCursorTranscriptResult> {
   const records: CursorTranscriptRecord[] = [];
   const stream = createReadStream(options.sourcePath, { encoding: "utf8" });
   const lines = createInterface({
     crlfDelay: Infinity,
-    input: stream
+    input: stream,
   });
 
   let lineNumber = 0;
@@ -51,7 +51,7 @@ export async function parseCursorTranscript(
       const normalizedRecord = normalizeTranscriptRecord(parsedLine, {
         lineNumber,
         sourceHash: options.sourceHash,
-        sourcePath: options.sourcePath
+        sourcePath: options.sourcePath,
       });
 
       records.push(normalizedRecord);
@@ -73,30 +73,32 @@ type RecordContext = {
 function parseCursorTranscriptLine(
   line: string,
   sourcePath: string,
-  lineNumber: number
+  lineNumber: number,
 ): JsonRecord {
   return parseJsonLine(line, sourcePath, lineNumber, "Cursor transcript JSONL");
 }
 
 function normalizeTranscriptRecord(
   parsedLine: JsonRecord,
-  context: RecordContext
+  context: RecordContext,
 ): CursorTranscriptRecord {
   const rawType = pickFirstString(parsedLine, [
     ["type"],
     ["role"],
     ["kind"],
     ["eventType"],
-    ["event", "type"]
+    ["event", "type"],
   ]);
   const kind = classifyRecordKind(rawType);
   const contentRedacted = detectRedaction(parsedLine);
   const messageText = contentRedacted ? null : extractMessageText(parsedLine, kind);
   const toolInputText =
-    kind === "tool_use_stub" || kind === "tool_result_stub" ? extractToolInputText(parsedLine) : null;
+    kind === "tool_use_stub" || kind === "tool_result_stub"
+      ? extractToolInputText(parsedLine)
+      : null;
   const filePaths = uniquePreservingOrder(extractFilePaths(parsedLine, messageText, toolInputText));
   const commandStrings = uniquePreservingOrder(
-    extractCommandStrings(parsedLine, messageText, toolInputText)
+    extractCommandStrings(parsedLine, messageText, toolInputText),
   );
 
   return {
@@ -108,7 +110,7 @@ function normalizeTranscriptRecord(
     provenance: {
       lineNumber: context.lineNumber,
       sourceHash: context.sourceHash,
-      sourcePath: context.sourcePath
+      sourcePath: context.sourcePath,
     },
     rawEvent: parsedLine,
     rawType,
@@ -119,9 +121,9 @@ function normalizeTranscriptRecord(
             callId: pickFirstString(parsedLine, [["id"], ["callId"], ["toolCallId"]]),
             inputText: toolInputText,
             name: pickFirstString(parsedLine, [["name"], ["toolName"], ["tool", "name"]]),
-            status: pickFirstString(parsedLine, [["status"], ["state"], ["tool", "status"]])
+            status: pickFirstString(parsedLine, [["status"], ["state"], ["tool", "status"]]),
           }
-        : null
+        : null,
   };
 }
 
@@ -153,24 +155,12 @@ function classifyRecordKind(rawType: string | null): CursorTranscriptRecordKind 
 
 function extractMessageText(
   parsedLine: JsonRecord,
-  kind: CursorTranscriptRecordKind
+  kind: CursorTranscriptRecordKind,
 ): string | null {
   const candidates =
     kind === "user_message" || kind === "assistant_message"
-      ? [
-          ["text"],
-          ["message", "content"],
-          ["message", "text"],
-          ["content"],
-          ["body"],
-          ["prompt"]
-        ]
-      : [
-          ["summary"],
-          ["message"],
-          ["text"],
-          ["content"]
-        ];
+      ? [["text"], ["message", "content"], ["message", "text"], ["content"], ["body"], ["prompt"]]
+      : [["summary"], ["message"], ["text"], ["content"]];
 
   for (const path of candidates) {
     const candidate = readValueAtPath(parsedLine, path);
@@ -186,7 +176,7 @@ function extractMessageText(
 
 function sanitizeExtractedText(
   value: string | null,
-  kind: CursorTranscriptRecordKind
+  kind: CursorTranscriptRecordKind,
 ): string | null {
   if (value === null) {
     return null;
@@ -220,4 +210,3 @@ function normalizeFreeformText(value: string): string | null {
 
   return stripped.length > 0 ? stripped : null;
 }
-

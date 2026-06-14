@@ -1,17 +1,14 @@
 import type { DatabaseSync } from "node:sqlite";
-
-import { openLedgerDatabase } from "./migrations.js";
 import type { SourceSession } from "../models/canonical.js";
+import { openLedgerDatabase } from "./migrations.js";
 import {
   currentTimestampExpression,
-  getAllDerivedPhases,
-  getDownstreamPhases,
-  normalizeLifecycleState,
-  resolveLifecycleStateForPhase,
-  toSourceSessionInsertRecord,
   type DeletionCandidateInput,
   type DeletionCandidateRow,
+  getAllDerivedPhases,
+  getDownstreamPhases,
   type LifecycleState,
+  normalizeLifecycleState,
   type PhaseCheckpointRow,
   type PhaseName,
   type PhaseState,
@@ -20,7 +17,9 @@ import {
   type ReviewQueueEntryRow,
   type RunHistoryInput,
   type RunHistoryRow,
-  type SourceSessionRow
+  resolveLifecycleStateForPhase,
+  type SourceSessionRow,
+  toSourceSessionInsertRecord,
 } from "./queries.js";
 
 export type UpsertSourceSessionResult = {
@@ -51,7 +50,7 @@ function mapSourceSessionRow(row: Record<string, unknown>): SourceSessionRow {
     source_tool: String(row.source_tool),
     started_at: String(row.started_at),
     updated_at: String(row.updated_at),
-    workspace_path: String(row.workspace_path)
+    workspace_path: String(row.workspace_path),
   };
 }
 
@@ -67,7 +66,7 @@ function mapPhaseCheckpointRow(row: Record<string, unknown>): PhaseCheckpointRow
     session_id: String(row.session_id),
     source_hash: String(row.source_hash),
     source_session_id: Number(row.source_session_id),
-    updated_at: String(row.updated_at)
+    updated_at: String(row.updated_at),
   };
 }
 
@@ -81,7 +80,7 @@ function mapRunHistoryRow(row: Record<string, unknown>): RunHistoryRow {
     session_id: String(row.session_id),
     source_hash: String(row.source_hash),
     source_session_id: Number(row.source_session_id),
-    started_at: String(row.started_at)
+    started_at: String(row.started_at),
   };
 }
 
@@ -97,7 +96,7 @@ function mapReviewQueueEntryRow(row: Record<string, unknown>): ReviewQueueEntryR
     session_id: String(row.session_id),
     source_hash: String(row.source_hash),
     source_session_id: Number(row.source_session_id),
-    updated_at: String(row.updated_at)
+    updated_at: String(row.updated_at),
   };
 }
 
@@ -112,7 +111,7 @@ function mapDeletionCandidateRow(row: Record<string, unknown>): DeletionCandidat
     session_id: String(row.session_id),
     source_hash: String(row.source_hash),
     source_session_id: Number(row.source_session_id),
-    updated_at: String(row.updated_at)
+    updated_at: String(row.updated_at),
   };
 }
 
@@ -131,13 +130,13 @@ function transaction<T>(database: DatabaseSync, work: () => T): T {
 
 function getSourceSessionByIdentity(
   database: DatabaseSync,
-  identity: Pick<SourceSession, "session_id" | "source_path" | "source_tool">
+  identity: Pick<SourceSession, "session_id" | "source_path" | "source_tool">,
 ): SourceSessionRow | null {
   const row = database
     .prepare(
       `SELECT *
        FROM source_sessions
-       WHERE source_tool = ? AND source_path = ? AND session_id = ?`
+       WHERE source_tool = ? AND source_path = ? AND session_id = ?`,
     )
     .get(identity.source_tool, identity.source_path, identity.session_id) as
     | Record<string, unknown>
@@ -147,9 +146,9 @@ function getSourceSessionByIdentity(
 }
 
 function getSourceSessionById(database: DatabaseSync, sourceSessionId: number): SourceSessionRow {
-  const row = database
-    .prepare("SELECT * FROM source_sessions WHERE id = ?")
-    .get(sourceSessionId) as Record<string, unknown> | undefined;
+  const row = database.prepare("SELECT * FROM source_sessions WHERE id = ?").get(sourceSessionId) as
+    | Record<string, unknown>
+    | undefined;
 
   if (!row) {
     throw new Error(`Unknown source session id: ${sourceSessionId}`);
@@ -160,14 +159,14 @@ function getSourceSessionById(database: DatabaseSync, sourceSessionId: number): 
 
 function invalidateDerivedData(
   database: DatabaseSync,
-  sourceSession: SourceSessionRow
+  sourceSession: SourceSessionRow,
 ): PhaseName[] {
   const stalePhases = database
     .prepare(
       `SELECT phase_name
        FROM phase_checkpoints
        WHERE source_session_id = ? AND phase_state = 'completed'
-       ORDER BY rowid`
+       ORDER BY rowid`,
     )
     .all(sourceSession.id) as Array<Record<string, unknown>>;
 
@@ -176,7 +175,7 @@ function invalidateDerivedData(
       .prepare(
         `UPDATE source_sessions
          SET current_lifecycle_state = 'discovered'
-         WHERE id = ?`
+         WHERE id = ?`,
       )
       .run(sourceSession.id);
 
@@ -196,7 +195,7 @@ function invalidateDerivedData(
          current_lifecycle_state = 'stale',
          invalidated_at = ${currentTimestampExpression},
          updated_at = ${currentTimestampExpression}
-       WHERE source_session_id = ? AND phase_state = 'completed'`
+       WHERE source_session_id = ? AND phase_state = 'completed'`,
     )
     .run(sourceSession.id);
 
@@ -210,7 +209,7 @@ function invalidateDerivedData(
            WHEN queue_state = 'completed' THEN 'stale'
            ELSE queue_state
          END
-       WHERE source_session_id = ?`
+       WHERE source_session_id = ?`,
     )
     .run(sourceSession.id);
 
@@ -225,7 +224,7 @@ function invalidateDerivedData(
            ELSE candidate_state
          END,
          safe_to_delete = 0
-       WHERE source_session_id = ?`
+       WHERE source_session_id = ?`,
     )
     .run(sourceSession.id);
 
@@ -233,7 +232,7 @@ function invalidateDerivedData(
     .prepare(
       `UPDATE source_sessions
        SET current_lifecycle_state = 'stale'
-       WHERE id = ?`
+       WHERE id = ?`,
     )
     .run(sourceSession.id);
 
@@ -242,11 +241,12 @@ function invalidateDerivedData(
 
 export function upsertSourceSession(
   database: DatabaseSync,
-  session: SourceSession
+  session: SourceSession,
 ): UpsertSourceSessionResult {
   return transaction(database, () => {
     const existing = getSourceSessionByIdentity(database, session);
-    const initialLifecycleState: LifecycleState = existing?.current_lifecycle_state ?? session.ingest_status;
+    const initialLifecycleState: LifecycleState =
+      existing?.current_lifecycle_state ?? session.ingest_status;
     const record = toSourceSessionInsertRecord(session, initialLifecycleState);
 
     if (!existing) {
@@ -280,14 +280,14 @@ export function upsertSourceSession(
              @ingest_status,
              @retention_status,
              @current_lifecycle_state
-           )`
+           )`,
         )
         .run(record);
 
       return {
         sourceChanged: false,
         sourceSession: getSourceSessionByIdentity(database, session)!,
-        stalePhases: []
+        stalePhases: [],
       };
     }
 
@@ -315,7 +315,7 @@ export function upsertSourceSession(
              ELSE content_revision + 1
            END,
            last_ingested_at = ${currentTimestampExpression}
-         WHERE id = @id`
+         WHERE id = @id`,
       )
       .run({
         conversation_id: session.conversation_id,
@@ -328,7 +328,7 @@ export function upsertSourceSession(
         source_hash: session.source_hash,
         started_at: session.started_at,
         updated_at: session.updated_at,
-        workspace_path: session.workspace_path
+        workspace_path: session.workspace_path,
       });
 
     const refreshed = getSourceSessionById(database, existing.id);
@@ -337,7 +337,7 @@ export function upsertSourceSession(
     return {
       sourceChanged,
       sourceSession: getSourceSessionById(database, existing.id),
-      stalePhases
+      stalePhases,
     };
   });
 }
@@ -356,7 +356,7 @@ export function insertRunHistory(database: DatabaseSync, input: RunHistoryInput)
          details_json,
          started_at,
          finished_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       input.sourceSessionId,
@@ -366,7 +366,7 @@ export function insertRunHistory(database: DatabaseSync, input: RunHistoryInput)
       input.sourceHash,
       input.detailsJson ?? "{}",
       input.startedAt ?? sourceSession.updated_at,
-      input.finishedAt ?? null
+      input.finishedAt ?? null,
     );
 
   const row = database
@@ -382,7 +382,7 @@ export function insertRunHistory(database: DatabaseSync, input: RunHistoryInput)
 
 export function transitionPhase(
   database: DatabaseSync,
-  input: PhaseTransitionInput
+  input: PhaseTransitionInput,
 ): PhaseCheckpointRow {
   return transaction(database, () => {
     const sourceSession = getSourceSessionById(database, input.sourceSessionId);
@@ -413,7 +413,7 @@ export function transitionPhase(
            run_id = excluded.run_id,
            completed_at = excluded.completed_at,
            invalidated_at = excluded.invalidated_at,
-           updated_at = ${currentTimestampExpression}`
+           updated_at = ${currentTimestampExpression}`,
       )
       .run(
         input.sourceSessionId,
@@ -425,24 +425,28 @@ export function transitionPhase(
         lifecycleState,
         input.runId ?? null,
         input.completedAt ?? (input.phaseState === "completed" ? sourceSession.updated_at : null),
-        input.phaseState === "stale" ? sourceSession.updated_at : null
+        input.phaseState === "stale" ? sourceSession.updated_at : null,
       );
 
     database
       .prepare(
         `UPDATE source_sessions
          SET current_lifecycle_state = ?, ingest_status = ?, last_ingested_at = ${currentTimestampExpression}
-         WHERE id = ?`
+         WHERE id = ?`,
       )
-      .run(lifecycleState, lifecycleState === "stale" ? sourceSession.ingest_status : input.phaseName, sourceSession.id);
+      .run(
+        lifecycleState,
+        lifecycleState === "stale" ? sourceSession.ingest_status : input.phaseName,
+        sourceSession.id,
+      );
 
     if (input.phaseState === "completed") {
       const downstreamPhases = getDownstreamPhases(input.phaseName);
 
       if (downstreamPhases.length > 0) {
-      database
-        .prepare(
-          `UPDATE phase_checkpoints
+        database
+          .prepare(
+            `UPDATE phase_checkpoints
            SET
              phase_state = 'stale',
              current_lifecycle_state = 'stale',
@@ -450,9 +454,9 @@ export function transitionPhase(
              updated_at = ${currentTimestampExpression}
            WHERE source_session_id = ? AND phase_name IN (${downstreamPhases
              .map(() => "?")
-             .join(", ")}) AND phase_name != ? AND phase_state = 'completed'`
-        )
-        .run(sourceSession.id, ...downstreamPhases, input.phaseName);
+             .join(", ")}) AND phase_name != ? AND phase_state = 'completed'`,
+          )
+          .run(sourceSession.id, ...downstreamPhases, input.phaseName);
       }
     }
 
@@ -460,7 +464,7 @@ export function transitionPhase(
       .prepare(
         `SELECT *
          FROM phase_checkpoints
-         WHERE source_session_id = ? AND phase_name = ?`
+         WHERE source_session_id = ? AND phase_name = ?`,
       )
       .get(sourceSession.id, input.phaseName) as Record<string, unknown> | undefined;
 
@@ -474,7 +478,7 @@ export function transitionPhase(
 
 export function upsertReviewQueueEntry(
   database: DatabaseSync,
-  input: ReviewQueueEntryInput
+  input: ReviewQueueEntryInput,
 ): ReviewQueueEntryRow {
   database
     .prepare(
@@ -493,7 +497,7 @@ export function upsertReviewQueueEntry(
          current_lifecycle_state = excluded.current_lifecycle_state,
          source_hash = excluded.source_hash,
          reason = excluded.reason,
-         updated_at = ${currentTimestampExpression}`
+         updated_at = ${currentTimestampExpression}`,
     )
     .run(
       input.sourceSessionId,
@@ -503,14 +507,14 @@ export function upsertReviewQueueEntry(
       input.queueState,
       input.currentLifecycleState,
       input.sourceHash,
-      input.reason
+      input.reason,
     );
 
   const row = database
     .prepare(
       `SELECT *
        FROM review_queue_entries
-       WHERE source_session_id = ? AND review_kind = ?`
+       WHERE source_session_id = ? AND review_kind = ?`,
     )
     .get(input.sourceSessionId, input.reviewKind) as Record<string, unknown> | undefined;
 
@@ -523,7 +527,7 @@ export function upsertReviewQueueEntry(
 
 export function upsertDeletionCandidate(
   database: DatabaseSync,
-  input: DeletionCandidateInput
+  input: DeletionCandidateInput,
 ): DeletionCandidateRow {
   database
     .prepare(
@@ -543,7 +547,7 @@ export function upsertDeletionCandidate(
          safe_to_delete = excluded.safe_to_delete,
          candidate_state = excluded.candidate_state,
          reason = excluded.reason,
-         updated_at = ${currentTimestampExpression}`
+         updated_at = ${currentTimestampExpression}`,
     )
     .run(
       input.sourceSessionId,
@@ -553,7 +557,7 @@ export function upsertDeletionCandidate(
       input.sourceHash,
       input.safeToDelete ? 1 : 0,
       input.candidateState,
-      input.reason
+      input.reason,
     );
 
   const row = database
@@ -569,14 +573,14 @@ export function upsertDeletionCandidate(
 
 export function listPhaseCheckpoints(
   database: DatabaseSync,
-  sourceSessionId: number
+  sourceSessionId: number,
 ): PhaseCheckpointRow[] {
   const rows = database
     .prepare(
       `SELECT *
        FROM phase_checkpoints
        WHERE source_session_id = ?
-       ORDER BY phase_name`
+       ORDER BY phase_name`,
     )
     .all(sourceSessionId) as Array<Record<string, unknown>>;
 
@@ -586,13 +590,13 @@ export function listPhaseCheckpoints(
 export function getPhaseCheckpoint(
   database: DatabaseSync,
   sourceSessionId: number,
-  phaseName: PhaseName
+  phaseName: PhaseName,
 ): PhaseCheckpointRow | null {
   const row = database
     .prepare(
       `SELECT *
        FROM phase_checkpoints
-       WHERE source_session_id = ? AND phase_name = ?`
+       WHERE source_session_id = ? AND phase_name = ?`,
     )
     .get(sourceSessionId, phaseName) as Record<string, unknown> | undefined;
 
@@ -601,7 +605,7 @@ export function getPhaseCheckpoint(
 
 export function getSourceSessionBySessionId(
   database: DatabaseSync,
-  sessionId: string
+  sessionId: string,
 ): SourceSessionRow | null {
   const row = database
     .prepare(
@@ -609,7 +613,7 @@ export function getSourceSessionBySessionId(
        FROM source_sessions
        WHERE session_id = ?
        ORDER BY id DESC
-       LIMIT 1`
+       LIMIT 1`,
     )
     .get(sessionId) as Record<string, unknown> | undefined;
 
@@ -621,7 +625,7 @@ export function listSourceSessions(database: DatabaseSync): SourceSessionRow[] {
     .prepare(
       `SELECT *
        FROM source_sessions
-       ORDER BY updated_at ASC, id ASC`
+       ORDER BY updated_at ASC, id ASC`,
     )
     .all() as Array<Record<string, unknown>>;
 
@@ -630,7 +634,7 @@ export function listSourceSessions(database: DatabaseSync): SourceSessionRow[] {
 
 export function listSourceSessionsByLifecycle(
   database: DatabaseSync,
-  lifecycleStates: readonly LifecycleState[]
+  lifecycleStates: readonly LifecycleState[],
 ): SourceSessionRow[] {
   if (lifecycleStates.length === 0) {
     return [];
@@ -641,7 +645,7 @@ export function listSourceSessionsByLifecycle(
       `SELECT *
        FROM source_sessions
        WHERE current_lifecycle_state IN (${lifecycleStates.map(() => "?").join(", ")})
-       ORDER BY updated_at ASC, id ASC`
+       ORDER BY updated_at ASC, id ASC`,
     )
     .all(...lifecycleStates) as Array<Record<string, unknown>>;
 
@@ -653,7 +657,7 @@ export function listReviewQueueEntries(database: DatabaseSync): ReviewQueueEntry
     .prepare(
       `SELECT *
        FROM review_queue_entries
-       ORDER BY updated_at ASC, id ASC`
+       ORDER BY updated_at ASC, id ASC`,
     )
     .all() as Array<Record<string, unknown>>;
 
@@ -662,7 +666,7 @@ export function listReviewQueueEntries(database: DatabaseSync): ReviewQueueEntry
 
 export function getReviewQueueEntryBySessionId(
   database: DatabaseSync,
-  sessionId: string
+  sessionId: string,
 ): ReviewQueueEntryRow | null {
   const row = database
     .prepare(
@@ -670,7 +674,7 @@ export function getReviewQueueEntryBySessionId(
        FROM review_queue_entries
        WHERE session_id = ?
        ORDER BY updated_at DESC, id DESC
-       LIMIT 1`
+       LIMIT 1`,
     )
     .get(sessionId) as Record<string, unknown> | undefined;
 
@@ -682,7 +686,7 @@ export function listDeletionCandidates(database: DatabaseSync): DeletionCandidat
     .prepare(
       `SELECT *
        FROM deletion_candidates
-       ORDER BY updated_at ASC, id ASC`
+       ORDER BY updated_at ASC, id ASC`,
     )
     .all() as Array<Record<string, unknown>>;
 
@@ -691,7 +695,7 @@ export function listDeletionCandidates(database: DatabaseSync): DeletionCandidat
 
 export function getDeletionCandidateBySessionId(
   database: DatabaseSync,
-  sessionId: string
+  sessionId: string,
 ): DeletionCandidateRow | null {
   const row = database
     .prepare(
@@ -699,7 +703,7 @@ export function getDeletionCandidateBySessionId(
        FROM deletion_candidates
        WHERE session_id = ?
        ORDER BY updated_at DESC, id DESC
-       LIMIT 1`
+       LIMIT 1`,
     )
     .get(sessionId) as Record<string, unknown> | undefined;
 
@@ -708,7 +712,7 @@ export function getDeletionCandidateBySessionId(
 
 export function markDeletionCandidateApplied(
   database: DatabaseSync,
-  sourceSessionId: number
+  sourceSessionId: number,
 ): DeletionCandidateRow {
   database
     .prepare(
@@ -717,7 +721,7 @@ export function markDeletionCandidateApplied(
          candidate_state = 'applied',
          current_lifecycle_state = 'deleted',
          updated_at = ${currentTimestampExpression}
-       WHERE source_session_id = ?`
+       WHERE source_session_id = ?`,
     )
     .run(sourceSessionId);
 
@@ -732,16 +736,13 @@ export function markDeletionCandidateApplied(
   return mapDeletionCandidateRow(row);
 }
 
-export function listRunHistory(
-  database: DatabaseSync,
-  sourceSessionId: number
-): RunHistoryRow[] {
+export function listRunHistory(database: DatabaseSync, sourceSessionId: number): RunHistoryRow[] {
   const rows = database
     .prepare(
       `SELECT *
        FROM run_history
        WHERE source_session_id = ?
-       ORDER BY id ASC`
+       ORDER BY id ASC`,
     )
     .all(sourceSessionId) as Array<Record<string, unknown>>;
 
@@ -759,21 +760,21 @@ export function getOperationalStats(database: DatabaseSync): {
     .prepare(
       `SELECT current_lifecycle_state AS state, COUNT(*) AS total
        FROM source_sessions
-       GROUP BY current_lifecycle_state`
+       GROUP BY current_lifecycle_state`,
     )
     .all() as Array<Record<string, unknown>>;
   const reviewRows = database
     .prepare(
       `SELECT queue_state AS state, COUNT(*) AS total
        FROM review_queue_entries
-       GROUP BY queue_state`
+       GROUP BY queue_state`,
     )
     .all() as Array<Record<string, unknown>>;
   const deletionRows = database
     .prepare(
       `SELECT candidate_state AS state, COUNT(*) AS total
        FROM deletion_candidates
-       GROUP BY candidate_state`
+       GROUP BY candidate_state`,
     )
     .all() as Array<Record<string, unknown>>;
   const blockedReasonRows = database
@@ -781,7 +782,7 @@ export function getOperationalStats(database: DatabaseSync): {
       `SELECT reason AS state, COUNT(*) AS total
        FROM deletion_candidates
        WHERE safe_to_delete = 0
-       GROUP BY reason`
+       GROUP BY reason`,
     )
     .all() as Array<Record<string, unknown>>;
 
@@ -790,7 +791,7 @@ export function getOperationalStats(database: DatabaseSync): {
     deletionCandidates: toCountMap(deletionRows),
     reviewQueue: toCountMap(reviewRows),
     sessionsByLifecycle: toCountMap(lifecycleRows),
-    totalSessions: listSourceSessions(database).length
+    totalSessions: listSourceSessions(database).length,
   };
 }
 

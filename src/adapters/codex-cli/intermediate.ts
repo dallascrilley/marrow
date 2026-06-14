@@ -2,7 +2,7 @@ import type {
   ParseTranscriptOptions,
   ParseTranscriptResult,
   TranscriptRecord,
-  WorkspaceMapping
+  WorkspaceMapping,
 } from "../_common/intermediate.js";
 
 /**

@@ -1,19 +1,19 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import test from "node:test";
 
 import {
   eventFixture,
   eventSchema,
-  sourceSessionFixture,
-  sourceSessionSchema,
   learningFixture,
   learningSchema,
   retentionReceiptFixture,
   retentionReceiptSchema,
+  sourceSessionFixture,
+  sourceSessionSchema,
   summaryFixture,
   summarySchema,
   turnFixture,
-  turnSchema
+  turnSchema,
 } from "../dist/models/canonical.js";
 
 test("canonical fixtures are frozen stable targets", () => {
@@ -39,18 +39,15 @@ test("model schemas accept serialized canonical fixtures", () => {
   assert.deepEqual(summarySchema.parse(roundTripSummary), summaryFixture);
   assert.deepEqual(
     retentionReceiptSchema.parse(roundTripRetentionReceipt),
-    retentionReceiptFixture
+    retentionReceiptFixture,
   );
-  assert.deepEqual(
-    sourceSessionSchema.parse(roundTripSourceSession),
-    sourceSessionFixture
-  );
+  assert.deepEqual(sourceSessionSchema.parse(roundTripSourceSession), sourceSessionFixture);
 });
 
 test("event schema rejects malformed event payloads", () => {
   const malformed = {
     ...eventFixture,
-    type: "bogus"
+    type: "bogus",
   };
 
   assert.throws(() => {
@@ -61,7 +58,7 @@ test("event schema rejects malformed event payloads", () => {
 test("turn schema rejects negative ordinals", () => {
   const malformed = {
     ...turnFixture,
-    index: -1
+    index: -1,
   };
 
   assert.throws(() => {
@@ -72,7 +69,7 @@ test("turn schema rejects negative ordinals", () => {
 test("learning schema rejects invalid confidence labels", () => {
   const malformed = {
     ...learningFixture,
-    confidence: "certain"
+    confidence: "certain",
   };
 
   assert.throws(() => {
@@ -83,7 +80,7 @@ test("learning schema rejects invalid confidence labels", () => {
 test("summary schema rejects blank titles", () => {
   const malformed = {
     ...summaryFixture,
-    topic: ""
+    topic: "",
   };
 
   assert.throws(() => {
@@ -94,7 +91,7 @@ test("summary schema rejects blank titles", () => {
 test("retention receipt schema rejects invalid retention statuses", () => {
   const malformed = {
     ...retentionReceiptFixture,
-    safe_to_delete: "queued"
+    safe_to_delete: "queued",
   };
 
   assert.throws(() => {
@@ -106,7 +103,7 @@ test("source session schema rejects malformed nested payloads", () => {
   const malformed = {
     ...sourceSessionFixture,
     ingest_status: "queued",
-    updated_at: "not-a-timestamp"
+    updated_at: "not-a-timestamp",
   };
 
   assert.throws(() => {

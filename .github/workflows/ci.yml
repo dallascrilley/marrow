@@ -1,0 +1,22 @@
+# CI runs the same entrypoint as local dev (script/cibuild) so they never drift.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: cibuild
+        run: ./script/cibuild

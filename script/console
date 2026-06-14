@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#
+# script/console — open an interactive REPL / shell wired to the app.
+. "$(dirname "$0")/lib/common.sh"
+log "console: opening REPL"
+run_console "$@"

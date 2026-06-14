@@ -1,9 +1,9 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execFile } from "node:child_process";
+import test from "node:test";
 import { promisify } from "node:util";
 
 import {
@@ -15,10 +15,7 @@ import {
 const execFileAsync = promisify(execFile);
 
 test("normaliseGitRemote strips scheme and .git suffix", () => {
-  assert.equal(
-    normaliseGitRemote("https://GitHub.com/Org/Repo.git"),
-    "github.com/org/repo",
-  );
+  assert.equal(normaliseGitRemote("https://GitHub.com/Org/Repo.git"), "github.com/org/repo");
 });
 
 test("resolveProjectId prefers git remote over path and declared key", async () => {

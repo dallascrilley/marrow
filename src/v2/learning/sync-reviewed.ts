@@ -1,10 +1,9 @@
-import type { SourceSession } from "../../models/canonical.js";
-import type { Learning } from "../../models/canonical.js";
+import type { Learning, SourceSession } from "../../models/canonical.js";
 import type { SupportedSource } from "../../pipeline/discover.js";
-import { resolveProjectIdForSession } from "../project/resolve.js";
 import { replayBundles, saveSessionBundle } from "../instinct/bundle.js";
 import { buildSessionBundleFromLearnings } from "../instinct/from-learning.js";
 import { saveAllInstincts } from "../instinct/store.js";
+import { resolveProjectIdForSession } from "../project/resolve.js";
 
 export async function syncReviewedLearningsToInstinctStore(input: {
   session: SourceSession;

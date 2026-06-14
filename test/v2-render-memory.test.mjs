@@ -1,13 +1,12 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-
+import test from "node:test";
+import { instinctSchema } from "../dist/v2/instinct/schema.js";
 import {
   MEMORY_LINE_CAP,
   renderMemoryMarkdown,
   selectInstinctsForRollup,
   shouldIncludeInRollup,
 } from "../dist/v2/vault/render-memory.js";
-import { instinctSchema } from "../dist/v2/instinct/schema.js";
 
 function instinct(overrides = {}) {
   return instinctSchema.parse({
@@ -24,9 +23,7 @@ function instinct(overrides = {}) {
       first_session: "sess-1",
       first_observed_at: "2026-05-19T10:00:00Z",
       source_refs: [],
-      observations: [
-        { session: "sess-1", reinforcing: true, at: "2026-05-19T10:00:00Z" },
-      ],
+      observations: [{ session: "sess-1", reinforcing: true, at: "2026-05-19T10:00:00Z" }],
     },
     related: [],
     created_at: "2026-05-19T10:00:00Z",
@@ -39,25 +36,15 @@ function instinct(overrides = {}) {
 test("shouldIncludeInRollup follows proven and established thresholds", () => {
   assert.equal(shouldIncludeInRollup(instinct({ maturity: "proven" })), true);
   assert.equal(
-    shouldIncludeInRollup(
-      instinct({ maturity: "established", confidence: 0.69 }),
-    ),
+    shouldIncludeInRollup(instinct({ maturity: "established", confidence: 0.69 })),
     false,
   );
   assert.equal(
-    shouldIncludeInRollup(
-      instinct({ maturity: "established", confidence: 0.71 }),
-    ),
+    shouldIncludeInRollup(instinct({ maturity: "established", confidence: 0.71 })),
     true,
   );
-  assert.equal(
-    shouldIncludeInRollup(instinct({ maturity: "candidate", confidence: 0.59 })),
-    false,
-  );
-  assert.equal(
-    shouldIncludeInRollup(instinct({ maturity: "candidate", confidence: 0.61 })),
-    true,
-  );
+  assert.equal(shouldIncludeInRollup(instinct({ maturity: "candidate", confidence: 0.59 })), false);
+  assert.equal(shouldIncludeInRollup(instinct({ maturity: "candidate", confidence: 0.61 })), true);
 });
 
 test("renderMemoryMarkdown spills when line cap exceeded", () => {

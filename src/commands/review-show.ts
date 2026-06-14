@@ -3,7 +3,10 @@ import type { DatabaseSync } from "node:sqlite";
 import type { CommandContext } from "../cli.js";
 import { getReviewQueueEntryBySessionId } from "../db/ledger.js";
 
-export async function executeReviewShow(context: CommandContext, database: DatabaseSync): Promise<number> {
+export async function executeReviewShow(
+  context: CommandContext,
+  database: DatabaseSync,
+): Promise<number> {
   const sessionId = context.args[0];
 
   if (!sessionId) {

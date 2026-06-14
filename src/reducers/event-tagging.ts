@@ -1,6 +1,6 @@
 import type { Event, EventType } from "../models/canonical.js";
-import type { GroupedTurn } from "./turn-grouping.js";
 import { pruneTranscriptPayload } from "./payload-pruning.js";
+import type { GroupedTurn } from "./turn-grouping.js";
 
 const decisionPatterns = [
   /\bdecided to\b/i,
@@ -23,7 +23,7 @@ const decisionPatterns = [
   /\b(?:design|approach).+\bfor\b.+\bis\b/i,
   /\bconclusion:?\b/i,
   /\b(?:verdict|outcome|result).+\b(?:is|was)\b/i,
-  /\b(?:ranking|comparison|versus|vs\.?)\b/i
+  /\b(?:ranking|comparison|versus|vs\.?)\b/i,
 ] as const;
 
 const failurePatterns = [
@@ -35,7 +35,7 @@ const failurePatterns = [
   /\bunable to\b/i,
   /\bno such\b/i,
   /\benoent\b/i,
-  /\beacces\b/i
+  /\beacces\b/i,
 ] as const;
 
 const fixPatterns = [
@@ -45,7 +45,7 @@ const fixPatterns = [
   /\bcorrected\b/i,
   /\bupdated\b.+\bto (?:fix|handle|avoid)\b/i,
   /\bchanged\b.+\bto (?:fix|handle|avoid)\b/i,
-  /\broot cause was\b/i
+  /\broot cause was\b/i,
 ] as const;
 
 const nextStepPatterns = [
@@ -54,7 +54,7 @@ const nextStepPatterns = [
   /\bstill need to\b/i,
   /\bremaining (?:work|task|issue|step|item)s?\b/i,
   /\bleft to do\b/i,
-  /\bfollow-?up (?:needed|required|is|will|task|item|step)s?\b/i
+  /\bfollow-?up (?:needed|required|is|will|task|item|step)s?\b/i,
 ] as const;
 
 const verificationCommandPattern =
@@ -64,12 +64,12 @@ const verificationTextPatterns = [
   /\bconfirmed\b/i,
   /\btests? pass(?:ed)?\b/i,
   /\bbuild succeeded\b/i,
-  /\ball checks passed\b/i
+  /\ball checks passed\b/i,
 ] as const;
 const noisyWrapperPatterns = [
   /<attached_files>/i,
   /<code_selection\b/i,
-  /<plugin_info\b/i
+  /<plugin_info\b/i,
 ] as const;
 
 export function tagTurnEvents(turns: GroupedTurn[]): Event[] {
@@ -81,17 +81,29 @@ export function tagTurnEvents(turns: GroupedTurn[]): Event[] {
       const text = extractRecordText(record);
 
       if (text !== null) {
-        maybePushEvent(events, seen, createPatternEvent(turn, record, text, "failure", failurePatterns));
+        maybePushEvent(
+          events,
+          seen,
+          createPatternEvent(turn, record, text, "failure", failurePatterns),
+        );
         maybePushEvent(events, seen, createPatternEvent(turn, record, text, "fix", fixPatterns));
-        maybePushEvent(events, seen, createPatternEvent(turn, record, text, "decision", decisionPatterns));
-        maybePushEvent(events, seen, createPatternEvent(turn, record, text, "next_step", nextStepPatterns));
+        maybePushEvent(
+          events,
+          seen,
+          createPatternEvent(turn, record, text, "decision", decisionPatterns),
+        );
+        maybePushEvent(
+          events,
+          seen,
+          createPatternEvent(turn, record, text, "next_step", nextStepPatterns),
+        );
         maybePushEvent(
           events,
           seen,
           createPatternEvent(turn, record, text, "verification", verificationTextPatterns, {
             confidence: "medium",
-            summaryPrefix: "Verification noted: "
-          })
+            summaryPrefix: "Verification noted: ",
+          }),
         );
       }
 
@@ -107,9 +119,9 @@ export function tagTurnEvents(turns: GroupedTurn[]): Event[] {
             type: "verification",
             payloadPatch: {
               matched_rule: "verification_command",
-              verification_command: verificationCommand
-            }
-          })
+              verification_command: verificationCommand,
+            },
+          }),
         );
       }
     }
@@ -142,7 +154,7 @@ function createPatternEvent(
   options?: {
     confidence?: Event["confidence"];
     summaryPrefix?: string;
-  }
+  },
 ): Event | null {
   const matchedPattern = patterns.find((pattern) => pattern.test(text));
 
@@ -181,8 +193,8 @@ function createPatternEvent(
     type,
     ...(options?.confidence === undefined ? {} : { confidence: options.confidence }),
     payloadPatch: {
-      matched_rule: matchedPattern.source
-    }
+      matched_rule: matchedPattern.source,
+    },
   });
 }
 
@@ -203,13 +215,13 @@ function createEvent(options: {
     summary: options.summary,
     payload_small: {
       ...basePayload,
-      ...options.payloadPatch
+      ...options.payloadPatch,
     },
     confidence: options.confidence ?? inferConfidence(options.type),
     source_offsets: {
       start_line: options.record.provenance.lineNumber,
-      end_line: options.record.provenance.lineNumber
-    }
+      end_line: options.record.provenance.lineNumber,
+    },
   };
 }
 

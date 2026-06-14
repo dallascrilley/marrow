@@ -1,9 +1,8 @@
 import { readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-
+import type { DatabaseSync } from "node:sqlite";
 import type { CommandContext } from "../cli.js";
 import { getRuntimePath, getRuntimeRoot } from "../config/paths.js";
-import type { DatabaseSync } from "node:sqlite";
 import { listSourceSessions } from "../db/ledger.js";
 import { resolveProjectId } from "../v2/project/resolve.js";
 
@@ -31,8 +30,7 @@ export async function executeMigrateProjectIds(
         await cp(sourceDir, targetDir, { recursive: true, force: false });
         entry.applied = true;
       } catch (error) {
-        entry.apply_error =
-          error instanceof Error ? error.message : String(error);
+        entry.apply_error = error instanceof Error ? error.message : String(error);
       }
     }
   }
@@ -77,9 +75,7 @@ type MigrationEntry = {
   apply_error?: string;
 };
 
-async function collectMigrationEntries(
-  database: DatabaseSync,
-): Promise<MigrationEntry[]> {
+async function collectMigrationEntries(database: DatabaseSync): Promise<MigrationEntry[]> {
   const resolvedAt = new Date().toISOString();
   const byOldKey = new Map<string, MigrationEntry>();
 
@@ -121,7 +117,5 @@ async function collectMigrationEntries(
     // knowledge/projects may not exist yet
   }
 
-  return [...byOldKey.values()].sort((left, right) =>
-    left.old_key.localeCompare(right.old_key),
-  );
+  return [...byOldKey.values()].sort((left, right) => left.old_key.localeCompare(right.old_key));
 }

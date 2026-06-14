@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#
+# script/update — refresh the project after pulling changes (deps, migrations).
+# Run after every `git pull`. Idempotent.
+. "$(dirname "$0")/lib/common.sh"
+log "update: syncing project state"
+run_update "$@"

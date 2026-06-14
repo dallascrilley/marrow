@@ -9,7 +9,7 @@ export const phaseNames = [
   "extracted",
   "archived",
   "deletion_candidate",
-  "deleted"
+  "deleted",
 ] as const;
 
 export const phaseStates = [
@@ -18,7 +18,7 @@ export const phaseStates = [
   "completed",
   "stale",
   "failed",
-  "skipped"
+  "skipped",
 ] as const;
 
 export type PhaseName = (typeof phaseNames)[number];
@@ -154,7 +154,7 @@ export function isPhaseName(value: string): value is PhaseName {
 
 export function resolveLifecycleStateForPhase(
   phaseName: PhaseName,
-  phaseState: PhaseState
+  phaseState: PhaseState,
 ): LifecycleState {
   if (phaseState === "completed") {
     return phaseName;
@@ -169,7 +169,7 @@ export function resolveLifecycleStateForPhase(
 
 export function toSourceSessionInsertRecord(
   session: SourceSession,
-  lifecycleState: LifecycleState
+  lifecycleState: LifecycleState,
 ): Record<string, string> {
   return {
     conversation_id: session.conversation_id,
@@ -184,7 +184,7 @@ export function toSourceSessionInsertRecord(
     source_tool: session.source_tool,
     started_at: session.started_at,
     updated_at: session.updated_at,
-    workspace_path: session.workspace_path
+    workspace_path: session.workspace_path,
   };
 }
 

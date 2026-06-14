@@ -14,156 +14,147 @@ import { resolveProjectIdForLegacyKey } from "../v2/project/resolve.js";
 export const wikiMemorySchemaVersion = "asd.wiki_memory.v1";
 
 export type WikiMemoryRecord = {
-	schema_version: typeof wikiMemorySchemaVersion;
-	id: string;
-	kind: "project_learning";
-	project: {
-		key: string;
-		root: string | null;
-	};
-	title: string;
-	body: string;
-	evidence: {
-		learning_id: string;
-		promotion_basis: string;
-		evidence: string[];
-		source_refs: Learning["source_refs"];
-	};
-	review: {
-		verdict: "keep";
-		confidence: Learning["confidence"];
-		source: "deterministic-export" | "reviewed-export";
-	};
-	created_at: string;
+  schema_version: typeof wikiMemorySchemaVersion;
+  id: string;
+  kind: "project_learning";
+  project: {
+    key: string;
+    root: string | null;
+  };
+  title: string;
+  body: string;
+  evidence: {
+    learning_id: string;
+    promotion_basis: string;
+    evidence: string[];
+    source_refs: Learning["source_refs"];
+  };
+  review: {
+    verdict: "keep";
+    confidence: Learning["confidence"];
+    source: "deterministic-export" | "reviewed-export";
+  };
+  created_at: string;
 };
 
 export async function executeMemoryExportWiki(
-	context: CommandContext,
-	database: DatabaseSync,
+  context: CommandContext,
+  database: DatabaseSync,
 ): Promise<number> {
-	const records = await buildWikiMemoryExport(database);
-	const exportDir = await ensureRuntimePath("wikiMemoryExports");
-	const exportPath = join(exportDir, "reviewed-memory.jsonl");
-	const contents =
-		records.length === 0
-			? ""
-			: `${records.map((record) => JSON.stringify(record)).join("\n")}\n`;
+  const records = await buildWikiMemoryExport(database);
+  const exportDir = await ensureRuntimePath("wikiMemoryExports");
+  const exportPath = join(exportDir, "reviewed-memory.jsonl");
+  const contents =
+    records.length === 0 ? "" : `${records.map((record) => JSON.stringify(record)).join("\n")}\n`;
 
-	await writeFile(exportPath, contents, "utf8");
+  await writeFile(exportPath, contents, "utf8");
 
-	context.output.info(
-		`Exported ${records.length} wiki memory ${records.length === 1 ? "record" : "records"}.`,
-	);
-	context.output.info(`Export path: ${exportPath}`);
+  context.output.info(
+    `Exported ${records.length} wiki memory ${records.length === 1 ? "record" : "records"}.`,
+  );
+  context.output.info(`Export path: ${exportPath}`);
 
-	return 0;
+  return 0;
 }
 
-export async function buildWikiMemoryExport(
-	database: DatabaseSync,
-): Promise<WikiMemoryRecord[]> {
-	const sessions = listSourceSessions(database);
-	const reviewedRoot = join(getRuntimePath("root"), "knowledge", "projects-reviewed");
-	const projectRoot =
-		(await directoryExists(reviewedRoot)) ? reviewedRoot : getRuntimePath("knowledgeProjects");
-	const projectDirs = await readDirectoryNames(projectRoot);
-	const records: WikiMemoryRecord[] = [];
-	const reviewSource =
-		projectRoot === reviewedRoot ? "reviewed-export" : "deterministic-export";
-	const resolvedByDir = new Map<string, string>();
+export async function buildWikiMemoryExport(database: DatabaseSync): Promise<WikiMemoryRecord[]> {
+  const sessions = listSourceSessions(database);
+  const reviewedRoot = join(getRuntimePath("root"), "knowledge", "projects-reviewed");
+  const projectRoot = (await directoryExists(reviewedRoot))
+    ? reviewedRoot
+    : getRuntimePath("knowledgeProjects");
+  const projectDirs = await readDirectoryNames(projectRoot);
+  const records: WikiMemoryRecord[] = [];
+  const reviewSource = projectRoot === reviewedRoot ? "reviewed-export" : "deterministic-export";
+  const resolvedByDir = new Map<string, string>();
 
-	for (const projectKey of projectDirs.sort()) {
-		let resolvedProjectId = resolvedByDir.get(projectKey);
-		if (resolvedProjectId === undefined) {
-			resolvedProjectId = await resolveProjectIdForLegacyKey(
-				projectKey,
-				sessions,
-			);
-			resolvedByDir.set(projectKey, resolvedProjectId);
-		}
+  for (const projectKey of projectDirs.sort()) {
+    let resolvedProjectId = resolvedByDir.get(projectKey);
+    if (resolvedProjectId === undefined) {
+      resolvedProjectId = await resolveProjectIdForLegacyKey(projectKey, sessions);
+      resolvedByDir.set(projectKey, resolvedProjectId);
+    }
 
-		const projectDir = join(projectRoot, projectKey);
-		const merged = await mergeProjectKnowledgeDirectory(projectDir);
-		for (const learning of merged.merged) {
-			if (learning.scope !== "project") continue;
-			records.push(
-				toWikiMemoryRecord(learning, reviewSource, resolvedProjectId),
-			);
-		}
-	}
+    const projectDir = join(projectRoot, projectKey);
+    const merged = await mergeProjectKnowledgeDirectory(projectDir);
+    for (const learning of merged.merged) {
+      if (learning.scope !== "project") continue;
+      records.push(toWikiMemoryRecord(learning, reviewSource, resolvedProjectId));
+    }
+  }
 
-	records.sort((left, right) => left.id.localeCompare(right.id));
-	return records;
+  records.sort((left, right) => left.id.localeCompare(right.id));
+  return records;
 }
 
 function toWikiMemoryRecord(
-	learning: Learning,
-	reviewSource: WikiMemoryRecord["review"]["source"],
-	resolvedProjectId: string,
+  learning: Learning,
+  reviewSource: WikiMemoryRecord["review"]["source"],
+  resolvedProjectId: string,
 ): WikiMemoryRecord {
-	return {
-		schema_version: wikiMemorySchemaVersion,
-		id: stableRecordId(learning, resolvedProjectId),
-		kind: "project_learning",
-		project: {
-			key: resolvedProjectId,
-			root: null,
-		},
-		title: learning.title,
-		body: learning.statement,
-		evidence: {
-			learning_id: learning.learning_id,
-			promotion_basis: learning.promotion_basis,
-			evidence: learning.evidence,
-			source_refs: learning.source_refs,
-		},
-		review: {
-			verdict: "keep",
-			confidence: learning.confidence,
-			source: reviewSource,
-		},
-		created_at: inferCreatedAt(learning),
-	};
+  return {
+    schema_version: wikiMemorySchemaVersion,
+    id: stableRecordId(learning, resolvedProjectId),
+    kind: "project_learning",
+    project: {
+      key: resolvedProjectId,
+      root: null,
+    },
+    title: learning.title,
+    body: learning.statement,
+    evidence: {
+      learning_id: learning.learning_id,
+      promotion_basis: learning.promotion_basis,
+      evidence: learning.evidence,
+      source_refs: learning.source_refs,
+    },
+    review: {
+      verdict: "keep",
+      confidence: learning.confidence,
+      source: reviewSource,
+    },
+    created_at: inferCreatedAt(learning),
+  };
 }
 
 function stableRecordId(learning: Learning, resolvedProjectId: string): string {
-	const stablePayload = JSON.stringify({
-		schema_version: wikiMemorySchemaVersion,
-		learning_id: learning.learning_id,
-		project_key: resolvedProjectId,
-		title: learning.title,
-		body: learning.statement,
-		source_refs: learning.source_refs,
-	});
-	return `sha256:${createHash("sha256").update(stablePayload).digest("hex")}`;
+  const stablePayload = JSON.stringify({
+    schema_version: wikiMemorySchemaVersion,
+    learning_id: learning.learning_id,
+    project_key: resolvedProjectId,
+    title: learning.title,
+    body: learning.statement,
+    source_refs: learning.source_refs,
+  });
+  return `sha256:${createHash("sha256").update(stablePayload).digest("hex")}`;
 }
 
 function inferCreatedAt(learning: Learning): string {
-	const firstRef = learning.source_refs[0];
-	const line = firstRef?.line ?? 0;
-	const seconds = Math.max(0, line);
-	return new Date(Date.UTC(1970, 0, 1, 0, 0, seconds)).toISOString();
+  const firstRef = learning.source_refs[0];
+  const line = firstRef?.line ?? 0;
+  const seconds = Math.max(0, line);
+  return new Date(Date.UTC(1970, 0, 1, 0, 0, seconds)).toISOString();
 }
 
 async function readDirectoryNames(path: string): Promise<string[]> {
-	try {
-		return await readdir(path);
-	} catch (error) {
-		if (isNodeError(error) && error.code === "ENOENT") return [];
-		throw error;
-	}
+  try {
+    return await readdir(path);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return [];
+    throw error;
+  }
 }
 
 async function directoryExists(path: string): Promise<boolean> {
-	try {
-		const entries = await readdir(path);
-		return entries.length > 0;
-	} catch (error) {
-		if (isNodeError(error) && error.code === "ENOENT") return false;
-		throw error;
-	}
+  try {
+    const entries = await readdir(path);
+    return entries.length > 0;
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return false;
+    throw error;
+  }
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-	return error instanceof Error && "code" in error;
+  return error instanceof Error && "code" in error;
 }

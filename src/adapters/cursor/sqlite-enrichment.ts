@@ -25,7 +25,7 @@ export type CursorAttributionAccumulator = {
 export function readCursorKvRowsReadOnly(databasePath: string): CursorKvRow[] {
   const database = new DatabaseSync(databasePath, {
     open: true,
-    readOnly: true
+    readOnly: true,
   });
 
   try {
@@ -34,7 +34,7 @@ export function readCursorKvRowsReadOnly(databasePath: string): CursorKvRow[] {
         `SELECT name
          FROM sqlite_master
          WHERE type = 'table'
-         ORDER BY name`
+         ORDER BY name`,
       )
       .all()
       .map((row) => row.name)
@@ -59,7 +59,7 @@ export function readCursorKvRowsReadOnly(databasePath: string): CursorKvRow[] {
             OR lower(${keyColumn}) LIKE '%tracking%'
             OR lower(${keyColumn}) LIKE '%session%'
             OR lower(${keyColumn}) LIKE '%conversation%'
-            OR lower(${keyColumn}) LIKE '%request%'`
+            OR lower(${keyColumn}) LIKE '%request%'`,
       );
 
       for (const row of statement.all()) {
@@ -69,7 +69,7 @@ export function readCursorKvRowsReadOnly(databasePath: string): CursorKvRow[] {
 
         rows.push({
           entryKey: row.entryKey,
-          entryValue: parseDatabaseValue(row.entryValue)
+          entryValue: parseDatabaseValue(row.entryValue),
         });
       }
     }
@@ -89,7 +89,7 @@ export function createAttributionAccumulator(): CursorAttributionAccumulator {
     sessionIds: new Set<string>(),
     workspaceIds: new Set<string>(),
     workspacePaths: new Set<string>(),
-    workspaceStorageIds: new Set<string>()
+    workspaceStorageIds: new Set<string>(),
   };
 }
 
@@ -113,7 +113,7 @@ function visitJsonValue(
   value: JsonValue,
   path: string[],
   entryKey: string,
-  accumulator: CursorAttributionAccumulator
+  accumulator: CursorAttributionAccumulator,
 ): void {
   if (typeof value === "string") {
     collectStringSignals(value, path, entryKey, accumulator);
@@ -141,7 +141,8 @@ function visitJsonValue(
         accumulator.activeComposerIds.add(child);
       } else if (
         normalizedKey === "id" &&
-        (entryKey.includes("active") || path.some((segment) => segment.toLowerCase().includes("active")))
+        (entryKey.includes("active") ||
+          path.some((segment) => segment.toLowerCase().includes("active")))
       ) {
         accumulator.activeComposerIds.add(child);
       } else if (normalizedKey === "conversationid") {
@@ -165,7 +166,7 @@ function collectStringSignals(
   value: string,
   path: string[],
   entryKey: string,
-  accumulator: CursorAttributionAccumulator
+  accumulator: CursorAttributionAccumulator,
 ): void {
   for (const pathMatch of value.match(absolutePosixPathPattern) ?? []) {
     accumulator.workspacePaths.add(pathMatch);
@@ -175,16 +176,10 @@ function collectStringSignals(
     accumulator.workspacePaths.add(pathMatch);
   }
 
-  if (
-    path.some((segment) => segment.toLowerCase() === "path") ||
-    entryKey.includes("workspace")
-  ) {
+  if (path.some((segment) => segment.toLowerCase() === "path") || entryKey.includes("workspace")) {
     const trimmed = value.trim();
 
-    if (
-      trimmed.startsWith("/") ||
-      /^[A-Za-z]:\\/.test(trimmed)
-    ) {
+    if (trimmed.startsWith("/") || /^[A-Za-z]:\\/.test(trimmed)) {
       accumulator.workspacePaths.add(trimmed);
     }
   }
@@ -192,8 +187,7 @@ function collectStringSignals(
 
 function selectColumnName(rows: unknown[], candidates: readonly string[]): string | null {
   for (const row of rows) {
-    const columnName =
-      typeof row === "object" && row !== null && "name" in row ? row.name : null;
+    const columnName = typeof row === "object" && row !== null && "name" in row ? row.name : null;
 
     if (
       typeof columnName === "string" &&
@@ -216,11 +210,7 @@ function parseDatabaseValue(value: unknown): JsonValue {
     return parseTextValue(value);
   }
 
-  if (
-    value === null ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
+  if (value === null || typeof value === "number" || typeof value === "boolean") {
     return value;
   }
 

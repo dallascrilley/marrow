@@ -1,14 +1,10 @@
-import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-import {
-  parseInstinctYaml,
-  serializeInstinct,
-} from "../dist/v2/instinct/yaml-io.js";
+import test from "node:test";
 import { instinctSchema } from "../dist/v2/instinct/schema.js";
+import { parseInstinctYaml, serializeInstinct } from "../dist/v2/instinct/yaml-io.js";
 
 test("instinct YAML round-trip preserves core fields", () => {
   const instinct = instinctSchema.parse({
@@ -24,9 +20,7 @@ test("instinct YAML round-trip preserves core fields", () => {
     source: {
       first_session: "sess-1",
       first_observed_at: "2026-05-19T10:00:00Z",
-      source_refs: [
-        { kind: "file", path: "package.json", session: "sess-1" },
-      ],
+      source_refs: [{ kind: "file", path: "package.json", session: "sess-1" }],
       observations: [
         {
           session: "sess-1",
@@ -64,9 +58,7 @@ test("instinct schema rejects invalid id suffix", () => {
         first_session: "s",
         first_observed_at: "2026-05-19T10:00:00Z",
         source_refs: [],
-        observations: [
-          { session: "s", reinforcing: true, at: "2026-05-19T10:00:00Z" },
-        ],
+        observations: [{ session: "s", reinforcing: true, at: "2026-05-19T10:00:00Z" }],
       },
       related: [],
       created_at: "2026-05-19T10:00:00Z",

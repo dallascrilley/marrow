@@ -1,5 +1,5 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import test from "node:test";
 
 import { summarySchema, turnSchema } from "../dist/models/canonical.js";
 import { isDiscardableNoSignal } from "../dist/pipeline/retention.js";
