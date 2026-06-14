@@ -6,15 +6,15 @@ import type { SourceSessionRow } from "../db/queries.js";
 import { summarySchema } from "../models/canonical.js";
 import { getSessionManifestPath } from "../writers/manifest-writer.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
-import { runParsePhase } from "./parse.js";
-import { getReducedArtifactPath, type ReducedArtifact, runReducePhase } from "./reduce.js";
 import {
   assessLlmBudget,
   getDefaultMaxPerWindow,
-  recordLlmBudgetUse,
   type LlmBudgetStatus,
+  recordLlmBudgetUse,
 } from "./llm-budget.js";
-import { isLowSignalTopic, shouldAttemptLlmTopic, type LlmTopicGenerator } from "./summarize.js";
+import { runParsePhase } from "./parse.js";
+import { getReducedArtifactPath, type ReducedArtifact, runReducePhase } from "./reduce.js";
+import { isLowSignalTopic, type LlmTopicGenerator, shouldAttemptLlmTopic } from "./summarize.js";
 import { runSummarizePhase } from "./summarize-phase.js";
 
 export type ResummarizeSkipReason = "high_signal_topic" | "missing_manifest";

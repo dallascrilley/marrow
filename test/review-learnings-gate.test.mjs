@@ -3,9 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-
-import { createLedger } from "../dist/db/ledger.js";
 import { executeQualityReviewLearnings } from "../dist/commands/quality-review-learnings.js";
+import { createLedger } from "../dist/db/ledger.js";
 
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
 
