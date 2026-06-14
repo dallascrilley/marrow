@@ -5,7 +5,7 @@ in-flight notes.
 
 ## Now
 
-- `td-0633d9` — SessionEnd hook (`asd hooks install`) — in progress
+_(none — pick from Next)_
 
 ## Next (deferred per whats-next 2026-05-27 anti-goal)
 
@@ -16,6 +16,7 @@ in-flight notes.
 
 ## Done (foundational v2 + post-ship hygiene)
 
+- SessionEnd hook — `asd hooks install` (td-0633d9, PR #24)
 - Project bootstrap on main (`AGENTS.md`, `script/cibuild`, biome, CI)
 - Kimi LAUNCH_CRITERIA gates validated
 - Search command implemented (`asd search`)
