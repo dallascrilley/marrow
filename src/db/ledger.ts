@@ -284,9 +284,14 @@ export function upsertSourceSession(
         )
         .run(record);
 
+      const sourceSession = getSourceSessionByIdentity(database, session);
+      if (!sourceSession) {
+        throw new Error(`Failed to load source session ${session.session_id} after insert`);
+      }
+
       return {
         sourceChanged: false,
-        sourceSession: getSourceSessionByIdentity(database, session)!,
+        sourceSession,
         stalePhases: [],
       };
     }

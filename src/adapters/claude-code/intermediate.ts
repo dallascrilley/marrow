@@ -1,7 +1,6 @@
 import type {
   ParseTranscriptOptions,
   ParseTranscriptResult,
-  TranscriptDiscovery,
   TranscriptRecord,
   WorkspaceMapping,
 } from "../_common/intermediate.js";

@@ -188,7 +188,7 @@ function classifyRecordKind(
  * `payload.message`).
  */
 function extractMessageText(
-  parsedLine: JsonRecord,
+  _parsedLine: JsonRecord,
   kind: TranscriptRecordKind,
   payload: JsonValue | undefined,
 ): string | null {
@@ -222,7 +222,7 @@ function extractMessageText(
  * payload object, then fall back to `payload.output` for result records.
  */
 function extractCodexToolInputText(
-  parsedLine: JsonRecord,
+  _parsedLine: JsonRecord,
   payload: JsonValue | undefined,
 ): string | null {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {

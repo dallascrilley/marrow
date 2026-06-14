@@ -1,7 +1,5 @@
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
-
-import type { JsonValue } from "../../models/canonical.js";
 import { type JsonRecord, parseJsonLine } from "../_common/jsonl.js";
 import {
   detectRedaction,

@@ -370,7 +370,7 @@ export async function readWikiMemoryJsonl(path: string): Promise<WikiMemoryRecor
   const records: WikiMemoryRecord[] = [];
   const lines = raw.split(/\r?\n/);
   for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index]!.trim();
+    const line = lines[index]?.trim() ?? "";
     if (line.length === 0) continue;
     let parsed: unknown;
     try {

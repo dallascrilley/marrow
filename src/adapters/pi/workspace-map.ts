@@ -84,8 +84,10 @@ function extractWorkspaceSlug(absoluteSessionPath: string): string {
   for (let index = 0; index < segments.length - 3; index += 1) {
     // Look for `.pi/agent/sessions/<slug>/...`. macOS sees `.pi` as a leading
     // hidden segment; on Windows the same parents apply.
+    const segment = segments[index];
     if (
-      stripDotPrefix(segments[index]!) === PI_SESSIONS_DIRNAME_MARKER &&
+      segment !== undefined &&
+      stripDotPrefix(segment) === PI_SESSIONS_DIRNAME_MARKER &&
       segments[index + 1] === PI_AGENT_DIRNAME_MARKER &&
       segments[index + 2] === PI_SESSIONS_LEAF_DIRNAME_MARKER
     ) {

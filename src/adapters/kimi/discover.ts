@@ -1,6 +1,6 @@
 import { lstat, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { pathExists } from "../_common/fs.js";
 import { hashFileContents } from "../_common/hash.js";
 import type { KimiDiscoveryResult, KimiTranscriptDiscovery } from "./intermediate.js";
