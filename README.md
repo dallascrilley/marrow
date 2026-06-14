@@ -28,6 +28,7 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 | SessionEnd → ingest (Claude Code) | `asd hooks install` — [`docs/recipes/session-end-ingest-hook.md`](docs/recipes/session-end-ingest-hook.md) |
 | Scheduled ingest + wiki push | [`docs/recipes/scheduled-memory-pipeline.md`](docs/recipes/scheduled-memory-pipeline.md) |
 | Skill usage evidence in corpus | `asd skill evidence <skill-id>` (after `export-index`) |
+| Skill adherence report | `asd skill report <skill-id>` — checklist score + suggestions |
 
 ## Requirements
 

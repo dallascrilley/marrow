@@ -12,11 +12,11 @@ _(none — pick from Next)_
 - `td-3d5e2b` — MCP server (ADR-0005; 3-tool cap)
 - `td-5aeb65` — Cross-project promotion (ADR-0006)
 - `td-b5b7b4` — Daemon-LLM separation
-- `td-02cfd4` — Skill adherence scoring + improvement suggestions (evidence v1 done)
+- `td-02cfd4` — Skill adherence LLM review (heuristic report v2 done)
 
 ## Done (foundational v2 + post-ship hygiene)
 
-- Skill evidence v1 — `asd skill evidence` (td-02cfd4 slice, PR #25)
+- Skill report v2 — `asd skill report` (td-02cfd4, checklist scoring + suggestions)
 - SessionEnd hook — `asd hooks install` (td-0633d9, PR #24)
 - Corpus resummarize proof — `/tmp/agent-session-distillery/2026-05-27_corpus-resummarize/SUMMARY.md` (td-da57d1)
 - Project bootstrap on main (`AGENTS.md`, `script/cibuild`, biome, CI)
