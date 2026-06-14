@@ -5,17 +5,23 @@ in-flight notes.
 
 ## Now
 
-_(none — pick from Next)_
+- `td-2a3ff9` — unattended memory loop proof (whats-next R1)
 
-## Next (deferred per whats-next 2026-05-27 anti-goal)
+## Next (whats-next 2026-06-14)
 
-- `td-3d5e2b` — MCP server (ADR-0005; 3-tool cap)
+- `td-3efc5e` — quality audit `--topic-distribution` (R2)
+- `td-b5b7b4` — daemon-LLM separation (R3)
+- `td-984616` — automation LAUNCH_CRITERIA gates (R4)
+- `td-504382` — close v2 epic (R5)
+
+## Deferred (anti-goal 2026-06-14)
+
+- `td-3d5e2b` — MCP server (ADR-0005)
 - `td-5aeb65` — Cross-project promotion (ADR-0006)
-- `td-b5b7b4` — Daemon-LLM separation
 
 ## Done (foundational v2 + post-ship hygiene)
 
-- Skill adherence MVP — `asd skill evidence` + `asd skill report` (td-02cfd4, PR #25/#27)
+- Whats-next report: `docs/whats-next/2026-06-14.md`
 - SessionEnd hook — `asd hooks install` (td-0633d9, PR #24)
 - Corpus resummarize proof — `/tmp/agent-session-distillery/2026-05-27_corpus-resummarize/SUMMARY.md` (td-da57d1)
 - Project bootstrap on main (`AGENTS.md`, `script/cibuild`, biome, CI)
