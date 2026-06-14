@@ -43,9 +43,9 @@ function extractWorkspaceSlug(sessionPath: string): string {
   // Path shape: ~/.kimi/sessions/<workspace-slug>/<session-uuid>/wire.jsonl
   const parts = sessionPath.split(/[/\\]/);
   // Find the index after "sessions"
-  const sessionsIndex = parts.findIndex((p) => p === "sessions");
+  const sessionsIndex = parts.indexOf("sessions");
   if (sessionsIndex >= 0 && sessionsIndex + 1 < parts.length) {
-    return parts[sessionsIndex + 1]!;
+    return parts[sessionsIndex + 1] ?? "unknown";
   }
   return "unknown";
 }

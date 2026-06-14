@@ -271,7 +271,10 @@ function getSubcommandList(definition: CommandDefinition): string {
 }
 
 function resolveCommand(argv: string[]): ResolvedCommand | { error: string } {
-  const commandName = argv[0]!;
+  const commandName = argv[0];
+  if (!commandName) {
+    return { error: "Missing command. Pass --help for usage." };
+  }
   const maybeSubcommand = argv[1];
   const rest = argv.slice(2);
   const command = commandTree[commandName];
@@ -283,7 +286,7 @@ function resolveCommand(argv: string[]): ResolvedCommand | { error: string } {
   if (command.subcommands) {
     const subcommand = maybeSubcommand ? command.subcommands[maybeSubcommand] : undefined;
 
-    if (!subcommand) {
+    if (!maybeSubcommand || !subcommand) {
       return {
         error: `Unknown or missing subcommand for ${commandName}. Available: ${getSubcommandList(command)}`,
       };
@@ -292,7 +295,7 @@ function resolveCommand(argv: string[]): ResolvedCommand | { error: string } {
     return {
       args: rest,
       definition: subcommand,
-      path: [commandName, maybeSubcommand!],
+      path: [commandName, maybeSubcommand],
     };
   }
 

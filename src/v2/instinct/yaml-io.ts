@@ -204,7 +204,7 @@ function parseSimpleYaml(content: string): YamlNode {
   const flushBlock = (): void => {
     if (blockKey === null) return;
     const text = blockLines.join("\n").trimEnd();
-    const parent = stack[stack.length - 1]!.container as YamlNode;
+    const parent = stack[stack.length - 1]?.container as YamlNode;
     parent[blockKey] = text;
     blockKey = null;
     blockLines = [];
@@ -225,12 +225,19 @@ function parseSimpleYaml(content: string): YamlNode {
     const indent = line.search(/\S/u);
     const trimmed = line.trim();
 
-    while (stack.length > 1 && indent <= stack[stack.length - 1]!.indent) {
+    while (stack.length > 1) {
+      const top = stack.at(-1);
+      if (top === undefined || indent > top.indent) {
+        break;
+      }
       stack.pop();
     }
 
     if (trimmed.startsWith("- ")) {
-      const frame = stack[stack.length - 1]!;
+      const frame = stack.at(-1);
+      if (!frame) {
+        throw new Error("Expected stack frame");
+      }
       let list: unknown[];
       if (Array.isArray(frame.container)) {
         list = frame.container;
@@ -245,7 +252,11 @@ function parseSimpleYaml(content: string): YamlNode {
       const itemText = trimmed.slice(2).trim();
       if (itemText.includes(":")) {
         const [key, ...rest] = itemText.split(":");
-        const item: YamlNode = { [key!.trim()]: parseScalarValue(rest.join(":")) };
+        const itemKey = key?.trim();
+        if (!itemKey) {
+          continue;
+        }
+        const item: YamlNode = { [itemKey]: parseScalarValue(rest.join(":")) };
         list.push(item);
         stack.push({ indent, container: item });
       } else {
@@ -262,12 +273,15 @@ function parseSimpleYaml(content: string): YamlNode {
     if (rest === "|") {
       blockKey = key;
       blockLines = [];
-      const parent = stack[stack.length - 1]!.container as YamlNode;
+      const parent = stack[stack.length - 1]?.container as YamlNode;
       parent[key] = "";
       continue;
     }
 
-    const frame = stack[stack.length - 1]!;
+    const frame = stack.at(-1);
+    if (!frame) {
+      throw new Error("Expected stack frame");
+    }
     let parent: YamlNode;
     if (Array.isArray(frame.container)) {
       throw new Error("Cannot add key inside a YAML list");

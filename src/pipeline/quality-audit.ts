@@ -439,7 +439,7 @@ function percentileNearestRank(sortedCounts: readonly number[], quantile: number
 
   const rank = Math.ceil(quantile * sortedCounts.length);
   const index = Math.min(sortedCounts.length - 1, Math.max(0, rank - 1));
-  return sortedCounts[index]!;
+  return sortedCounts.at(index) ?? 0;
 }
 
 async function fileExists(path: string): Promise<boolean> {

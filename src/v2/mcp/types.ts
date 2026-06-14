@@ -3,13 +3,7 @@
 // Type-only. Not imported by v1 code paths.
 
 import { z } from "zod";
-import {
-  domainSchema,
-  type Instinct,
-  instinctIdSchema,
-  maturitySchema,
-  scopeSchema,
-} from "../instinct/schema.js";
+import { domainSchema, type Instinct, maturitySchema, scopeSchema } from "../instinct/schema.js";
 
 // Hard cap on the number of tools the MCP server exposes. New tools require
 // either usage-log evidence or an ADR amending 0005.
@@ -91,7 +85,7 @@ export interface RecentInstinctsOutput {
 
 // ---- Tool catalog (for registration with the MCP runtime) -----------
 
-export interface McpToolDescriptor<I, O> {
+export interface McpToolDescriptor<I, _O> {
   name: string;
   description: string;
   inputSchema: z.ZodType<I>;
