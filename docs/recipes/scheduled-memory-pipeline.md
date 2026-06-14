@@ -8,8 +8,9 @@ Uses the v1 CLI surface today; v2 instinct sync happens inside
 
 ```text
 ingest sync --resume --source <adapter>
+  → pipeline gate --max-per 5/24h
   → quality audit --limit 100
-  → [optional] quality review-learnings   # requires OPENROUTER_API_KEY
+  → [optional] quality review-learnings --if-new --max-per 5/24h   # requires OPENROUTER_API_KEY
   → quality apply-learning-review         # writes projects-reviewed + v2 instincts
   → memory export-wiki
   → memory push-wiki                      # requires ~/vault or ASD_VAULT_ROOT
@@ -44,6 +45,7 @@ Full resummarize may invoke `--llm-topic` when `OPENROUTER_API_KEY` is set.
 | `AGENT_SESSION_DISTILLERY_ROOT` | Runtime dir (default `~/.agent-session-distillery`) |
 | `ASD_VAULT_ROOT` | Vault root for `memory push-wiki` (default `~/vault`) |
 | `OPENROUTER_API_KEY` | Required only when running `quality review-learnings` |
+| `ASD_LLM_MAX_PER` | Sliding-window LLM budget for review-learnings (default `5/24h`) |
 
 Build the CLI once after checkout updates:
 

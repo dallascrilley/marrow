@@ -5,11 +5,11 @@ in-flight notes.
 
 ## Now
 
-- `td-b5b7b4` — daemon-LLM separation (R3)
+- (none — sprint items from whats-next 2026-06-14 complete)
 
-## Next (whats-next 2026-06-14)
+## Next
 
-- `td-504382` — close v2 epic (R5)
+- Deferred anti-goals only: MCP (`td-3d5e2b`), cross-project promotion (`td-5aeb65`)
 
 ## Deferred (anti-goal 2026-06-14)
 
@@ -18,6 +18,8 @@ in-flight notes.
 
 ## Done (foundational v2 + post-ship hygiene)
 
+- `td-504382` — v2 epic closed (foundational shipped; MCP/promotion deferred)
+- `td-b5b7b4` — daemon-LLM separation / pipeline gate (R3, ADR-0007)
 - `td-984616` — automation LAUNCH_CRITERIA gates (R4)
 - `td-3efc5e` — quality audit `--topic-distribution` (whats-next R2)
 - Whats-next report: `docs/whats-next/2026-06-14.md`

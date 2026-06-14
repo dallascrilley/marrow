@@ -13,6 +13,7 @@ import { executeIngestSync } from "./commands/ingest-sync.js";
 import { executeMemoryExportWiki } from "./commands/memory-export-wiki.js";
 import { executeMemoryPushWiki } from "./commands/memory-push-wiki.js";
 import { executeMigrateProjectIds } from "./commands/migrate-project-ids.js";
+import { executePipelineGate } from "./commands/pipeline-gate.js";
 import { executeQualityApplyLearningReview } from "./commands/quality-apply-learning-review.js";
 import { executeQualityAudit } from "./commands/quality-audit.js";
 import { executeQualityResummarize } from "./commands/quality-resummarize.js";
@@ -81,7 +82,7 @@ const commandTree: Record<string, CommandDefinition> = {
       },
       "review-learnings": {
         description:
-          "Review project learnings with OpenRouter LLM memory lint and write a sidecar report.",
+          "Review project learnings with OpenRouter LLM memory lint and write a sidecar report. Pass --if-new to skip when nothing is pending; --max-per 5/24h for sliding-window budget.",
         execute: async (context) => withLedger(context, executeQualityReviewLearnings),
       },
       "apply-learning-review": {
@@ -180,6 +181,16 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "Score SKILL.md checklist adherence across relevant sessions and emit improvement suggestions.",
         execute: async (context) => withLedger(context, executeSkillReport),
+      },
+    },
+  },
+  pipeline: {
+    description: "Cheap pipeline gates before LLM-bound memory passes.",
+    subcommands: {
+      gate: {
+        description:
+          "Report pending ingest work, unreviewed learnings, and LLM budget headroom without calling OpenRouter.",
+        execute: async (context) => withLedger(context, executePipelineGate),
       },
     },
   },
