@@ -64,7 +64,9 @@ export async function executeQualityReviewLearnings(
 
   const sessions = listSourceSessions(database).slice(0, options.limit);
   const reviewed = [];
+  const failures: Array<{ learning_id: string; reason: string; session_id: string }> = [];
   let reviewedLearningCount = 0;
+  let terminalFailureReason: string | undefined;
 
   for (const session of sessions) {
     if (
@@ -104,20 +106,25 @@ export async function executeQualityReviewLearnings(
         refreshLlm: options.refreshLlm,
       });
     } catch (error) {
+      // A provider/transport failure is NOT a review verdict. Record it as a
+      // failure (not a `reject` sidecar entry) and leave the learnings
+      // unreviewed so they remain pending for a later retry. Counting these
+      // toward reviewedLearningCount would falsely consume the LLM budget and
+      // poison the sidecar with permanent rejections (see apply-learning-review).
+      const message = error instanceof Error ? error.message : String(error);
       for (const learning of selectedLearnings) {
-        reviewed.push({
+        failures.push({
           learning_id: learning.learning_id,
-          reason: error instanceof Error ? error.message : String(error),
-          scope_key: learning.scope_key,
+          reason: message,
           session_id: session.session_id,
-          statement: learning.statement,
-          suggested_statement: learning.statement,
-          verdict: "reject",
-          durability: "unclear",
-          keep: false,
         });
       }
-      reviewedLearningCount += selectedLearnings.length;
+      // Terminal credential/quota errors fail identically for every call, so
+      // stop early instead of hammering the dead key for every session.
+      if (isTerminalProviderError(message)) {
+        terminalFailureReason = message;
+        break;
+      }
       continue;
     }
 
@@ -142,12 +149,19 @@ export async function executeQualityReviewLearnings(
   }
 
   const outputPath = join(getRuntimePath("reports"), "llm-learning-review.jsonl");
-  await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(
-    outputPath,
-    reviewed.length === 0 ? "" : `${reviewed.map((entry) => JSON.stringify(entry)).join("\n")}\n`,
-    "utf8",
-  );
+  // Only overwrite the sidecar when there are real reviews. If every call
+  // failed (e.g. provider quota), preserve any prior good sidecar instead of
+  // clobbering it with an empty file.
+  if (reviewed.length > 0) {
+    await mkdir(dirname(outputPath), { recursive: true });
+    await writeFile(
+      outputPath,
+      `${reviewed.map((entry) => JSON.stringify(entry)).join("\n")}\n`,
+      "utf8",
+    );
+  }
+
+  const providerFailed = reviewed.length === 0 && failures.length > 0;
 
   context.output.info(
     JSON.stringify(
@@ -157,6 +171,14 @@ export async function executeQualityReviewLearnings(
           options.noCache === true
             ? "disabled"
             : (options.cacheDir ?? join(getRuntimePath("root"), "cache", "llm-learning-review")),
+        failed: failures.length,
+        ...(providerFailed
+          ? {
+              skipped: true,
+              skip_reason: "llm_provider_error",
+              failure_reason: (terminalFailureReason ?? failures[0]?.reason ?? "").slice(0, 200),
+            }
+          : {}),
         model: options.model ?? process.env.OPENROUTER_MODEL ?? "openai/gpt-5-nano",
         path: outputPath,
         rejected: reviewed.filter((entry) => !entry.keep).length,
@@ -241,6 +263,18 @@ async function readProjectLearnings(projectKey: string, sessionId: string): Prom
 
     throw error;
   }
+}
+
+function isTerminalProviderError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("(401)") ||
+    normalized.includes("(403)") ||
+    normalized.includes("(429)") ||
+    normalized.includes("limit exceeded") ||
+    normalized.includes("key limit") ||
+    normalized.includes("quota")
+  );
 }
 
 function isMissingFileError(error: unknown): boolean {
