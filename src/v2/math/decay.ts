@@ -98,11 +98,12 @@ export function maturityStateFrom(
 
 function survivedContradiction(observations: readonly Observation[]): boolean {
   for (let i = 0; i < observations.length; i++) {
-    const o = observations[i]!;
+    const o = observations.at(i);
+    if (!o) continue;
     if (o.reinforcing) continue;
     let reinforcingAfter = 0;
     for (let j = i + 1; j < observations.length; j++) {
-      if (observations[j]!.reinforcing) reinforcingAfter += 1;
+      if (observations[j]?.reinforcing) reinforcingAfter += 1;
       if (reinforcingAfter >= 2) return true;
     }
   }

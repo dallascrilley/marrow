@@ -159,7 +159,7 @@ function parseOptions(args: readonly string[]): ApplyReviewOptions {
 }
 
 function parseStringOption(args: readonly string[], flag: string): string | undefined {
-  const flagIndex = args.findIndex((arg) => arg === flag);
+  const flagIndex = args.indexOf(flag);
   if (flagIndex === -1) {
     return undefined;
   }

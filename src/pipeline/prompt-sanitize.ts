@@ -172,7 +172,7 @@ export function capEvidenceText(
   const ellipsisBytes = Buffer.byteLength(ellipsis, "utf8");
   const budget = Math.max(0, maxBytes - ellipsisBytes);
   let end = budget;
-  while (end > 0 && (bytes[end]! & 0xc0) === 0x80) {
+  while (end > 0 && ((bytes.at(end) ?? 0) & 0xc0) === 0x80) {
     end -= 1;
   }
 

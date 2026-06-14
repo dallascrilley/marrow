@@ -35,13 +35,15 @@ export async function writeKnowledgeArtifacts(input: {
   const normalizedUserLearnings = input.userLearnings.map((learning) =>
     learningSchema.parse(learning),
   );
+  const firstProjectLearning = normalizedProjectLearnings[0];
+  const firstUserLearning = normalizedUserLearnings[0];
   const projectPath =
-    normalizedProjectLearnings.length > 0
-      ? getProjectKnowledgeSessionPath(normalizedProjectLearnings[0]!.scope_key, input.sessionId)
+    firstProjectLearning !== undefined
+      ? getProjectKnowledgeSessionPath(firstProjectLearning.scope_key, input.sessionId)
       : null;
   const userPath =
-    normalizedUserLearnings.length > 0
-      ? getUserKnowledgeSessionPath(normalizedUserLearnings[0]!.scope_key, input.sessionId)
+    firstUserLearning !== undefined
+      ? getUserKnowledgeSessionPath(firstUserLearning.scope_key, input.sessionId)
       : null;
 
   await Promise.all([

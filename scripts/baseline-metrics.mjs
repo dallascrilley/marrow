@@ -9,8 +9,8 @@
 //   node scripts/baseline-metrics.mjs --root /tmp/asd-demo
 //   node scripts/baseline-metrics.mjs --json > baseline.json
 
-import { readdir, readFile, stat } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { readdir, stat } from "node:fs/promises";
+import { join } from "node:path";
 
 const args = process.argv.slice(2);
 const wantJson = args.includes("--json");
@@ -31,7 +31,7 @@ const out = {
 };
 
 if (wantJson) {
-  process.stdout.write(JSON.stringify(out, null, 2) + "\n");
+  process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
 } else {
   prettyPrint(out);
 }
@@ -163,7 +163,7 @@ function prettyPrint(o) {
       "summaries",
     ]) {
       const m = o.runtime[k];
-      if (!m || !m.present) {
+      if (!m?.present) {
         lines.push(`  ${k.padEnd(10)} (absent)`);
         continue;
       }
@@ -189,7 +189,7 @@ function prettyPrint(o) {
   }
   lines.push("");
   lines.push("Re-run after each v2 milestone. Diff the JSON form to track change.");
-  process.stdout.write(lines.join("\n") + "\n");
+  process.stdout.write(`${lines.join("\n")}\n`);
 }
 
 function formatBytes(n) {

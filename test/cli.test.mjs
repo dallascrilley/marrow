@@ -81,7 +81,7 @@ test("search finds sessions in the exported session index", async () => {
     await mkdir(indexDir, { recursive: true });
     await writeFile(
       indexPath,
-      [
+      `${[
         JSON.stringify({
           v: 1,
           source_path: "/tmp/codex.jsonl",
@@ -118,7 +118,7 @@ test("search finds sessions in the exported session index", async () => {
           ),
           updated_at: "2026-05-22T21:00:00.000Z",
         }),
-      ].join("\n") + "\n",
+      ].join("\n")}\n`,
       "utf8",
     );
 

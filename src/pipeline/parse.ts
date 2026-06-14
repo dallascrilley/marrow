@@ -4,7 +4,6 @@ import type { DatabaseSync } from "node:sqlite";
 import type {
   ParseTranscriptOptions,
   ParseTranscriptResult,
-  TranscriptRecord,
 } from "../adapters/_common/intermediate.js";
 import { parseClaudeCodeTranscript } from "../adapters/claude-code/parse-transcript.js";
 import { parseCodexCliTranscript } from "../adapters/codex-cli/parse-transcript.js";

@@ -293,23 +293,25 @@ function toProjectTurnCandidates(input: {
   const candidates: ProjectLearningCandidate[] = [];
 
   if (fixEvents.length > 0 && verificationEvents.length > 0) {
-    const fix = fixEvents[0]!;
-    const verification = verificationEvents[0]!;
-    const command = commands[0] ?? commandFromEvent(verification);
-    const normalizedFix = normalizeWorkflowStatement(fix.summary);
-    const fixPrefix = startsWithPastTenseVerb(normalizedFix) ? "" : "Fixed ";
-    const statement = `${fixPrefix}${lowercaseFirst(normalizedFix)}; verified${command === undefined ? "" : ` with ${formatCommand(command)}`}.`;
-    candidates.push({
-      confidence: command === undefined ? "medium" : "high",
-      dedupeKey: `verified-fix:${statement.toLowerCase()}`,
-      evidence: uniqueStrings([fix.summary, verification.summary]),
-      kind: "workflow",
-      learningId: `${input.sourceSession.session_id}:project:verified-fix:${input.index}`,
-      promotionBasis: "Derived from same-turn fix and verification evidence.",
-      sourceRefs: sourceRefsForEvents(input.sourceSession, [fix, verification]),
-      statement,
-      title: `Verified fix: ${truncateInline(statement, 60)}`,
-    });
+    const fix = fixEvents.at(0);
+    const verification = verificationEvents.at(0);
+    if (fix && verification) {
+      const command = commands[0] ?? commandFromEvent(verification);
+      const normalizedFix = normalizeWorkflowStatement(fix.summary);
+      const fixPrefix = startsWithPastTenseVerb(normalizedFix) ? "" : "Fixed ";
+      const statement = `${fixPrefix}${lowercaseFirst(normalizedFix)}; verified${command === undefined ? "" : ` with ${formatCommand(command)}`}.`;
+      candidates.push({
+        confidence: command === undefined ? "medium" : "high",
+        dedupeKey: `verified-fix:${statement.toLowerCase()}`,
+        evidence: uniqueStrings([fix.summary, verification.summary]),
+        kind: "workflow",
+        learningId: `${input.sourceSession.session_id}:project:verified-fix:${input.index}`,
+        promotionBasis: "Derived from same-turn fix and verification evidence.",
+        sourceRefs: sourceRefsForEvents(input.sourceSession, [fix, verification]),
+        statement,
+        title: `Verified fix: ${truncateInline(statement, 60)}`,
+      });
+    }
   }
 
   for (const failure of failureEvents) {
@@ -365,23 +367,27 @@ function toProjectTurnCandidates(input: {
     !hasVerifiedFix &&
     fixEvents.length > 0 &&
     files.length > 0 &&
-    !looksLikeRawCompletionBlock(fixEvents[0]!.summary)
+    !looksLikeRawCompletionBlock(fixEvents.at(0)?.summary ?? "")
   ) {
-    const fix = fixEvents[0]!;
-    const file = files[0]!;
-    const fixSummary = normalizeFixSummary(fix.summary);
-    const statement = `In ${file}, ${lowercaseFirst(fixSummary)}.`;
-    candidates.push({
-      confidence: "medium",
-      dedupeKey: `file-scoped:${statement.toLowerCase()}`,
-      evidence: [fix.summary, file],
-      kind: "pattern",
-      learningId: `${input.sourceSession.session_id}:project:file-scoped:${input.index}`,
-      promotionBasis: "Derived from a concrete file path and fix outcome in the same turn.",
-      sourceRefs: sourceRefsForEvents(input.sourceSession, [fix]),
-      statement,
-      title: `File update: ${truncateInline(statement, 60)}`,
-    });
+    const fix = fixEvents.at(0);
+    const file = files.at(0);
+    if (!fix || !file) {
+      // guarded by length checks above
+    } else {
+      const fixSummary = normalizeFixSummary(fix.summary);
+      const statement = `In ${file}, ${lowercaseFirst(fixSummary)}.`;
+      candidates.push({
+        confidence: "medium",
+        dedupeKey: `file-scoped:${statement.toLowerCase()}`,
+        evidence: [fix.summary, file],
+        kind: "pattern",
+        learningId: `${input.sourceSession.session_id}:project:file-scoped:${input.index}`,
+        promotionBasis: "Derived from a concrete file path and fix outcome in the same turn.",
+        sourceRefs: sourceRefsForEvents(input.sourceSession, [fix]),
+        statement,
+        title: `File update: ${truncateInline(statement, 60)}`,
+      });
+    }
   }
 
   const prReviewCommand = selectPrReviewCommand(commands, promptForClassification);
@@ -901,7 +907,10 @@ function extractSpecDecision(
     return null;
   }
 
-  const file = specFiles[0]!;
+  const file = specFiles.at(0);
+  if (!file) {
+    return null;
+  }
   const topic = sanitizeHarnessLeakText(
     promptForClassification
       .replace(/\/(?:speckit|speckit-specify)\b/gi, "")
@@ -947,7 +956,7 @@ function lowercaseFirst(value: string): string {
     return value;
   }
 
-  return `${value[0]!.toLowerCase()}${value.slice(1)}`;
+  return `${value[0]?.toLowerCase()}${value.slice(1)}`;
 }
 
 function stripCompletionBlock(value: string): string {
