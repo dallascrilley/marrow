@@ -5,11 +5,11 @@ in-flight notes.
 
 ## Now
 
-- Post-sprint: see `docs/whats-next/2026-06-15.md` (R2 gate perf, R3 skip proof, R4 resummarize budget)
+- Deferred anti-goals only: MCP (`td-3d5e2b`), cross-project promotion (`td-5aeb65`)
 
 ## Next
 
-- Deferred anti-goals only: MCP (`td-3d5e2b`), cross-project promotion (`td-5aeb65`)
+- (empty — post-sprint R2–R4 landed this cycle)
 
 ## Deferred (anti-goal 2026-06-14)
 
@@ -18,6 +18,7 @@ in-flight notes.
 
 ## Done (foundational v2 + post-ship hygiene)
 
+- Post-sprint R2–R4: gate timing proof, review-learnings skip test + operator run proof, resummarize LLM budget (`td-5b96ea`, `td-85c2ab`, `td-d74657`)
 - `td-504382` — v2 epic closed (foundational shipped; MCP/promotion deferred)
 - `td-b5b7b4` — daemon-LLM separation / pipeline gate (R3, ADR-0007)
 - `td-984616` — automation LAUNCH_CRITERIA gates (R4)

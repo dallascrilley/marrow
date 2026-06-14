@@ -156,10 +156,11 @@ against production-shaped data instead of synthetic-only fixtures.
 
 ## Command Examples
 
-Initial backfill of all local Cursor transcripts:
+Initial backfill (pick one `--source`; run multiple adapters back-to-back to grow the corpus):
 
 ```bash
 node dist/cli.js ingest backfill --source cursor
+node dist/cli.js ingest backfill --source claude-code
 ```
 
 Initial backfill with a cutoff date and session cap:
@@ -296,12 +297,14 @@ node dist/cli.js memory push-wiki --vault /path/to/vault
 node dist/cli.js memory push-wiki --no-overwrite
 ```
 
-Output layout, per project:
+Output layout, per project (v1 wiki pages + v2 curated rollup):
 
-- `<vault>/wiki/projects/<project-key>/asd-learnings/<page-id>.md` — one page per record.
+- `<vault>/wiki/projects/<project-key>/asd-learnings/<page-id>.md` — one page per reviewed learning record.
 - `<vault>/wiki/projects/<project-key>/asd-learnings/_asd-manifest.json` — asd-owned manifest.
+- `<vault>/wiki/projects/<project-key>/MEMORY.md` — curated instinct rollup (regenerated on each push).
+- `<vault>/wiki/projects/<project-key>/{workflow,tooling,preferences,pitfalls,debugging}.md` — topic spill files when the rollup exceeds the line cap.
 
-asd writes **only** into that subtree. It never touches `hot.md`, `index.md`,
+asd writes **only** into those paths under `wiki/projects/<project-key>/`. It never touches `hot.md`, `index.md`,
 `log.md`, `wiki/sources/`, `wiki/entities/`, `wiki/concepts/`, any `_index.md`,
 or `.raw/.manifest.json`. The next vault session's normal autolink / lint flow
 picks up new pages through the same mechanism it uses for any other new file

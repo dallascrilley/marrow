@@ -6,9 +6,15 @@ import type { SourceSessionRow } from "../db/queries.js";
 import { summarySchema } from "../models/canonical.js";
 import { getSessionManifestPath } from "../writers/manifest-writer.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
+import {
+  assessLlmBudget,
+  getDefaultMaxPerWindow,
+  type LlmBudgetStatus,
+  recordLlmBudgetUse,
+} from "./llm-budget.js";
 import { runParsePhase } from "./parse.js";
 import { getReducedArtifactPath, type ReducedArtifact, runReducePhase } from "./reduce.js";
-import { isLowSignalTopic, type LlmTopicGenerator } from "./summarize.js";
+import { isLowSignalTopic, type LlmTopicGenerator, shouldAttemptLlmTopic } from "./summarize.js";
 import { runSummarizePhase } from "./summarize-phase.js";
 
 export type ResummarizeSkipReason = "high_signal_topic" | "missing_manifest";
@@ -25,6 +31,7 @@ export type ResummarizeOptions = {
   limit?: number;
   llmTopic?: boolean;
   lowSignalOnly?: boolean;
+  maxPer?: string;
   projectKeys?: readonly string[];
   sessionIds?: readonly string[];
 };
@@ -50,6 +57,9 @@ export type ResummarizeResult = {
   skipped: ResummarizeSkip[];
   skipped_count: number;
   would_process_count: number;
+  llm_budget: LlmBudgetStatus | null;
+  llm_topic_calls: number;
+  llm_topic_skipped_for_budget: number;
 };
 
 export async function resummarizeSessions(
@@ -61,6 +71,10 @@ export async function resummarizeSessions(
   const skipped: ResummarizeSkip[] = [];
   const sessions: ResummarizeResult["sessions"] = [];
   let wouldProcessCount = 0;
+  let llmTopicCalls = 0;
+  let llmTopicSkippedForBudget = 0;
+  const maxPer = options.maxPer ?? getDefaultMaxPerWindow();
+  let llmBudget = options.llmTopic === true ? await assessLlmBudget(maxPer) : null;
 
   for (const sourceSession of candidates) {
     if (options.lowSignalOnly === true) {
@@ -90,16 +104,30 @@ export async function resummarizeSessions(
 
     try {
       const reduced = await loadOrBuildReduced(database, sourceSession);
+      const wantsLlmTopic = shouldAttemptLlmTopic(
+        toSourceSessionModel(sourceSession),
+        reduced.turns,
+        options.llmTopic === true,
+      );
+      const useLlmTopic = wantsLlmTopic && llmBudget?.allowed !== false;
+      if (wantsLlmTopic && !useLlmTopic) {
+        llmTopicSkippedForBudget += 1;
+      }
+
       const summaryResult = await runSummarizePhase(
         database,
         sourceSession,
         reduced.turns,
         reduced.events,
         false,
-        options.llmTopic === true,
+        useLlmTopic,
         true,
         options.generateTopic,
       );
+      if (summaryResult.summary.topic_source === "llm") {
+        llmTopicCalls += 1;
+        llmBudget = await recordLlmBudgetUse(maxPer);
+      }
       sessions.push({
         session_id: sourceSession.session_id,
         summary_path: summaryResult.summaryPath,
@@ -128,6 +156,9 @@ export async function resummarizeSessions(
     skipped,
     skipped_count: skipped.length,
     would_process_count: wouldProcessCount,
+    llm_budget: llmBudget,
+    llm_topic_calls: llmTopicCalls,
+    llm_topic_skipped_for_budget: llmTopicSkippedForBudget,
   };
 }
 
@@ -207,6 +238,23 @@ async function fileExists(path: string): Promise<boolean> {
   } catch (error) {
     return isMissingFileError(error) ? false : Promise.reject(error);
   }
+}
+
+function toSourceSessionModel(sourceSession: SourceSessionRow) {
+  return {
+    conversation_id: sourceSession.conversation_id,
+    ingest_status: sourceSession.ingest_status,
+    project_key: sourceSession.project_key,
+    retention_status: sourceSession.retention_status,
+    session_id: sourceSession.session_id,
+    source_format: sourceSession.source_format,
+    source_hash: sourceSession.source_hash,
+    source_path: sourceSession.source_path,
+    source_tool: sourceSession.source_tool,
+    started_at: sourceSession.started_at,
+    updated_at: sourceSession.updated_at,
+    workspace_path: sourceSession.workspace_path,
+  };
 }
 
 function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {

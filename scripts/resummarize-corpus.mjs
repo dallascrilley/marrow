@@ -11,6 +11,7 @@ const dryRun = args.includes("--dry-run");
 const llmTopic = !args.includes("--no-llm-topic");
 const exportIndex = !args.includes("--no-export-index");
 const limit = parseOption("--limit");
+const maxPer = parseOption("--max-per") ?? process.env.ASD_LLM_MAX_PER;
 
 const env = { ...process.env };
 const rootOverride = parseOption("--root");
@@ -28,6 +29,7 @@ const resummarizeArgs = [
   "resummarize",
   "--low-signal-only",
   ...(llmTopic ? ["--llm-topic"] : []),
+  ...(maxPer ? ["--max-per", maxPer] : []),
   ...(exportIndex && !dryRun ? ["--export-index"] : []),
   ...(dryRun ? ["--dry-run"] : []),
   ...(limit ? ["--limit", limit] : []),
@@ -41,6 +43,7 @@ const report = {
   dry_run: dryRun,
   export_index: exportIndex && !dryRun,
   llm_topic: llmTopic,
+  max_per: maxPer ?? null,
   report_path: join(runtimeRoot, "reports", "resummarize-corpus.json"),
   result: payload,
   root: runtimeRoot,

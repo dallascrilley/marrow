@@ -61,7 +61,13 @@ No new daemon process. Full daemon remains out of scope.
 ## Consequences
 
 - Scheduled runs skip OpenRouter when learnings are already reviewed or
-  budget is exhausted (exit 0 with `skipped: true` JSON).
+  budget is exhausted (exit 0 with `skipped: true` JSON on
+  `quality review-learnings`).
+- `quality resummarize --llm-topic` and `npm run corpus:resummarize` share
+  `reports/llm-budget.json` but charge **one use per successful LLM topic**,
+  not per command run. When budget is exhausted, resummarize falls back to
+  deterministic topics and keeps processing (no whole-command skip).
+- `quality review-learnings` charges **one use per command run** that reviewed
+  at least one learning, even when multiple OpenRouter calls occurred.
 - Operators can inspect gate output without API keys.
-- Future work: extend gate to corpus resummarize `--llm-topic` budget;
-  tiered warn/pause thresholds (80/90/100%) from prior-art notes.
+- Future work: tiered warn/pause thresholds (80/90/100%) from prior-art notes.

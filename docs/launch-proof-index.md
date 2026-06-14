@@ -1,6 +1,6 @@
 # Launch Proof Index
 
-Date: 2026-06-14
+Date: 2026-06-15
 Repo: `/Users/dallascrilley/Code/agent-session-distillery`
 
 Operator-facing index for v1 local transcript launch proof and v2 atomic-instinct
@@ -43,6 +43,9 @@ Remaining out of scope: remote Cursor background-agent chats.
 | Pipeline gate (daemon-LLM separation) | Cheap pending-work + budget JSON before OpenRouter. | `test/pipeline-gate.test.mjs`, `test/llm-budget.test.mjs`, ADR-0007 |
 | Skill evidence + adherence report | Corpus skill mentions and checklist scoring. | `test/skill-report.test.mjs`, `docs/recipes/skill-adherence-report.md` |
 | Quality audit topic distribution | Per-project low-signal/wrapper/LLM-rescue stats + remediation hints. | `test/quality-audit.test.mjs` |
+| Pipeline gate timing (skip-ingest) | Cron-fast gate ~1s vs full five-adapter scan ~100s on operator runtime. | `/tmp/agent-session-distillery/2026-06-15_pipeline-gate-timing/SUMMARY.md` |
+| Review-learnings `--if-new` skip | Sandbox skip JSON + operator run path when pending learnings exist. | `/tmp/agent-session-distillery/2026-06-15_review-learnings-gate/SUMMARY.md`, `test/review-learnings-gate.test.mjs` |
+| Resummarize LLM budget | Corpus resummarize shares sliding-window budget with review-learnings. | `test/resummarize.test.mjs` (llm budget case), `docs/recipes/scheduled-memory-pipeline.md` |
 
 ## Rerun (turnkey)
 
