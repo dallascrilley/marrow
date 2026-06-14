@@ -7,6 +7,7 @@ import { executeDeleteApply } from "./commands/delete-apply.js";
 import { executeDeleteCandidates } from "./commands/delete-candidates.js";
 import { executeExplain } from "./commands/explain.js";
 import { executeExportIndex } from "./commands/export-index.js";
+import { executeHooksInstall } from "./commands/hooks-install.js";
 import { executeIngestBackfill } from "./commands/ingest-backfill.js";
 import { executeIngestSync } from "./commands/ingest-sync.js";
 import { executeMemoryExportWiki } from "./commands/memory-export-wiki.js";
@@ -152,6 +153,16 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "Map legacy project keys to ADR-0002 project ids (dry-run by default; pass --apply to copy knowledge/projects).",
         execute: async (context) => withLedger(context, executeMigrateProjectIds),
+      },
+    },
+  },
+  hooks: {
+    description: "Install harness hooks that trigger asd ingest on session lifecycle events.",
+    subcommands: {
+      install: {
+        description:
+          "Install Claude Code SessionEnd hook → asd ingest sync --source claude-code (project .claude/ by default; pass --global for ~/.claude/settings.json).",
+        execute: async (context) => executeHooksInstall(context),
       },
     },
   },
