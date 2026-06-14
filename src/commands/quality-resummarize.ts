@@ -9,6 +9,10 @@ export async function executeQualityResummarize(
   database: DatabaseSync,
 ): Promise<number> {
   const options = parseResummarizeOptions(context.args);
+  if (options.maxPer !== undefined && options.llmTopic !== true) {
+    console.warn("[asd] quality resummarize: --max-per has no effect without --llm-topic");
+  }
+
   const result = await resummarizeSessions(database, options);
 
   if (options.exportIndex === true && !options.dryRun && result.processed_count > 0) {

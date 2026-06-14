@@ -14,7 +14,7 @@ import {
   recordLlmBudgetUse,
   type LlmBudgetStatus,
 } from "./llm-budget.js";
-import { isLowSignalTopic, type LlmTopicGenerator } from "./summarize.js";
+import { isLowSignalTopic, shouldAttemptLlmTopic, type LlmTopicGenerator } from "./summarize.js";
 import { runSummarizePhase } from "./summarize-phase.js";
 
 export type ResummarizeSkipReason = "high_signal_topic" | "missing_manifest";
@@ -74,10 +74,7 @@ export async function resummarizeSessions(
   let llmTopicCalls = 0;
   let llmTopicSkippedForBudget = 0;
   const maxPer = options.maxPer ?? getDefaultMaxPerWindow();
-  let llmBudget =
-    options.llmTopic === true && options.dryRun !== true
-      ? await assessLlmBudget(maxPer)
-      : null;
+  let llmBudget = options.llmTopic === true ? await assessLlmBudget(maxPer) : null;
 
   for (const sourceSession of candidates) {
     if (options.lowSignalOnly === true) {
@@ -105,17 +102,18 @@ export async function resummarizeSessions(
       continue;
     }
 
-    const existingTopic = await readExistingTopic(sourceSession.session_id);
-    const wantsLlmTopic =
-      options.llmTopic === true &&
-      (existingTopic === null || isLowSignalTopic(existingTopic));
-    const useLlmTopic = wantsLlmTopic && llmBudget?.allowed !== false;
-    if (wantsLlmTopic && !useLlmTopic) {
-      llmTopicSkippedForBudget += 1;
-    }
-
     try {
       const reduced = await loadOrBuildReduced(database, sourceSession);
+      const wantsLlmTopic = shouldAttemptLlmTopic(
+        toSourceSessionModel(sourceSession),
+        reduced.turns,
+        options.llmTopic === true,
+      );
+      const useLlmTopic = wantsLlmTopic && llmBudget?.allowed !== false;
+      if (wantsLlmTopic && !useLlmTopic) {
+        llmTopicSkippedForBudget += 1;
+      }
+
       const summaryResult = await runSummarizePhase(
         database,
         sourceSession,
@@ -240,6 +238,23 @@ async function fileExists(path: string): Promise<boolean> {
   } catch (error) {
     return isMissingFileError(error) ? false : Promise.reject(error);
   }
+}
+
+function toSourceSessionModel(sourceSession: SourceSessionRow) {
+  return {
+    conversation_id: sourceSession.conversation_id,
+    ingest_status: sourceSession.ingest_status,
+    project_key: sourceSession.project_key,
+    retention_status: sourceSession.retention_status,
+    session_id: sourceSession.session_id,
+    source_format: sourceSession.source_format,
+    source_hash: sourceSession.source_hash,
+    source_path: sourceSession.source_path,
+    source_tool: sourceSession.source_tool,
+    started_at: sourceSession.started_at,
+    updated_at: sourceSession.updated_at,
+    workspace_path: sourceSession.workspace_path,
+  };
 }
 
 function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {

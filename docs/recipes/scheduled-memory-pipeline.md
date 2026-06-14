@@ -35,8 +35,20 @@ summary topics and re-exports the session index; manifests stay immutable):
 npm run corpus:resummarize
 ```
 
-Uses the same `ASD_LLM_MAX_PER` sliding-window budget as `quality review-learnings`
-when `--llm-topic` is enabled (default unless `resummarize-corpus.mjs --no-llm-topic`).
+Uses the same `ASD_LLM_MAX_PER` sliding-window budget file
+(`reports/llm-budget.json`) as `quality review-learnings` when `--llm-topic` is
+enabled (default unless `resummarize-corpus.mjs --no-llm-topic`).
+
+**Budget accounting differs by command:**
+
+| Command | One budget "use" means |
+| --- | --- |
+| `quality review-learnings` | One command run that reviewed at least one learning (may include many OpenRouter calls) |
+| `quality resummarize --llm-topic` | One successful LLM topic generation (`topic_source: "llm"`) |
+
+When the budget is exhausted, `review-learnings` exits early with
+`skipped: true`. Resummarize continues with deterministic topics only (no
+whole-command skip).
 
 Run this on a weekly or monthly cadence — not on the same 6-hour ingest cron.
 
@@ -47,7 +59,7 @@ Run this on a weekly or monthly cadence — not on the same 6-hour ingest cron.
 | `AGENT_SESSION_DISTILLERY_ROOT` | Runtime dir (default `~/.agent-session-distillery`) |
 | `ASD_VAULT_ROOT` | Vault root for `memory push-wiki` (default `~/vault`) |
 | `OPENROUTER_API_KEY` | Required only when running `quality review-learnings` |
-| `ASD_LLM_MAX_PER` | Sliding-window LLM budget for review-learnings (default `5/24h`) |
+| `ASD_LLM_MAX_PER` | Sliding-window LLM budget shared by review-learnings and corpus resummarize (default `5/24h`) |
 
 Build the CLI once after checkout updates:
 

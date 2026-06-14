@@ -48,7 +48,9 @@ test("review-learnings --if-new skips when no unreviewed project learnings exist
       );
 
       assert.equal(exitCode, 0);
-      const payload = JSON.parse(messages[0] ?? "{}");
+      const skipLine = messages.find((message) => message.includes('"skipped"'));
+      assert.ok(skipLine, "expected skipped JSON on info output");
+      const payload = JSON.parse(skipLine);
       assert.equal(payload.skipped, true);
       assert.equal(payload.skip_reason, "no_unreviewed_project_learnings");
       assert.equal(payload.count, 0);

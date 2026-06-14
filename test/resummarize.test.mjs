@@ -428,13 +428,16 @@ test("resummarizeSessions respects llm budget across multiple low-signal session
 
   try {
     const database = await createLedger();
+    // Prompt must yield a low-signal deterministic topic (same as llmTopic mock test above).
+    const lowSignalHandoffPrompt =
+      "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.";
     await seedResummarizeFixture({
       database,
       runtimeRoot,
       sandbox,
       sessionId: "budget-session-a",
       topic: "brainstorming",
-      userPrompt: "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.",
+      userPrompt: lowSignalHandoffPrompt,
     });
     await seedResummarizeFixture({
       database,
@@ -442,7 +445,7 @@ test("resummarizeSessions respects llm budget across multiple low-signal session
       sandbox,
       sessionId: "budget-session-b",
       topic: "whats-next",
-      userPrompt: "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.",
+      userPrompt: lowSignalHandoffPrompt,
     });
 
     const result = await resummarizeSessions(database, {
@@ -462,6 +465,125 @@ test("resummarizeSessions respects llm budget across multiple low-signal session
     assert.equal(llmSessions.length, 1);
     assert.equal(deterministicSessions.length, 1);
     assert.equal(result.llm_budget?.allowed, false);
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("resummarizeSessions does not count budget skip when deterministic topic is high-signal", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-budget-high-det-"));
+  const runtimeRoot = join(sandbox, "runtime");
+  process.env[runtimeOverrideEnvVar] = runtimeRoot;
+
+  try {
+    const database = await createLedger();
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId: "stored-low-det-high",
+      topic: "brainstorming",
+      userPrompt: "Fix export-index contract topic provenance",
+    });
+
+    const result = await resummarizeSessions(database, {
+      generateTopic: async () => "should not run",
+      llmTopic: true,
+      lowSignalOnly: true,
+      maxPer: "1/1h",
+      sessionIds: ["stored-low-det-high"],
+    });
+
+    assert.equal(result.llm_topic_calls, 0);
+    assert.equal(result.llm_topic_skipped_for_budget, 0);
+    assert.equal(result.sessions[0]?.topic_source, "deterministic");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("resummarizeSessions skips llm calls when budget is pre-exhausted", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-budget-exhausted-"));
+  const runtimeRoot = join(sandbox, "runtime");
+  process.env[runtimeOverrideEnvVar] = runtimeRoot;
+
+  try {
+    await mkdir(join(runtimeRoot, "reports"), { recursive: true });
+    await writeFile(
+      join(runtimeRoot, "reports", "llm-budget.json"),
+      `${JSON.stringify({ uses: [new Date().toISOString()] })}\n`,
+      "utf8",
+    );
+
+    const database = await createLedger();
+    const lowSignalHandoffPrompt =
+      "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.";
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId: "budget-exhausted-session",
+      topic: "brainstorming",
+      userPrompt: lowSignalHandoffPrompt,
+    });
+
+    const calls = [];
+    const result = await resummarizeSessions(database, {
+      generateTopic: async (input) => {
+        calls.push(input);
+        return "should not run";
+      },
+      llmTopic: true,
+      lowSignalOnly: true,
+      maxPer: "1/1h",
+      sessionIds: ["budget-exhausted-session"],
+    });
+
+    assert.equal(calls.length, 0);
+    assert.equal(result.llm_topic_calls, 0);
+    assert.equal(result.llm_topic_skipped_for_budget, 1);
+    assert.equal(result.llm_budget?.allowed, false);
+    assert.equal(result.sessions[0]?.topic_source, "deterministic");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("resummarizeSessions does not charge budget when mocked llm generator throws", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-budget-throw-"));
+  const runtimeRoot = join(sandbox, "runtime");
+  process.env[runtimeOverrideEnvVar] = runtimeRoot;
+
+  try {
+    const database = await createLedger();
+    const lowSignalHandoffPrompt =
+      "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.";
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId: "budget-throw-session",
+      topic: "brainstorming",
+      userPrompt: lowSignalHandoffPrompt,
+    });
+
+    const result = await resummarizeSessions(database, {
+      generateTopic: async () => {
+        throw new Error("mock openrouter failure");
+      },
+      llmTopic: true,
+      lowSignalOnly: true,
+      maxPer: "1/1h",
+      sessionIds: ["budget-throw-session"],
+    });
+
+    assert.equal(result.llm_topic_calls, 0);
+    assert.equal(result.llm_topic_skipped_for_budget, 0);
+    assert.equal(result.sessions[0]?.topic_source, "deterministic");
+    assert.equal(result.llm_budget?.used_in_window, 0);
   } finally {
     delete process.env[runtimeOverrideEnvVar];
     await rm(sandbox, { force: true, recursive: true });
