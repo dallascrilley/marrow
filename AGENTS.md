@@ -88,7 +88,7 @@ discovered during bootstrap are appended below this baseline as a
 - **Skill evidence:** `asd skill evidence <id>` scans indexed summaries for skill mentions
   (v1 of td-02cfd4 adherence analysis).
 - **Skill report:** `asd skill report <id>` scores checklist adherence and suggests SKILL.md
-  improvements (td-02cfd4 v2).
+  improvements ([`docs/recipes/skill-adherence-report.md`](docs/recipes/skill-adherence-report.md)).
 
 ### Project-relevant skills
 
