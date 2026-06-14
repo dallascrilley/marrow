@@ -21,6 +21,7 @@ import { executeReviewQueue } from "./commands/review-queue.js";
 import { executeReviewShow } from "./commands/review-show.js";
 import { executeSearch } from "./commands/search.js";
 import { executeSkillEvidence } from "./commands/skill-evidence.js";
+import { executeSkillReport } from "./commands/skill-report.js";
 import { executeStats } from "./commands/stats.js";
 import { getRuntimeRoot } from "./config/paths.js";
 import { createLedger } from "./db/ledger.js";
@@ -174,6 +175,11 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "List indexed sessions whose summaries mention a hub skill id (run export-index after ingest).",
         execute: async (context) => withLedger(context, executeSkillEvidence),
+      },
+      report: {
+        description:
+          "Score SKILL.md checklist adherence across relevant sessions and emit improvement suggestions.",
+        execute: async (context) => withLedger(context, executeSkillReport),
       },
     },
   },
