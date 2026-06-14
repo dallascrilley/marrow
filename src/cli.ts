@@ -20,6 +20,7 @@ import { executeQualityReviewLearnings } from "./commands/quality-review-learnin
 import { executeReviewQueue } from "./commands/review-queue.js";
 import { executeReviewShow } from "./commands/review-show.js";
 import { executeSearch } from "./commands/search.js";
+import { executeSkillEvidence } from "./commands/skill-evidence.js";
 import { executeStats } from "./commands/stats.js";
 import { getRuntimeRoot } from "./config/paths.js";
 import { createLedger } from "./db/ledger.js";
@@ -163,6 +164,16 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "Install Claude Code SessionEnd hook → asd ingest sync --source claude-code (project .claude/ by default; pass --global for ~/.claude/settings.json).",
         execute: async (context) => executeHooksInstall(context),
+      },
+    },
+  },
+  skill: {
+    description: "Analyze hub skill usage against distilled session evidence.",
+    subcommands: {
+      evidence: {
+        description:
+          "List indexed sessions whose summaries mention a hub skill id (run export-index after ingest).",
+        execute: async (context) => withLedger(context, executeSkillEvidence),
       },
     },
   },

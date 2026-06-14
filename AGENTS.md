@@ -83,6 +83,10 @@ discovered during bootstrap are appended below this baseline as a
   features as ship-ready.
 - **Legacy scripts:** `scripts/` holds proof and dry-run utilities; prefer `script/*`
   and `npm run` for bootstrap/CI parity.
+- **Hooks:** `asd hooks install` registers Claude Code SessionEnd → ingest sync
+  ([`docs/recipes/session-end-ingest-hook.md`](docs/recipes/session-end-ingest-hook.md)).
+- **Skill evidence:** `asd skill evidence <id>` scans indexed summaries for skill mentions
+  (v1 of td-02cfd4 adherence analysis).
 
 ### Project-relevant skills
 
