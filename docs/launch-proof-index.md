@@ -17,6 +17,8 @@ memory pipeline proof. Canonical gate definitions:
 
 **P2 (Kimi adapter):** kimi-adapter-source-research, kimi-adapter — validated 2026-05-27 via integration and unit tests.
 
+**P2 (automation surfaces):** session-end-hook, skill-adherence-report, quality-audit-topic-distribution — validated 2026-06-14 via unit tests and operator proofs.
+
 Remaining out of scope: remote Cursor background-agent chats.
 
 ## Proof Artifacts
@@ -37,6 +39,9 @@ Remaining out of scope: remote Cursor background-agent chats.
 | Kimi adapter ingest | End-to-end ingest via `--source kimi`. | `test/integration/kimi-ingest.test.mjs`, `test/kimi-*.test.mjs` |
 | Corpus resummarize (operator runtime) | Dry-run + full pass on live corpus; zero failures. | `/tmp/agent-session-distillery/2026-05-27_corpus-resummarize/SUMMARY.md` |
 | Unattended memory loop (partial) | Hook dry-run + claude-code ingest → audit → export-index → vault push; exit 0. | `/tmp/agent-session-distillery/2026-06-14_unattended-loop/SUMMARY.md` |
+| SessionEnd hook install | Hook script + settings merge via `hooks install`. | `test/hooks-install.test.mjs` |
+| Skill evidence + adherence report | Corpus skill mentions and checklist scoring. | `test/skill-report.test.mjs`, `docs/recipes/skill-adherence-report.md` |
+| Quality audit topic distribution | Per-project low-signal/wrapper/LLM-rescue stats + remediation hints. | `test/quality-audit.test.mjs` |
 
 ## Rerun (turnkey)
 
