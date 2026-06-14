@@ -21,6 +21,14 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 | CI parity | `script/cibuild` or `just cibuild` |
 | Lint / format | `npm run lint` / `npm run format` |
 
+## Automation
+
+| Task | Command / doc |
+|------|----------------|
+| SessionEnd → ingest (Claude Code) | `asd hooks install` — [`docs/recipes/session-end-ingest-hook.md`](docs/recipes/session-end-ingest-hook.md) |
+| Scheduled ingest + wiki push | [`docs/recipes/scheduled-memory-pipeline.md`](docs/recipes/scheduled-memory-pipeline.md) |
+| Skill usage evidence in corpus | `asd skill evidence <skill-id>` (after `export-index`) |
+
 ## Requirements
 
 - Node `22.x`

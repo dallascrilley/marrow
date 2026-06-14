@@ -5,7 +5,7 @@ in-flight notes.
 
 ## Now
 
-_(none — pick from Next)_
+- `td-02cfd4` — skill adherence (`asd skill evidence` v1 shipped; scoring TBD)
 
 ## Next (deferred per whats-next 2026-05-27 anti-goal)
 
