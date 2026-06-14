@@ -3,9 +3,9 @@ import { join } from "node:path";
 
 import { getRuntimePath } from "../../config/paths.js";
 import { replayBundles } from "../instinct/bundle.js";
-import { projectVaultDir } from "../project/resolve.js";
-import { parseInstinctYaml } from "../instinct/yaml-io.js";
 import type { Domain, Instinct } from "../instinct/schema.js";
+import { parseInstinctYaml } from "../instinct/yaml-io.js";
+import { projectVaultDir } from "../project/resolve.js";
 
 export const MEMORY_LINE_CAP = 200;
 
@@ -74,8 +74,7 @@ export function renderMemoryMarkdown(
   const generated =
     generatedAt ??
     instincts.reduce(
-      (latest, instinct) =>
-        instinct.updated_at > latest ? instinct.updated_at : latest,
+      (latest, instinct) => (instinct.updated_at > latest ? instinct.updated_at : latest),
       "1970-01-01T00:00:00.000Z",
     );
 

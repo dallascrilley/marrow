@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#
+# script/cibuild — exactly what CI runs: install (frozen) + lint + test + build.
+# Keep this as the single source of truth for CI so local and CI never drift.
+. "$(dirname "$0")/lib/common.sh"
+log "cibuild: lint + test + build"
+run_cibuild "$@"

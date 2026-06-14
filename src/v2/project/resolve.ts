@@ -1,6 +1,6 @@
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { execFile } from "node:child_process";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
@@ -28,9 +28,7 @@ export type ResolveProjectIdInput = {
  * ADR-0002 resolution order: git remote hash → `.asd-project-key` override →
  * workspace path hash (or session-root hash when workspace is unknown).
  */
-export async function resolveProjectId(
-  input: ResolveProjectIdInput,
-): Promise<ResolvedProjectId> {
+export async function resolveProjectId(input: ResolveProjectIdInput): Promise<ResolvedProjectId> {
   const workspace = normaliseWorkspacePath(input.workspacePath);
   const sessionRoot = input.sessionRoot?.trim() || null;
 
@@ -154,9 +152,7 @@ async function readGitOriginRemote(workspacePath: string): Promise<string | null
   }
 }
 
-async function readDeclaredProjectKey(
-  root: string | null | undefined,
-): Promise<string | null> {
+async function readDeclaredProjectKey(root: string | null | undefined): Promise<string | null> {
   if (!root || root.trim().length === 0) {
     return null;
   }

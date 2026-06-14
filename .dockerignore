@@ -1,0 +1,17 @@
+# Assembled to .dockerignore
+.git
+.gitignore
+.github
+.agents-state
+docs
+*.md
+!README.md
+.env
+.env.*
+node_modules
+.venv
+__pycache__
+dist
+build
+.cache
+tmp

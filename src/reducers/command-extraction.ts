@@ -46,7 +46,7 @@ export function extractCommandsByTurn(turns: GroupedTurn[]): CommandExtractionRe
             command: normalizedCommand,
             firstSeenLineNumber: record.provenance.lineNumber,
             normalizedCommand,
-            turnId: turn.turnId
+            turnId: turn.turnId,
           });
         }
       }
@@ -58,7 +58,7 @@ export function extractCommandsByTurn(turns: GroupedTurn[]): CommandExtractionRe
   return {
     allCommands: entries.map((entry) => entry.command),
     byTurn,
-    entries
+    entries,
   };
 }
 

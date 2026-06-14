@@ -57,7 +57,7 @@ export async function writeSessionManifest(input: {
     return {
       created: false,
       manifest,
-      path
+      path,
     };
   }
 
@@ -65,7 +65,7 @@ export async function writeSessionManifest(input: {
   return {
     created: true,
     manifest,
-    path
+    path,
   };
 }
 
@@ -90,9 +90,9 @@ function buildManifest(input: {
       last_turn_id: input.turns[input.turns.length - 1]?.turn_id ?? null,
       line_end: lineNumbers.length > 0 ? Math.max(...lineNumbers) : null,
       line_start: lineNumbers.length > 0 ? Math.min(...lineNumbers) : null,
-      turn_count: input.turns.length
+      turn_count: input.turns.length,
     },
-    version: 1
+    version: 1,
   };
 }
 

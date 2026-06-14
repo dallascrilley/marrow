@@ -4,7 +4,10 @@ import type { CommandContext } from "../cli.js";
 import { runDiscoverPhase } from "../pipeline/discover.js";
 import { parseIngestOptions, processDiscoveredSessions } from "./ingest-backfill.js";
 
-export async function executeIngestSync(context: CommandContext, database: DatabaseSync): Promise<number> {
+export async function executeIngestSync(
+  context: CommandContext,
+  database: DatabaseSync,
+): Promise<number> {
   const options = parseIngestOptions(context.args);
   const discovery = await runDiscoverPhase({
     database,
@@ -16,13 +19,13 @@ export async function executeIngestSync(context: CommandContext, database: Datab
     ...(options.limit === undefined ? {} : { limit: options.limit }),
     onlyNewOrChanged: true,
     ...(options.since === undefined ? {} : { since: options.since }),
-    source: options.source
+    source: options.source,
   });
   const batch = await processDiscoveredSessions(
     database,
     discovery.sessions,
     options.resume,
-    options.llmTopic
+    options.llmTopic,
   );
 
   context.output.info(
@@ -36,11 +39,11 @@ export async function executeIngestSync(context: CommandContext, database: Datab
         processed_count: batch.sessions.length,
         selected_count: discovery.selectedCount,
         sessions: batch.sessions,
-        source: options.source
+        source: options.source,
       },
       null,
-      2
-    )
+      2,
+    ),
   );
 
   return 0;

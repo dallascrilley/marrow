@@ -1,7 +1,7 @@
 #!/usr/bin/env node
+import { spawnSync } from "node:child_process";
 import { access } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
 
 const args = process.argv.slice(2);
 const projectRoot = resolve(new URL("..", import.meta.url).pathname);
@@ -11,7 +11,7 @@ const options = {
   limit: parseOption("--limit") ?? "100",
   requireReview: args.includes("--require-review"),
   reviewInput: parseOption("--review-input"),
-  root: parseOption("--root")
+  root: parseOption("--root"),
 };
 
 const env = { ...process.env };
@@ -33,12 +33,7 @@ const reviewSidecarExists = await pathExists(reviewInput);
 let applyOccurred = false;
 if (reviewSidecarExists) {
   steps.push(
-    runStep("apply learning review", [
-      "quality",
-      "apply-learning-review",
-      "--input",
-      reviewInput
-    ])
+    runStep("apply learning review", ["quality", "apply-learning-review", "--input", reviewInput]),
   );
   applyOccurred = steps.at(-1)?.status === "passed";
 } else if (options.requireReview) {
@@ -48,7 +43,7 @@ if (reviewSidecarExists) {
     name: "apply learning review",
     status: "failed",
     stderr: `Missing review sidecar: ${reviewInput}`,
-    stdout: ""
+    stdout: "",
   });
 } else {
   steps.push({
@@ -57,7 +52,7 @@ if (reviewSidecarExists) {
     name: "apply learning review",
     status: "skipped",
     stderr: "",
-    stdout: `No review sidecar found at ${reviewInput}; export will use reviewed learnings only if they already exist, otherwise deterministic project learnings.`
+    stdout: `No review sidecar found at ${reviewInput}; export will use reviewed learnings only if they already exist, otherwise deterministic project learnings.`,
   });
 }
 
@@ -71,7 +66,7 @@ const summary = {
   review_input: reviewInput,
   root: runtimeRoot,
   steps,
-  success: failed.length === 0
+  success: failed.length === 0,
 };
 
 console.log(JSON.stringify(summary, null, 2));
@@ -96,7 +91,7 @@ function runStep(name, stepArgs) {
   const result = spawnSync(command[0], command.slice(1), {
     cwd: projectRoot,
     encoding: "utf8",
-    env
+    env,
   });
 
   return {
@@ -105,7 +100,7 @@ function runStep(name, stepArgs) {
     name,
     status: result.status === 0 ? "passed" : "failed",
     stderr: result.stderr.trim(),
-    stdout: result.stdout.trim()
+    stdout: result.stdout.trim(),
   };
 }
 

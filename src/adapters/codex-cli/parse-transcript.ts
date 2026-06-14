@@ -2,11 +2,8 @@ import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 
 import type { JsonValue } from "../../models/canonical.js";
-import { parseJsonLine, type JsonRecord } from "../_common/jsonl.js";
-import type {
-  TranscriptRecord,
-  TranscriptRecordKind
-} from "../_common/intermediate.js";
+import type { TranscriptRecord, TranscriptRecordKind } from "../_common/intermediate.js";
+import { type JsonRecord, parseJsonLine } from "../_common/jsonl.js";
 import {
   detectRedaction,
   extractCommandStrings,
@@ -16,13 +13,13 @@ import {
   looksRedacted,
   pickFirstString,
   readValueAtPath,
-  uniquePreservingOrder
+  uniquePreservingOrder,
 } from "../_common/text-extract.js";
 import type {
   CodexCliSessionMeta,
   CodexCliTranscriptRecord,
   ParseCodexCliTranscriptOptions,
-  ParseCodexCliTranscriptResult
+  ParseCodexCliTranscriptResult,
 } from "./intermediate.js";
 
 /**
@@ -37,7 +34,7 @@ import type {
  * mapper does not need to re-read the file.
  */
 export async function parseCodexCliTranscript(
-  options: ParseCodexCliTranscriptOptions
+  options: ParseCodexCliTranscriptOptions,
 ): Promise<ParseCodexCliTranscriptResult> {
   const records: CodexCliTranscriptRecord[] = [];
   const stream = createReadStream(options.sourcePath, { encoding: "utf8" });
@@ -56,7 +53,7 @@ export async function parseCodexCliTranscript(
       const normalizedRecord = normalizeTranscriptRecord(parsedLine, {
         lineNumber,
         sourceHash: options.sourceHash,
-        sourcePath: options.sourcePath
+        sourcePath: options.sourcePath,
       });
 
       records.push(normalizedRecord);
@@ -79,13 +76,17 @@ type RecordContext = {
   sourcePath: string;
 };
 
-function parseCodexCliRolloutLine(line: string, sourcePath: string, lineNumber: number): JsonRecord {
+function parseCodexCliRolloutLine(
+  line: string,
+  sourcePath: string,
+  lineNumber: number,
+): JsonRecord {
   return parseJsonLine(line, sourcePath, lineNumber, "Codex CLI rollout JSONL");
 }
 
 function normalizeTranscriptRecord(
   parsedLine: JsonRecord,
-  context: RecordContext
+  context: RecordContext,
 ): TranscriptRecord {
   const topType = pickFirstString(parsedLine, [["type"]]);
   const payload = readValueAtPath(parsedLine, ["payload"]);
@@ -103,10 +104,12 @@ function normalizeTranscriptRecord(
   const contentRedacted = detectRedaction(parsedLine);
   const messageText = contentRedacted ? null : extractMessageText(parsedLine, kind, payload);
   const toolInputText =
-    kind === "tool_use_stub" || kind === "tool_result_stub" ? extractCodexToolInputText(parsedLine, payload) : null;
+    kind === "tool_use_stub" || kind === "tool_result_stub"
+      ? extractCodexToolInputText(parsedLine, payload)
+      : null;
   const filePaths = uniquePreservingOrder(extractFilePaths(parsedLine, messageText, toolInputText));
   const commandStrings = uniquePreservingOrder(
-    extractCommandStrings(parsedLine, messageText, toolInputText)
+    extractCommandStrings(parsedLine, messageText, toolInputText),
   );
 
   return {
@@ -118,7 +121,7 @@ function normalizeTranscriptRecord(
     provenance: {
       lineNumber: context.lineNumber,
       sourceHash: context.sourceHash,
-      sourcePath: context.sourcePath
+      sourcePath: context.sourcePath,
     },
     rawEvent: parsedLine,
     rawType,
@@ -138,9 +141,9 @@ function normalizeTranscriptRecord(
             status:
               payload && typeof payload === "object" && !Array.isArray(payload)
                 ? pickFirstString(payload as JsonRecord, [["status"], ["state"]])
-                : null
+                : null,
           }
-        : null
+        : null,
   };
 }
 
@@ -157,7 +160,7 @@ function composeRawType(topType: string | null, payloadType: string | null): str
 function classifyRecordKind(
   topType: string | null,
   payloadType: string | null,
-  role: string | null
+  role: string | null,
 ): TranscriptRecordKind {
   if (topType === "response_item" && payloadType === "message") {
     if (role === "user") return "user_message";
@@ -187,7 +190,7 @@ function classifyRecordKind(
 function extractMessageText(
   parsedLine: JsonRecord,
   kind: TranscriptRecordKind,
-  payload: JsonValue | undefined
+  payload: JsonValue | undefined,
 ): string | null {
   const isPayloadRecord = payload && typeof payload === "object" && !Array.isArray(payload);
   if (!isPayloadRecord) {
@@ -197,17 +200,8 @@ function extractMessageText(
 
   const candidates =
     kind === "user_message" || kind === "assistant_message"
-      ? [
-          ["content"],
-          ["message"],
-          ["text"]
-        ]
-      : [
-          ["message"],
-          ["text"],
-          ["content"],
-          ["summary"]
-        ];
+      ? [["content"], ["message"], ["text"]]
+      : [["message"], ["text"], ["content"], ["summary"]];
 
   for (const path of candidates) {
     const candidate = readValueAtPath(payloadRecord, path);
@@ -229,7 +223,7 @@ function extractMessageText(
  */
 function extractCodexToolInputText(
   parsedLine: JsonRecord,
-  payload: JsonValue | undefined
+  payload: JsonValue | undefined,
 ): string | null {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return null;
@@ -265,6 +259,6 @@ function extractSessionMeta(parsedLine: JsonRecord): CodexCliSessionMeta | null 
     agentNickname: subagentRecord ? pickFirstString(subagentRecord, [["agent_nickname"]]) : null,
     agentRole: subagentRecord ? pickFirstString(subagentRecord, [["agent_role"]]) : null,
     subagentDepth: typeof depth === "number" ? depth : null,
-    timestamp: pickFirstString(payloadRecord, [["timestamp"]])
+    timestamp: pickFirstString(payloadRecord, [["timestamp"]]),
   };
 }

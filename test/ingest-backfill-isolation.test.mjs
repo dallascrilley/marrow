@@ -1,5 +1,5 @@
-import test from "node:test";
 import assert from "node:assert/strict";
+import test from "node:test";
 
 import { processDiscoveredSessions } from "../dist/commands/ingest-backfill.js";
 import { createLedger } from "../dist/db/ledger.js";
@@ -22,9 +22,9 @@ test("processDiscoveredSessions continues after a per-session failure", async ()
         source_tool: "cursor",
         started_at: "2026-05-22T19:00:00.000Z",
         updated_at: "2026-05-22T20:00:00.000Z",
-        workspace_path: "/tmp/demo"
-      }
-    }
+        workspace_path: "/tmp/demo",
+      },
+    },
   };
   const badEntry = {
     ledger: {
@@ -42,9 +42,9 @@ test("processDiscoveredSessions continues after a per-session failure", async ()
         source_tool: "cursor",
         started_at: "2026-05-22T19:00:00.000Z",
         updated_at: "2026-05-22T20:00:00.000Z",
-        workspace_path: "/tmp/demo"
-      }
-    }
+        workspace_path: "/tmp/demo",
+      },
+    },
   };
 
   const result = await processDiscoveredSessions(database, [badEntry, goodEntry], false, false);

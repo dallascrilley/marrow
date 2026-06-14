@@ -42,7 +42,7 @@ export async function readPiSessionMeta(sessionPath: string): Promise<PiSessionM
         cwd: pickFirstString(parsed, [["cwd"]]),
         id: pickFirstString(parsed, [["id"]]),
         timestamp: pickFirstString(parsed, [["timestamp"]]),
-        version
+        version,
       };
       break;
     }
@@ -62,7 +62,7 @@ export async function readPiSessionMeta(sessionPath: string): Promise<PiSessionM
  */
 export function derivePiWorkspaceMapping(
   sessionPath: string,
-  sessionMeta: PiSessionMeta | null
+  sessionMeta: PiSessionMeta | null,
 ): PiWorkspaceMapping {
   const absoluteSessionPath = resolve(sessionPath);
   const piSessionPath = absoluteSessionPath;
@@ -74,7 +74,7 @@ export function derivePiWorkspaceMapping(
     piSessionPath,
     projectKey: deriveProjectKey(workspacePath, workspaceSlug),
     workspacePath,
-    workspaceSlug
+    workspaceSlug,
   };
 }
 

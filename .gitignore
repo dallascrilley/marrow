@@ -12,3 +12,27 @@ node_modules/
 !test/fixtures/pi/
 !test/fixtures/pi/**/*.jsonl
 .todos/
+
+# --- added by project-bootstrap ---
+# Assembled to .gitignore (core + language profile appended).
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+.cache/
+tmp/
+*.tmp
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+# --- Node / TypeScript ---
+build/
+coverage/
+.next/
+*.tsbuildinfo
+.pnpm-store/
+npm-debug.log*
+pnpm-debug.log*

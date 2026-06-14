@@ -1,16 +1,11 @@
 import { mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import {
-  projectInstinctsDir,
-  projectInstinctsRoot,
-} from "../project/resolve.js";
+import { projectInstinctsDir, projectInstinctsRoot } from "../project/resolve.js";
 import type { Instinct } from "./schema.js";
 import { parseInstinctYaml, serializeInstinct } from "./yaml-io.js";
 
-export async function ensureProjectInstinctLayout(
-  projectId: string,
-): Promise<void> {
+export async function ensureProjectInstinctLayout(projectId: string): Promise<void> {
   await mkdir(projectInstinctsDir(projectId), { recursive: true });
   await mkdir(join(projectInstinctsRoot(projectId), "sessions"), {
     recursive: true,
@@ -26,10 +21,7 @@ export async function loadInstinct(
   instinctId: string,
 ): Promise<Instinct | null> {
   try {
-    const contents = await readFile(
-      instinctFilePath(projectId, instinctId),
-      "utf8",
-    );
+    const contents = await readFile(instinctFilePath(projectId, instinctId), "utf8");
     return parseInstinctYaml(contents);
   } catch {
     return null;
@@ -47,9 +39,7 @@ export async function listInstinctIds(projectId: string): Promise<string[]> {
   }
 }
 
-export async function loadAllInstincts(
-  projectId: string,
-): Promise<Map<string, Instinct>> {
+export async function loadAllInstincts(projectId: string): Promise<Map<string, Instinct>> {
   const map = new Map<string, Instinct>();
   for (const id of await listInstinctIds(projectId)) {
     const instinct = await loadInstinct(projectId, id);
@@ -60,10 +50,7 @@ export async function loadAllInstincts(
   return map;
 }
 
-export async function saveInstinct(
-  projectId: string,
-  instinct: Instinct,
-): Promise<void> {
+export async function saveInstinct(projectId: string, instinct: Instinct): Promise<void> {
   await ensureProjectInstinctLayout(projectId);
   const target = instinctFilePath(projectId, instinct.id);
   const temp = `${target}.tmp`;

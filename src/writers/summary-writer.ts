@@ -33,14 +33,14 @@ export async function writeSessionSummary(summary: Summary): Promise<SummaryWrit
   await mkdir(sessionDirectoryPath, { recursive: true });
   await Promise.all([
     writeTextFile(summaryPath, `${JSON.stringify(normalizedSummary, null, 2)}\n`),
-    writeTextFile(markdownPath, renderSummaryMarkdown(normalizedSummary))
+    writeTextFile(markdownPath, renderSummaryMarkdown(normalizedSummary)),
   ]);
 
   return {
     markdownPath,
     sessionDirectoryPath,
     summary: normalizedSummary,
-    summaryPath
+    summaryPath,
   };
 }
 
@@ -74,7 +74,7 @@ function renderSummaryMarkdown(summary: Summary): string {
     "",
     "## User Learnings",
     ...renderList(summary.user_learnings),
-    ""
+    "",
   ];
 
   return `${sections.join("\n")}`;

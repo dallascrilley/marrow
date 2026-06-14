@@ -1,11 +1,7 @@
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
-
-import { parseJsonLine, type JsonRecord } from "../_common/jsonl.js";
-import type {
-  TranscriptRecord,
-  TranscriptRecordKind
-} from "../_common/intermediate.js";
+import type { TranscriptRecord, TranscriptRecordKind } from "../_common/intermediate.js";
+import { type JsonRecord, parseJsonLine } from "../_common/jsonl.js";
 import {
   detectRedaction,
   extractCommandStrings,
@@ -16,12 +12,12 @@ import {
   looksRedacted,
   pickFirstString,
   readValueAtPath,
-  uniquePreservingOrder
+  uniquePreservingOrder,
 } from "../_common/text-extract.js";
 import type {
   ClaudeCodeTranscriptRecord,
   ParseClaudeCodeTranscriptOptions,
-  ParseClaudeCodeTranscriptResult
+  ParseClaudeCodeTranscriptResult,
 } from "./intermediate.js";
 
 /**
@@ -44,13 +40,13 @@ import type {
  * - `system`, `summary`, plus any unknown type → `event`
  */
 export async function parseClaudeCodeTranscript(
-  options: ParseClaudeCodeTranscriptOptions
+  options: ParseClaudeCodeTranscriptOptions,
 ): Promise<ParseClaudeCodeTranscriptResult> {
   const records: ClaudeCodeTranscriptRecord[] = [];
   const stream = createReadStream(options.sourcePath, { encoding: "utf8" });
   const lines = createInterface({
     crlfDelay: Infinity,
-    input: stream
+    input: stream,
   });
 
   let lineNumber = 0;
@@ -67,7 +63,7 @@ export async function parseClaudeCodeTranscript(
       const normalizedRecord = normalizeTranscriptRecord(parsedLine, {
         lineNumber,
         sourceHash: options.sourceHash,
-        sourcePath: options.sourcePath
+        sourcePath: options.sourcePath,
       });
 
       records.push(normalizedRecord);
@@ -89,24 +85,26 @@ type RecordContext = {
 function parseClaudeCodeTranscriptLine(
   line: string,
   sourcePath: string,
-  lineNumber: number
+  lineNumber: number,
 ): JsonRecord {
   return parseJsonLine(line, sourcePath, lineNumber, "Claude Code transcript JSONL");
 }
 
 function normalizeTranscriptRecord(
   parsedLine: JsonRecord,
-  context: RecordContext
+  context: RecordContext,
 ): TranscriptRecord {
   const rawType = pickFirstString(parsedLine, [["type"], ["role"]]);
   const kind = classifyRecordKind(rawType);
   const contentRedacted = detectRedaction(parsedLine);
   const messageText = contentRedacted ? null : extractMessageText(parsedLine, kind);
   const toolInputText =
-    kind === "tool_use_stub" || kind === "tool_result_stub" ? extractToolInputText(parsedLine) : null;
+    kind === "tool_use_stub" || kind === "tool_result_stub"
+      ? extractToolInputText(parsedLine)
+      : null;
   const filePaths = uniquePreservingOrder(extractFilePaths(parsedLine, messageText, toolInputText));
   const commandStrings = uniquePreservingOrder(
-    extractCommandStrings(parsedLine, messageText, toolInputText)
+    extractCommandStrings(parsedLine, messageText, toolInputText),
   );
 
   return {
@@ -118,7 +116,7 @@ function normalizeTranscriptRecord(
     provenance: {
       lineNumber: context.lineNumber,
       sourceHash: context.sourceHash,
-      sourcePath: context.sourcePath
+      sourcePath: context.sourcePath,
     },
     rawEvent: parsedLine,
     rawType,
@@ -129,9 +127,9 @@ function normalizeTranscriptRecord(
             callId: pickFirstString(parsedLine, [["id"], ["callId"], ["toolUseID"]]),
             inputText: toolInputText,
             name: pickFirstString(parsedLine, [["name"], ["toolName"]]),
-            status: pickFirstString(parsedLine, [["status"], ["state"]])
+            status: pickFirstString(parsedLine, [["status"], ["state"]]),
           }
-        : null
+        : null,
   };
 }
 
@@ -164,24 +162,11 @@ function classifyRecordKind(rawType: string | null): TranscriptRecordKind {
  * `tool_use`); the shared `extractNormalizedText` recursively unwraps the
  * array and pulls `text` fields, which is enough for the summarize phase.
  */
-function extractMessageText(
-  parsedLine: JsonRecord,
-  kind: TranscriptRecordKind
-): string | null {
+function extractMessageText(parsedLine: JsonRecord, kind: TranscriptRecordKind): string | null {
   const candidates =
     kind === "user_message" || kind === "assistant_message"
-      ? [
-          ["message", "content"],
-          ["message", "text"],
-          ["content"],
-          ["text"]
-        ]
-      : [
-          ["summary"],
-          ["message"],
-          ["text"],
-          ["content"]
-        ];
+      ? [["message", "content"], ["message", "text"], ["content"], ["text"]]
+      : [["summary"], ["message"], ["text"], ["content"]];
 
   for (const path of candidates) {
     const candidate = readValueAtPath(parsedLine, path);

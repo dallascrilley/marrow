@@ -1,18 +1,17 @@
 import { lstat, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { extname, join, resolve } from "node:path";
-
-import { hashFileContents } from "../_common/hash.js";
 import { pathExists } from "../_common/fs.js";
-import {
-  deriveClaudeCodeWorkspaceMapping,
-  type DeriveClaudeCodeWorkspaceMappingOptions
-} from "./workspace-map.js";
+import { hashFileContents } from "../_common/hash.js";
 import type {
   ClaudeCodeDiscoveryResult,
   ClaudeCodeTranscriptDiscovery,
-  ClaudeCodeTranscriptFormat
+  ClaudeCodeTranscriptFormat,
 } from "./intermediate.js";
+import {
+  type DeriveClaudeCodeWorkspaceMappingOptions,
+  deriveClaudeCodeWorkspaceMapping,
+} from "./workspace-map.js";
 
 export const claudeCodeTranscriptExtensions = [".jsonl"] as const;
 
@@ -30,11 +29,11 @@ export type DiscoverClaudeCodeInputsOptions = {
  * `.jsonl` file as a session. Symlinks and dotfiles are skipped.
  */
 export async function discoverClaudeCodeInputs(
-  options: DiscoverClaudeCodeInputsOptions = {}
+  options: DiscoverClaudeCodeInputsOptions = {},
 ): Promise<ClaudeCodeDiscoveryResult> {
   const homeDir = resolve(options.homeDir ?? homedir());
   const claudeCodeProjectsRoot = resolve(
-    options.claudeCodeProjectsRoot ?? join(homeDir, ".claude", "projects")
+    options.claudeCodeProjectsRoot ?? join(homeDir, ".claude", "projects"),
   );
   const transcriptPaths = await discoverTranscriptPaths(claudeCodeProjectsRoot);
   const transcripts = await Promise.all(
@@ -43,8 +42,8 @@ export async function discoverClaudeCodeInputs(
         stat(transcriptPath),
         hashFileContents(transcriptPath),
         deriveClaudeCodeWorkspaceMapping(transcriptPath, {
-          claudeCodeProjectsRoot
-        } satisfies DeriveClaudeCodeWorkspaceMappingOptions)
+          claudeCodeProjectsRoot,
+        } satisfies DeriveClaudeCodeWorkspaceMappingOptions),
       ]);
 
       return {
@@ -53,9 +52,9 @@ export async function discoverClaudeCodeInputs(
         sizeBytes: metadata.size,
         sourceFormat: normalizeTranscriptFormat(transcriptPath),
         sourceHash,
-        sourcePath: transcriptPath
+        sourcePath: transcriptPath,
       } satisfies ClaudeCodeTranscriptDiscovery;
-    })
+    }),
   );
 
   return { transcripts };
@@ -82,7 +81,10 @@ async function discoverTranscriptPaths(projectsRoot: string): Promise<string[]> 
   return discoveredPaths.sort((left, right) => left.localeCompare(right));
 }
 
-async function collectTranscriptFiles(directoryPath: string, discoveredPaths: string[]): Promise<void> {
+async function collectTranscriptFiles(
+  directoryPath: string,
+  discoveredPaths: string[],
+): Promise<void> {
   const directoryEntries = await readdir(directoryPath, { withFileTypes: true });
   directoryEntries.sort((left, right) => left.name.localeCompare(right.name));
 
@@ -91,7 +93,11 @@ async function collectTranscriptFiles(directoryPath: string, discoveredPaths: st
     if (!entry.isFile()) continue;
 
     const extension = extname(entry.name).toLowerCase();
-    if (!claudeCodeTranscriptExtensions.includes(extension as (typeof claudeCodeTranscriptExtensions)[number])) {
+    if (
+      !claudeCodeTranscriptExtensions.includes(
+        extension as (typeof claudeCodeTranscriptExtensions)[number],
+      )
+    ) {
       continue;
     }
 

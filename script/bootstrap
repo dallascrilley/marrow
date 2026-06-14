@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#
+# script/bootstrap — install system-level toolchain/dependencies.
+# Idempotent: safe to run repeatedly. Run once on a fresh machine.
+. "$(dirname "$0")/lib/common.sh"
+log "bootstrap: installing toolchain"
+run_bootstrap "$@"

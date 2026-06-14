@@ -6,7 +6,7 @@ export type EnrichCursorTrackingDbOptions = {
 };
 
 export function enrichCursorTrackingDb(
-  options: EnrichCursorTrackingDbOptions
+  options: EnrichCursorTrackingDbOptions,
 ): CursorTrackingDbEnrichment | null {
   try {
     const attribution = collectAttribution(readCursorKvRowsReadOnly(options.databasePath));
@@ -18,7 +18,7 @@ export function enrichCursorTrackingDb(
       sessionIds: [...attribution.sessionIds],
       workspaceIds: [...attribution.workspaceIds],
       workspacePaths: [...attribution.workspacePaths],
-      workspaceStorageIds: [...attribution.workspaceStorageIds]
+      workspaceStorageIds: [...attribution.workspaceStorageIds],
     };
   } catch {
     return null;

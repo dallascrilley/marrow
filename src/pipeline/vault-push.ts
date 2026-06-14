@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { access, mkdir, readFile, rename, readdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 
@@ -80,10 +80,7 @@ export function sanitiseProjectKey(key: string): string {
  * counts as punctuation per the vault's wiki-ingest convention).
  */
 export function sanitiseWikiText(text: string): string {
-  return text
-    .replace(/ — /g, ", ")
-    .replace(/—/g, ", ")
-    .replace(/ -- /g, ", ");
+  return text.replace(/ — /g, ", ").replace(/—/g, ", ").replace(/ -- /g, ", ");
 }
 
 /** Strip the `sha256:` prefix from a record id, returning the bare hex digest. */
@@ -150,9 +147,7 @@ export function renderFrontmatter(record: WikiMemoryRecord): string {
 export function renderBody(record: WikiMemoryRecord): string {
   const title = sanitiseWikiText(record.title);
   const body = sanitiseWikiText(record.body);
-  const evidenceLines = record.evidence.evidence.map((entry) =>
-    `- ${sanitiseWikiText(entry)}`,
-  );
+  const evidenceLines = record.evidence.evidence.map((entry) => `- ${sanitiseWikiText(entry)}`);
 
   const sections: string[] = [`# ${title}`, "", body];
 
@@ -242,7 +237,10 @@ export function serialiseManifest(manifest: VaultPushManifest): string {
   return `${JSON.stringify(ordered, null, 2)}\n`;
 }
 
-export async function saveManifest(manifestPath: string, manifest: VaultPushManifest): Promise<void> {
+export async function saveManifest(
+  manifestPath: string,
+  manifest: VaultPushManifest,
+): Promise<void> {
   await atomicWriteFile(manifestPath, serialiseManifest(manifest));
 }
 
@@ -350,8 +348,10 @@ export async function pushAll(options: PushAllOptions): Promise<PushAllResult> {
     outcomes,
     total_records: outcomes.length,
     total_written: outcomes.filter((entry) => entry.outcome === "written").length,
-    total_skipped_unchanged: outcomes.filter((entry) => entry.outcome === "skipped_unchanged").length,
-    total_skipped_protected: outcomes.filter((entry) => entry.outcome === "skipped_protected").length,
+    total_skipped_unchanged: outcomes.filter((entry) => entry.outcome === "skipped_unchanged")
+      .length,
+    total_skipped_protected: outcomes.filter((entry) => entry.outcome === "skipped_protected")
+      .length,
   };
 }
 
@@ -417,9 +417,7 @@ function stripFrontmatter(text: string): string {
 
 function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {
   return (
-    error instanceof Error &&
-    "code" in error &&
-    (error as NodeJS.ErrnoException).code === "ENOENT"
+    error instanceof Error && "code" in error && (error as NodeJS.ErrnoException).code === "ENOENT"
   );
 }
 

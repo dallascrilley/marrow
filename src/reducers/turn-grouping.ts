@@ -35,7 +35,7 @@ export function groupRecordsIntoTurns(options: GroupTurnsOptions): GroupedTurn[]
         index: groupedTurns.length,
         leadingRecords,
         record,
-        sessionId: options.sessionId
+        sessionId: options.sessionId,
       });
       leadingRecords = [];
       continue;
@@ -77,7 +77,7 @@ function createTurn(options: {
     sourceLineEnd: Math.max(...lineNumbers),
     sourceLineStart: Math.min(...lineNumbers),
     startedAtHint: pickFirstTimestamp(records),
-    endedAtHint: pickLastTimestamp(records)
+    endedAtHint: pickLastTimestamp(records),
   };
 }
 
@@ -100,10 +100,11 @@ function finalizeTurn(turn: GroupedTurn): GroupedTurn {
     assistantMessages: uniquePreservingOrder(assistantMessages),
     commandStrings: uniquePreservingOrder(commandStrings),
     filePaths: uniquePreservingOrder(filePaths),
-    sourceLineEnd: turn.records[turn.records.length - 1]?.provenance.lineNumber ?? turn.sourceLineEnd,
+    sourceLineEnd:
+      turn.records[turn.records.length - 1]?.provenance.lineNumber ?? turn.sourceLineEnd,
     sourceLineStart: turn.records[0]?.provenance.lineNumber ?? turn.sourceLineStart,
     startedAtHint: pickFirstTimestamp(turn.records),
-    endedAtHint: pickLastTimestamp(turn.records)
+    endedAtHint: pickLastTimestamp(turn.records),
   };
 }
 

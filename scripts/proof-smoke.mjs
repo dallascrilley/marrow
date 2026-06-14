@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawnSync } from "node:child_process";
 /**
  * Turnkey launch proof reruns for v1 gates and the v2 memory pipeline.
  *
@@ -8,7 +9,6 @@
  *   node scripts/proof-smoke.mjs --write-summary /tmp/.../SUMMARY.md
  */
 import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -67,7 +67,9 @@ async function runV1Proofs() {
       join(cursorProject, "agent-transcripts/session-e2e.jsonl"),
     );
 
-    steps.push(runCliStep("install/build/help", ["--help"], { AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot }));
+    steps.push(
+      runCliStep("install/build/help", ["--help"], { AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot }),
+    );
     steps.push(
       runCliStep("ingest backfill", ["ingest", "backfill", "--source", "cursor"], {
         HOME: home,
@@ -141,12 +143,7 @@ async function runV2MemoryPipelineProof() {
       throw new Error("ingest backfill did not return project_key");
     }
 
-    const learningPath = join(
-      runtimeRoot,
-      "knowledge/projects",
-      projectKey,
-      "session-e2e.jsonl",
-    );
+    const learningPath = join(runtimeRoot, "knowledge/projects", projectKey, "session-e2e.jsonl");
     const [learning] = (await readFile(learningPath, "utf8"))
       .trim()
       .split("\n")
@@ -225,7 +222,9 @@ async function runV2MemoryPipelineProof() {
         const memory = await readFile(memoryPath, "utf8");
         artifacts.memory_path = memoryPath;
         artifacts.memory_excerpt = memory.split("\n").slice(0, 12).join("\n");
-        const pushPayload = JSON.parse(steps.find((s) => s.name === "memory push-wiki")?.stdout ?? "{}");
+        const pushPayload = JSON.parse(
+          steps.find((s) => s.name === "memory push-wiki")?.stdout ?? "{}",
+        );
         artifacts.memory_render = pushPayload.memory_renders?.[0] ?? null;
         steps.push({
           name: "vault MEMORY.md render",
@@ -361,6 +360,12 @@ function formatSummaryMarkdown(report) {
     }
   }
 
-  lines.push("", "## Unit test backing", "", "- `npm test` — v2 suite under `test/v2-*.test.mjs`", "");
+  lines.push(
+    "",
+    "## Unit test backing",
+    "",
+    "- `npm test` — v2 suite under `test/v2-*.test.mjs`",
+    "",
+  );
   return `${lines.join("\n")}\n`;
 }

@@ -13,7 +13,7 @@ export function pruneTranscriptPayload(record: CursorTranscriptRecord): Record<s
   const pruned: Record<string, JsonValue> = {
     content_redacted: record.contentRedacted,
     line_number: record.provenance.lineNumber,
-    raw_kind: record.kind
+    raw_kind: record.kind,
   };
 
   if (record.rawType !== null) {
@@ -46,24 +46,23 @@ export function pruneTranscriptPayload(record: CursorTranscriptRecord): Record<s
           ? null
           : truncateText(record.toolUse.inputText, MAX_TOOL_INPUT_LENGTH),
       name: record.toolUse.name,
-      status: record.toolUse.status
+      status: record.toolUse.status,
     });
   }
 
   pruned.raw_payload_stub = compactObject({
     approximate_bytes: estimateSerializedLength(record.rawEvent),
-    has_nested_content: rawRecord === null ? false : rawKeys.some((key) => isNested(rawRecord[key])),
+    has_nested_content:
+      rawRecord === null ? false : rawKeys.some((key) => isNested(rawRecord[key])),
     key_count: rawKeys.length,
     kept_keys: rawKeys.slice(0, MAX_TOP_LEVEL_KEYS),
-    omitted_key_count: Math.max(0, rawKeys.length - MAX_TOP_LEVEL_KEYS)
+    omitted_key_count: Math.max(0, rawKeys.length - MAX_TOP_LEVEL_KEYS),
   });
 
   return pruned;
 }
 
-function compactObject(
-  value: Record<string, JsonValue | undefined>
-): Record<string, JsonValue> {
+function compactObject(value: Record<string, JsonValue | undefined>): Record<string, JsonValue> {
   const compacted: Record<string, JsonValue> = {};
 
   for (const [key, entry] of Object.entries(value)) {

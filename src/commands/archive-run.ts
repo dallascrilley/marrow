@@ -5,15 +5,26 @@ import type { CommandContext } from "../cli.js";
 import { listSourceSessionsByLifecycle } from "../db/ledger.js";
 import { runArchivePhase } from "../pipeline/archive.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
-import { getProjectKnowledgeSessionPath, getUserKnowledgeSessionPath } from "../writers/knowledge-writer.js";
-import { getSessionSummaryJsonPath, getSessionSummaryMarkdownPath } from "../writers/summary-writer.js";
+import {
+  getProjectKnowledgeSessionPath,
+  getUserKnowledgeSessionPath,
+} from "../writers/knowledge-writer.js";
+import {
+  getSessionSummaryJsonPath,
+  getSessionSummaryMarkdownPath,
+} from "../writers/summary-writer.js";
 
-export async function executeArchiveRun(context: CommandContext, database: DatabaseSync): Promise<number> {
+export async function executeArchiveRun(
+  context: CommandContext,
+  database: DatabaseSync,
+): Promise<number> {
   const sessions = listSourceSessionsByLifecycle(database, ["extracted"]);
   const processed: Array<Record<string, unknown>> = [];
 
   for (const session of sessions) {
-    const reduced = JSON.parse(await readFile(getReducedArtifactPath(session.session_id), "utf8")) as {
+    const reduced = JSON.parse(
+      await readFile(getReducedArtifactPath(session.session_id), "utf8"),
+    ) as {
       events: import("../models/canonical.js").Event[];
       turns: import("../models/canonical.js").Turn[];
     };
@@ -23,12 +34,12 @@ export async function executeArchiveRun(context: CommandContext, database: Datab
       knowledge: {
         project: {
           count: 0,
-          path: getProjectKnowledgeSessionPath(session.project_key, session.session_id)
+          path: getProjectKnowledgeSessionPath(session.project_key, session.session_id),
         },
         user: {
           count: 0,
-          path: getUserKnowledgeSessionPath("operator", session.session_id)
-        }
+          path: getUserKnowledgeSessionPath("operator", session.session_id),
+        },
       },
       sourceSession: session,
       sourceSessionId: session.id,
@@ -36,14 +47,14 @@ export async function executeArchiveRun(context: CommandContext, database: Datab
         markdownPath: getSessionSummaryMarkdownPath(session.session_id),
         sessionDirectoryPath: "",
         summary: JSON.parse(await readFile(getSessionSummaryJsonPath(session.session_id), "utf8")),
-        summaryPath: getSessionSummaryJsonPath(session.session_id)
+        summaryPath: getSessionSummaryJsonPath(session.session_id),
       },
-      turns: reduced.turns
+      turns: reduced.turns,
     });
 
     processed.push({
       result,
-      session_id: session.session_id
+      session_id: session.session_id,
     });
   }
 

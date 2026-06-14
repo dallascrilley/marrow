@@ -1,5 +1,6 @@
 import type { Event, Learning, SourceSession, Summary, Turn } from "../models/canonical.js";
 import { summarySchema } from "../models/canonical.js";
+import { generateTopicWithOpenRouter } from "./llm-learning-review.js";
 import {
   extractSubstantivePrompt,
   firstSubstantivePromptFromTurns,
@@ -9,7 +10,6 @@ import {
   looksLikeSkillHarnessLeak,
   sanitizeHarnessLeakText,
 } from "./prompt-sanitize.js";
-import { generateTopicWithOpenRouter } from "./llm-learning-review.js";
 
 type TopicSource = "deterministic" | "llm";
 
@@ -36,19 +36,19 @@ export type OptionalLlmTopicOptions = {
 export function summarizeSession(input: SummarizeSessionInput): Summary {
   return summarizeSessionWithTopic(input, {
     topic: deriveTopic(input.sourceSession, input.turns),
-    topicSource: "deterministic"
+    topicSource: "deterministic",
   });
 }
 
 export async function summarizeSessionWithOptionalLlmTopic(
   input: SummarizeSessionInput,
-  options: OptionalLlmTopicOptions = {}
+  options: OptionalLlmTopicOptions = {},
 ): Promise<Summary> {
   const deterministicTopic = deriveTopic(input.sourceSession, input.turns);
   if (options.llmTopic !== true || !isLowSignalTopic(deterministicTopic)) {
     return summarizeSessionWithTopic(input, {
       topic: deterministicTopic,
-      topicSource: "deterministic"
+      topicSource: "deterministic",
     });
   }
 
@@ -58,13 +58,13 @@ export async function summarizeSessionWithOptionalLlmTopic(
       await generateTopic({
         deterministicTopic,
         sourceSession: input.sourceSession,
-        turns: input.turns
-      })
+        turns: input.turns,
+      }),
     );
 
     return summarizeSessionWithTopic(input, {
       topic: llmTopic,
-      topicSource: "llm"
+      topicSource: "llm",
     });
   } catch (error) {
     // An optional title enhancer must never break core ingest: on any LLM failure
@@ -72,58 +72,60 @@ export async function summarizeSessionWithOptionalLlmTopic(
     console.warn(`[asd] LLM topic generation failed; using deterministic topic (${String(error)})`);
     return summarizeSessionWithTopic(input, {
       topic: deterministicTopic,
-      topicSource: "deterministic"
+      topicSource: "deterministic",
     });
   }
 }
 
 function summarizeSessionWithTopic(
   input: SummarizeSessionInput,
-  topicInput: { topic: string; topicSource: TopicSource }
+  topicInput: { topic: string; topicSource: TopicSource },
 ): Summary {
   const decisions = uniquePreservingOrder(
     input.events
       .filter((event) => event.type === "decision")
-      .map((event) => normalizeSummaryLine(event.summary))
+      .map((event) => normalizeSummaryLine(event.summary)),
   );
   const failures = uniquePreservingOrder(
     input.events
       .filter((event) => event.type === "failure")
-      .map((event) => normalizeSummaryLine(event.summary))
+      .map((event) => normalizeSummaryLine(event.summary)),
   );
   const fixes = summarizeWorkedOutcomes(input.events);
   const nextStep = selectNextStep(input.events);
   const usefulCommands = uniquePreservingOrder(
     [
       ...input.turns.flatMap((turn) => turn.commands_seen),
-      ...input.events.flatMap((event) => collectEventCommands(event))
+      ...input.events.flatMap((event) => collectEventCommands(event)),
     ]
       .filter((command) => isUsefulCommand(command))
-      .map((command) => normalizeSummaryLine(command))
+      .map((command) => normalizeSummaryLine(command)),
   ).slice(0, 6);
   const filesOfInterest = uniquePreservingOrder(
     [
       ...input.turns.flatMap((turn) => turn.files_touched),
-      ...input.events.flatMap((event) => collectEventFiles(event))
+      ...input.events.flatMap((event) => collectEventFiles(event)),
     ]
       .filter((filePath) => filePath.trim().length > 0)
-      .filter((filePath) => isUsefulFilePath(filePath))
+      .filter((filePath) => isUsefulFilePath(filePath)),
   ).slice(0, 6);
   const summary = {
     deletion_readiness: input.deletionReadiness ?? "not_ready",
     files_of_interest: filesOfInterest,
     next_step: normalizeSummaryLine(nextStep),
     project_learnings: uniquePreservingOrder(
-      (input.projectLearnings ?? []).map((learning) => learning.statement)
+      (input.projectLearnings ?? []).map((learning) => learning.statement),
     ),
     session_id: input.sourceSession.session_id,
     topic: topicInput.topic,
     topic_source: topicInput.topicSource,
     useful_commands: usefulCommands,
-    user_learnings: uniquePreservingOrder((input.userLearnings ?? []).map((learning) => learning.statement)),
+    user_learnings: uniquePreservingOrder(
+      (input.userLearnings ?? []).map((learning) => learning.statement),
+    ),
     what_failed: failures,
     what_was_decided: decisions,
-    what_worked: fixes
+    what_worked: fixes,
   } satisfies Summary;
 
   return summarySchema.parse(summary);
@@ -236,7 +238,7 @@ function summarizeWorkedOutcomes(events: readonly Event[]): string[] {
   return uniquePreservingOrder(
     events
       .filter((event) => event.type === "fix" || isPositiveVerification(event))
-      .map((event) => summarizeOutcome(event))
+      .map((event) => summarizeOutcome(event)),
   );
 }
 
@@ -312,7 +314,9 @@ function collectEventCommands(event: Event): string[] {
 }
 
 function collectEventFiles(event: Event): string[] {
-  return readPayloadStringArray(event, "command_strings").filter((value) => looksLikeSourcePath(value));
+  return readPayloadStringArray(event, "command_strings").filter((value) =>
+    looksLikeSourcePath(value),
+  );
 }
 
 function stripEventPrefix(value: string): string {
@@ -358,7 +362,9 @@ function readPayloadStringArray(event: Event, key: string): string[] {
     return [];
   }
 
-  return value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+  return value.filter(
+    (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
+  );
 }
 
 function looksLikeCompletedOutcome(value: string): boolean {
@@ -392,9 +398,7 @@ function normalizeGeneratedTopic(topic: string): string {
 
 function normalizeSummaryLine(value: string): string {
   const sanitized = sanitizeHarnessLeakText(value);
-  const normalized = (sanitized.length > 0 ? sanitized : value)
-    .replace(/\s+/g, " ")
-    .trim();
+  const normalized = (sanitized.length > 0 ? sanitized : value).replace(/\s+/g, " ").trim();
   return truncateInline(normalized, 180);
 }
 
@@ -419,7 +423,9 @@ function isHarnessTopicLine(line: string): boolean {
   return (
     /^#\s*(?:AGENTS|CLAUDE)\.md\b/i.test(line) ||
     /^(?:AGENTS|CLAUDE)\.md\s+instructions\s+for\b/i.test(line) ||
-    /^(?:system[-_]reminder|environment_context|command-message|command-name|command-args|task-notification|local-command-(?:stdout|stderr)|user-prompt-submit-hook|bash-(?:input|stdout|stderr))\b/i.test(line) ||
+    /^(?:system[-_]reminder|environment_context|command-message|command-name|command-args|task-notification|local-command-(?:stdout|stderr)|user-prompt-submit-hook|bash-(?:input|stdout|stderr))\b/i.test(
+      line,
+    ) ||
     /^turn_aborted$/i.test(line) ||
     /^Caveat:/i.test(line) ||
     /^\[Request interrupted by user\b/i.test(line) ||
@@ -443,8 +449,10 @@ function isGenericInitPrompt(topic: string): boolean {
   return (
     /^\/init\b/i.test(topic) ||
     /^init$/i.test(topic) ||
-    /^(?:please\s+)?(?:analyze|scan|inspect)\s+(?:this\s+)?(?:repo|repository|codebase)\b/i.test(topic) &&
-      /\b(?:AGENTS|CLAUDE)\.md\b/i.test(topic)
+    (/^(?:please\s+)?(?:analyze|scan|inspect)\s+(?:this\s+)?(?:repo|repository|codebase)\b/i.test(
+      topic,
+    ) &&
+      /\b(?:AGENTS|CLAUDE)\.md\b/i.test(topic))
   );
 }
 
@@ -461,11 +469,15 @@ function looksLikePathOrPathInstruction(topic: string): boolean {
     return true;
   }
 
-  return /^read\s+(?:\.agents-state\/handoff\.md|(?:~\/|\/|\.{1,2}\/|[\w.-]+\/)[^\s]+)\b/i.test(topic);
+  return /^read\s+(?:\.agents-state\/handoff\.md|(?:~\/|\/|\.{1,2}\/|[\w.-]+\/)[^\s]+)\b/i.test(
+    topic,
+  );
 }
 
 function looksLikeBareCommand(topic: string): boolean {
-  return /^(?:cd|ls|cat|sed|awk|rg|grep|git|gh|npm|pnpm|bun|node|python3?|uv|just|make|cargo|go|swift|xcodebuild|docker|curl)\b(?:\s|$)/i.test(topic);
+  return /^(?:cd|ls|cat|sed|awk|rg|grep|git|gh|npm|pnpm|bun|node|python3?|uv|just|make|cargo|go|swift|xcodebuild|docker|curl)\b(?:\s|$)/i.test(
+    topic,
+  );
 }
 
 function looksLikeBareSkillSlugTopic(topic: string): boolean {
@@ -512,13 +524,13 @@ function isTooShortOrGeneric(topic: string): boolean {
       "task",
       "test",
       "update",
-      "work"
+      "work",
     ]);
     return words.every((word) => genericWords.has(word));
   }
 
   return /^(?:help with|work on|fix the|update the|continue the|review the|implement the|debug the|test the)\s+(?:task|code|project|repo|issue|bug|changes?)\.?$/i.test(
-    lower
+    lower,
   );
 }
 
@@ -530,8 +542,9 @@ function isUsefulCommand(command: string): boolean {
   }
 
   return (
-    /^(?:\.\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b)/i.test(command.trim()) &&
-    !["node", "python", "python3"].includes(normalized)
+    /^(?:\.\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b)/i.test(
+      command.trim(),
+    ) && !["node", "python", "python3"].includes(normalized)
   );
 }
 
@@ -546,7 +559,9 @@ function isUsefulFilePath(filePath: string): boolean {
 }
 
 function looksLikeSourcePath(value: string): boolean {
-  return /\.(?:[cm]?[jt]sx?|py|go|rs|swift|kt|java|c|cc|cpp|h|hpp|json|ya?ml|toml|md|sql)$/i.test(value);
+  return /\.(?:[cm]?[jt]sx?|py|go|rs|swift|kt|java|c|cc|cpp|h|hpp|json|ya?ml|toml|md|sql)$/i.test(
+    value,
+  );
 }
 
 function stripTrailingPunctuation(value: string): string {

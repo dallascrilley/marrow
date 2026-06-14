@@ -1,12 +1,12 @@
-import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import test from "node:test";
 
 import { replayBundles, saveSessionBundle } from "../dist/v2/instinct/bundle.js";
 import { sessionBundleSchema } from "../dist/v2/instinct/schema.js";
-import { saveAllInstincts, listInstinctIds } from "../dist/v2/instinct/store.js";
+import { listInstinctIds, saveAllInstincts } from "../dist/v2/instinct/store.js";
 import { renderProjectMemoryToVault } from "../dist/v2/vault/render-memory.js";
 
 test("bundle replay → saveAllInstincts prune → vault MEMORY.md includes candidate rollup", async () => {
@@ -66,11 +66,7 @@ test("bundle replay → saveAllInstincts prune → vault MEMORY.md includes cand
       "instincts",
       "stale-instinct-dddddddd.yaml",
     );
-    await writeFile(
-      stalePath,
-      "schema_version: 1\nid: stale-instinct-dddddddd\n",
-      "utf8",
-    );
+    await writeFile(stalePath, "schema_version: 1\nid: stale-instinct-dddddddd\n", "utf8");
     await saveAllInstincts(projectId, replayed);
 
     const ids = await listInstinctIds(projectId);

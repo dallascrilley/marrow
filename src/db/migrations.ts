@@ -99,7 +99,7 @@ const schemaStatements = [
   "CREATE INDEX IF NOT EXISTS idx_review_queue_lifecycle ON review_queue_entries(current_lifecycle_state)",
   "CREATE INDEX IF NOT EXISTS idx_deletion_candidates_session_id ON deletion_candidates(session_id)",
   "CREATE INDEX IF NOT EXISTS idx_deletion_candidates_project_key ON deletion_candidates(project_key)",
-  "CREATE INDEX IF NOT EXISTS idx_deletion_candidates_lifecycle ON deletion_candidates(current_lifecycle_state)"
+  "CREATE INDEX IF NOT EXISTS idx_deletion_candidates_lifecycle ON deletion_candidates(current_lifecycle_state)",
 ] as const;
 
 export function getLedgerDirectoryPath(): string {

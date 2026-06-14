@@ -6,10 +6,7 @@ import { applyDeltas, finalizeInstinct, type InstinctMap } from "./apply-delta.j
 import type { SessionBundle } from "./schema.js";
 import { parseSessionBundleYaml, serializeSessionBundle } from "./yaml-io.js";
 
-export function sessionBundlePath(
-  projectId: string,
-  sessionId: string,
-): string {
+export function sessionBundlePath(projectId: string, sessionId: string): string {
   return join(projectSessionsDir(projectId), `${sessionId}.yaml`);
 }
 
@@ -26,19 +23,14 @@ export async function loadSessionBundle(
   sessionId: string,
 ): Promise<SessionBundle | null> {
   try {
-    const contents = await readFile(
-      sessionBundlePath(projectId, sessionId),
-      "utf8",
-    );
+    const contents = await readFile(sessionBundlePath(projectId, sessionId), "utf8");
     return parseSessionBundleYaml(contents);
   } catch {
     return null;
   }
 }
 
-export async function listSessionBundleIds(
-  projectId: string,
-): Promise<string[]> {
+export async function listSessionBundleIds(projectId: string): Promise<string[]> {
   try {
     const entries = await readdir(projectSessionsDir(projectId));
     return entries
@@ -49,9 +41,7 @@ export async function listSessionBundleIds(
   }
 }
 
-export async function loadAllSessionBundles(
-  projectId: string,
-): Promise<SessionBundle[]> {
+export async function loadAllSessionBundles(projectId: string): Promise<SessionBundle[]> {
   const bundles: SessionBundle[] = [];
   for (const sessionId of await listSessionBundleIds(projectId)) {
     const bundle = await loadSessionBundle(projectId, sessionId);
@@ -59,9 +49,7 @@ export async function loadAllSessionBundles(
       bundles.push(bundle);
     }
   }
-  return bundles.sort((left, right) =>
-    left.ingested_at.localeCompare(right.ingested_at),
-  );
+  return bundles.sort((left, right) => left.ingested_at.localeCompare(right.ingested_at));
 }
 
 export async function replayBundles(projectId: string): Promise<InstinctMap> {

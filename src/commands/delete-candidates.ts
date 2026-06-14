@@ -4,12 +4,15 @@ import type { DatabaseSync } from "node:sqlite";
 import type { CommandContext } from "../cli.js";
 import { listDeletionCandidates } from "../db/ledger.js";
 import type { DeletionCandidateRow } from "../db/queries.js";
-import { getProjectKnowledgeSessionPath, getUserKnowledgeSessionPath } from "../writers/knowledge-writer.js";
+import {
+  getProjectKnowledgeSessionPath,
+  getUserKnowledgeSessionPath,
+} from "../writers/knowledge-writer.js";
 import { getSessionManifestPath } from "../writers/manifest-writer.js";
 import { getRetentionReceiptPath } from "../writers/report-writer.js";
 import {
   getSessionSummaryJsonPath,
-  getSessionSummaryMarkdownPath
+  getSessionSummaryMarkdownPath,
 } from "../writers/summary-writer.js";
 
 type RetentionArtifactPaths = {
@@ -38,7 +41,10 @@ type RetentionDecision = {
   updated_at: string;
 };
 
-export async function executeDeleteCandidates(context: CommandContext, database: DatabaseSync): Promise<number> {
+export async function executeDeleteCandidates(
+  context: CommandContext,
+  database: DatabaseSync,
+): Promise<number> {
   const candidates = listDeletionCandidates(database);
   const decisions = await Promise.all(candidates.map(buildRetentionDecision));
 
@@ -49,20 +55,24 @@ export async function executeDeleteCandidates(context: CommandContext, database:
 async function buildRetentionDecision(candidate: DeletionCandidateRow): Promise<RetentionDecision> {
   const artifactPaths = {
     manifest_json: getSessionManifestPath(candidate.session_id),
-    project_knowledge_jsonl: getProjectKnowledgeSessionPath(candidate.project_key, candidate.session_id),
+    project_knowledge_jsonl: getProjectKnowledgeSessionPath(
+      candidate.project_key,
+      candidate.session_id,
+    ),
     retention_receipt_json: getRetentionReceiptPath(candidate.session_id),
     summary_json: getSessionSummaryJsonPath(candidate.session_id),
     summary_markdown: getSessionSummaryMarkdownPath(candidate.session_id),
-    user_knowledge_jsonl: getUserKnowledgeSessionPath("operator", candidate.session_id)
+    user_knowledge_jsonl: getUserKnowledgeSessionPath("operator", candidate.session_id),
   };
   const artifactPresenceEntries = await Promise.all(
-    Object.entries(artifactPaths).map(async ([name, path]) => [name, await pathExists(path)] as const)
+    Object.entries(artifactPaths).map(
+      async ([name, path]) => [name, await pathExists(path)] as const,
+    ),
   );
-  const artifactPresence = Object.fromEntries(artifactPresenceEntries) as RetentionDecision["artifact_presence"];
-  const missingArtifacts = missingRequiredArtifacts(
-    artifactPresence,
-    candidate.candidate_state,
-  );
+  const artifactPresence = Object.fromEntries(
+    artifactPresenceEntries,
+  ) as RetentionDecision["artifact_presence"];
+  const missingArtifacts = missingRequiredArtifacts(artifactPresence, candidate.candidate_state);
   const safeToDelete = candidate.safe_to_delete === 1;
 
   return {
@@ -78,9 +88,8 @@ async function buildRetentionDecision(candidate: DeletionCandidateRow): Promise<
     session_id: candidate.session_id,
     source_hash: candidate.source_hash,
     source_session_id: candidate.source_session_id,
-    status:
-      safeToDelete && isDeletionReadyState(candidate.candidate_state) ? "ready" : "blocked",
-    updated_at: candidate.updated_at
+    status: safeToDelete && isDeletionReadyState(candidate.candidate_state) ? "ready" : "blocked",
+    updated_at: candidate.updated_at,
   };
 }
 
@@ -102,7 +111,7 @@ function missingRequiredArtifacts(
     artifactPresence.project_knowledge_jsonl ||
     artifactPresence.user_knowledge_jsonl
       ? null
-      : "knowledge_jsonl"
+      : "knowledge_jsonl",
   ].filter((value): value is string => value !== null);
 
   return missing.sort();

@@ -2,11 +2,8 @@ import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 
 import type { JsonValue } from "../../models/canonical.js";
-import { parseJsonLine, type JsonRecord } from "../_common/jsonl.js";
-import type {
-  TranscriptRecord,
-  TranscriptRecordKind
-} from "../_common/intermediate.js";
+import type { TranscriptRecord, TranscriptRecordKind } from "../_common/intermediate.js";
+import { type JsonRecord, parseJsonLine } from "../_common/jsonl.js";
 import {
   detectRedaction,
   extractCommandStrings,
@@ -16,13 +13,13 @@ import {
   looksRedacted,
   pickFirstString,
   readValueAtPath,
-  uniquePreservingOrder
+  uniquePreservingOrder,
 } from "../_common/text-extract.js";
 import type {
   ParsePiTranscriptOptions,
   ParsePiTranscriptResult,
   PiSessionMeta,
-  PiTranscriptRecord
+  PiTranscriptRecord,
 } from "./intermediate.js";
 
 /**
@@ -39,7 +36,7 @@ import type {
  * records in phase 1 (see docs/research/pi-source-strategy.md).
  */
 export async function parsePiTranscript(
-  options: ParsePiTranscriptOptions
+  options: ParsePiTranscriptOptions,
 ): Promise<ParsePiTranscriptResult> {
   const records: PiTranscriptRecord[] = [];
   const stream = createReadStream(options.sourcePath, { encoding: "utf8" });
@@ -58,7 +55,7 @@ export async function parsePiTranscript(
       const normalizedRecord = normalizeTranscriptRecord(parsedLine, {
         lineNumber,
         sourceHash: options.sourceHash,
-        sourcePath: options.sourcePath
+        sourcePath: options.sourcePath,
       });
 
       records.push(normalizedRecord);
@@ -87,7 +84,7 @@ function parsePiSessionLine(line: string, sourcePath: string, lineNumber: number
 
 function normalizeTranscriptRecord(
   parsedLine: JsonRecord,
-  context: RecordContext
+  context: RecordContext,
 ): TranscriptRecord {
   const topType = pickFirstString(parsedLine, [["type"]]);
   const messageObject = readValueAtPath(parsedLine, ["message"]);
@@ -106,7 +103,7 @@ function normalizeTranscriptRecord(
       : null;
   const filePaths = uniquePreservingOrder(extractFilePaths(parsedLine, messageText, toolInputText));
   const commandStrings = uniquePreservingOrder(
-    extractCommandStrings(parsedLine, messageText, toolInputText)
+    extractCommandStrings(parsedLine, messageText, toolInputText),
   );
 
   return {
@@ -118,7 +115,7 @@ function normalizeTranscriptRecord(
     provenance: {
       lineNumber: context.lineNumber,
       sourceHash: context.sourceHash,
-      sourcePath: context.sourcePath
+      sourcePath: context.sourcePath,
     },
     rawEvent: parsedLine,
     rawType,
@@ -138,9 +135,9 @@ function normalizeTranscriptRecord(
             status:
               messageObject && typeof messageObject === "object" && !Array.isArray(messageObject)
                 ? pickFirstString(messageObject as JsonRecord, [["status"], ["state"]])
-                : null
+                : null,
           }
-        : null
+        : null,
   };
 }
 
@@ -175,7 +172,7 @@ function classifyRecordKind(topType: string | null, role: string | null): Transc
 function extractMessageText(
   parsedLine: JsonRecord,
   kind: TranscriptRecordKind,
-  messageObject: JsonValue | undefined
+  messageObject: JsonValue | undefined,
 ): string | null {
   if (kind === "user_message" || kind === "assistant_message" || kind === "tool_result_stub") {
     if (!messageObject || typeof messageObject !== "object" || Array.isArray(messageObject)) {
@@ -193,7 +190,9 @@ function extractMessageText(
     return null;
   }
 
-  for (const path of [["content"], ["text"], ["message"]] satisfies ReadonlyArray<ReadonlyArray<string>>) {
+  for (const path of [["content"], ["text"], ["message"]] satisfies ReadonlyArray<
+    ReadonlyArray<string>
+  >) {
     const candidate = readValueAtPath(parsedLine, path);
     const normalized = extractNormalizedText(candidate);
     if (normalized !== null && !looksRedacted(normalized)) {
@@ -227,6 +226,6 @@ function extractSessionMeta(parsedLine: JsonRecord): PiSessionMeta | null {
     cwd: pickFirstString(parsedLine, [["cwd"]]),
     id: pickFirstString(parsedLine, [["id"]]),
     timestamp: pickFirstString(parsedLine, [["timestamp"]]),
-    version: typeof versionValue === "number" ? versionValue : null
+    version: typeof versionValue === "number" ? versionValue : null,
   };
 }
