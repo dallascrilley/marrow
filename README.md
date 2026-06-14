@@ -216,9 +216,14 @@ Audit summary and deletion-readiness quality across already-ingested sessions:
 ```bash
 node dist/cli.js quality audit
 node dist/cli.js quality audit --limit 100
+node dist/cli.js quality audit --topic-distribution
 ```
 
-The audit reports deletion-readiness counts, blocked reasons, issue counts,
+Topic-distribution mode ranks projects by low-signal topic rate, wrapper-leak
+count, and LLM rescue coverage, and prints remediation commands
+(`corpus:resummarize:dry-run` → `corpus:resummarize`).
+
+The default audit reports deletion-readiness counts, blocked reasons, issue counts,
 recommendations, deterministic project-learning distribution metrics, knowledge
 artifact presence, and the worst sessions by deterministic output-quality checks.
 

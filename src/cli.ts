@@ -76,7 +76,7 @@ const commandTree: Record<string, CommandDefinition> = {
     subcommands: {
       audit: {
         description:
-          "Score summaries, learnings, and deletion readiness across existing runtime artifacts.",
+          "Score summaries, learnings, and deletion readiness across existing runtime artifacts. Pass --topic-distribution for corpus topic-quality stats and remediation hints.",
         execute: async (context) => withLedger(context, executeQualityAudit),
       },
       "review-learnings": {

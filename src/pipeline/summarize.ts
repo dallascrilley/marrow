@@ -184,6 +184,22 @@ export function isLowSignalTopic(topic: string): boolean {
   return false;
 }
 
+export function isWrapperLeakTopic(topic: string): boolean {
+  const normalized = topic.replace(/\s+/g, " ").trim();
+  if (normalized.length === 0) {
+    return false;
+  }
+
+  return (
+    looksLikeBareSkillSlugTopic(normalized) ||
+    looksLikeSkillHarnessLeak(normalized) ||
+    looksLikeMarkdownSkillHeaderTopic(normalized) ||
+    looksLikeSlashCommandTopic(normalized) ||
+    /^Session summary for\b/i.test(normalized) ||
+    /^Base directory for this skill\b/i.test(normalized)
+  );
+}
+
 function looksLikeMarkdownSkillHeaderTopic(topic: string): boolean {
   return /^#\s+[A-Za-z][^\n`]{0,120}$/.test(topic.trim());
 }

@@ -5,11 +5,10 @@ in-flight notes.
 
 ## Now
 
-- `td-3efc5e` — quality audit `--topic-distribution` (whats-next R2)
+- `td-b5b7b4` — daemon-LLM separation (R3)
 
 ## Next (whats-next 2026-06-14)
 
-- `td-b5b7b4` — daemon-LLM separation (R3)
 - `td-984616` — automation LAUNCH_CRITERIA gates (R4)
 - `td-504382` — close v2 epic (R5)
 

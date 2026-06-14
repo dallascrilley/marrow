@@ -2,31 +2,67 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
 import { auditQuality } from "../pipeline/quality-audit.js";
+import { auditTopicDistribution } from "../pipeline/topic-distribution.js";
 
 export async function executeQualityAudit(
   context: CommandContext,
   database: DatabaseSync,
 ): Promise<number> {
-  const limit = parseLimit(context.args);
-  const report = await auditQuality(database, limit === undefined ? {} : { limit });
+  const options = parseQualityAuditOptions(context.args);
+
+  if (options.topicDistribution) {
+    const report = await auditTopicDistribution(
+      database,
+      options.limit === undefined ? {} : { limit: options.limit },
+    );
+    context.output.info(JSON.stringify(report, null, 2));
+    return 0;
+  }
+
+  const report = await auditQuality(
+    database,
+    options.limit === undefined ? {} : { limit: options.limit },
+  );
 
   context.output.info(JSON.stringify(report, null, 2));
   return 0;
 }
 
-function parseLimit(args: readonly string[]): number | undefined {
-  const limitFlagIndex = args.findIndex((arg) => arg === "--limit");
+function parseQualityAuditOptions(args: readonly string[]): {
+  limit?: number;
+  topicDistribution: boolean;
+} {
+  let limit: number | undefined;
+  let topicDistribution = false;
 
-  if (limitFlagIndex === -1) {
-    return undefined;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === undefined) {
+      continue;
+    }
+
+    if (arg === "--topic-distribution") {
+      topicDistribution = true;
+      continue;
+    }
+
+    if (arg === "--limit") {
+      const rawLimit = args[index + 1];
+      const parsed = Number(rawLimit);
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        throw new Error("quality audit --limit requires a non-negative integer");
+      }
+      limit = parsed;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--")) {
+      throw new Error(`Unknown quality audit flag: ${arg}`);
+    }
+
+    throw new Error(`Unexpected argument for quality audit: ${arg}`);
   }
 
-  const rawLimit = args[limitFlagIndex + 1];
-  const limit = Number(rawLimit);
-
-  if (!Number.isInteger(limit) || limit < 0) {
-    throw new Error("quality audit --limit requires a non-negative integer");
-  }
-
-  return limit;
+  return limit === undefined ? { topicDistribution } : { limit, topicDistribution };
 }
