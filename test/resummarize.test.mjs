@@ -420,3 +420,50 @@ test("resummarizeSessions --dry-run reports would_process_count without writes",
     await rm(sandbox, { force: true, recursive: true });
   }
 });
+
+test("resummarizeSessions respects llm budget across multiple low-signal sessions", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-budget-"));
+  const runtimeRoot = join(sandbox, "runtime");
+  process.env[runtimeOverrideEnvVar] = runtimeRoot;
+
+  try {
+    const database = await createLedger();
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId: "budget-session-a",
+      topic: "brainstorming",
+      userPrompt: "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.",
+    });
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId: "budget-session-b",
+      topic: "whats-next",
+      userPrompt: "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.",
+    });
+
+    const result = await resummarizeSessions(database, {
+      generateTopic: async () => "budget-rescued topic",
+      llmTopic: true,
+      lowSignalOnly: true,
+      maxPer: "1/1h",
+    });
+
+    assert.equal(result.llm_topic_calls, 1);
+    assert.equal(result.llm_topic_skipped_for_budget, 1);
+    assert.equal(result.processed_count, 2);
+    const llmSessions = result.sessions.filter((session) => session.topic_source === "llm");
+    const deterministicSessions = result.sessions.filter(
+      (session) => session.topic_source === "deterministic",
+    );
+    assert.equal(llmSessions.length, 1);
+    assert.equal(deterministicSessions.length, 1);
+    assert.equal(result.llm_budget?.allowed, false);
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});

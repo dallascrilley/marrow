@@ -35,8 +35,10 @@ summary topics and re-exports the session index; manifests stay immutable):
 npm run corpus:resummarize
 ```
 
+Uses the same `ASD_LLM_MAX_PER` sliding-window budget as `quality review-learnings`
+when `--llm-topic` is enabled (default unless `resummarize-corpus.mjs --no-llm-topic`).
+
 Run this on a weekly or monthly cadence — not on the same 6-hour ingest cron.
-Full resummarize may invoke `--llm-topic` when `OPENROUTER_API_KEY` is set.
 
 ## Environment
 
