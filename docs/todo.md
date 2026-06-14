@@ -5,11 +5,10 @@ in-flight notes.
 
 ## Now
 
-- `td-3efc5e` — quality audit `--topic-distribution` (whats-next R2)
+- `td-b5b7b4` — daemon-LLM separation (R3)
 
 ## Next (whats-next 2026-06-14)
 
-- `td-b5b7b4` — daemon-LLM separation (R3)
 - `td-984616` — automation LAUNCH_CRITERIA gates (R4)
 - `td-504382` — close v2 epic (R5)
 
@@ -20,6 +19,7 @@ in-flight notes.
 
 ## Done (foundational v2 + post-ship hygiene)
 
+- `td-3efc5e` — quality audit `--topic-distribution` (whats-next R2)
 - Whats-next report: `docs/whats-next/2026-06-14.md`
 - SessionEnd hook — `asd hooks install` (td-0633d9, PR #24)
 - Corpus resummarize proof — `/tmp/agent-session-distillery/2026-05-27_corpus-resummarize/SUMMARY.md` (td-da57d1)

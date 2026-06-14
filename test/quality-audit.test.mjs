@@ -12,6 +12,7 @@ import {
 } from "../dist/db/ledger.js";
 import { sourceSessionFixture, summaryFixture } from "../dist/models/canonical.js";
 import { auditQuality } from "../dist/pipeline/quality-audit.js";
+import { auditTopicDistribution } from "../dist/pipeline/topic-distribution.js";
 import { writeKnowledgeArtifacts } from "../dist/writers/knowledge-writer.js";
 import { writeSessionSummary } from "../dist/writers/summary-writer.js";
 
@@ -233,6 +234,98 @@ test("quality audit reports project-learning distribution statistics", async () 
         report.sessions.find((session) => session.session_id === "distribution-session-3")
           .project_learning_count,
         10,
+      );
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("topic distribution aggregates low-signal, wrapper leaks, and llm rescue coverage", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+
+    try {
+      const goodSession = upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "agent-session-distillery",
+        session_id: "topic-good-session",
+        source_hash: "sha256:topic-good",
+      }).sourceSession;
+      const noisySession = upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "agent-session-distillery",
+        session_id: "topic-noisy-session",
+        source_hash: "sha256:topic-noisy",
+      }).sourceSession;
+      const rescuedSession = upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "other-project",
+        session_id: "topic-rescued-session",
+        source_hash: "sha256:topic-rescued",
+      }).sourceSession;
+      upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "other-project",
+        session_id: "topic-missing-session",
+        source_hash: "sha256:topic-missing",
+      });
+
+      await writeSessionSummary({
+        ...summaryFixture,
+        session_id: goodSession.session_id,
+        topic: "Fix quality audit topic distribution",
+        topic_source: "deterministic",
+      });
+      await writeSessionSummary({
+        ...summaryFixture,
+        session_id: noisySession.session_id,
+        topic: "brainstorming",
+        topic_source: "deterministic",
+      });
+      await writeSessionSummary({
+        ...summaryFixture,
+        session_id: rescuedSession.session_id,
+        topic: "Recover topic quality with LLM rescue",
+        topic_source: "llm",
+      });
+
+      const report = await auditTopicDistribution(database);
+
+      assert.equal(report.totals.sessions, 4);
+      assert.equal(report.totals.missing_summaries, 1);
+      assert.equal(report.totals.low_signal_topics, 1);
+      assert.equal(report.totals.wrapper_leak_topics, 1);
+      assert.equal(report.totals.deterministic_topics, 2);
+      assert.equal(report.totals.llm_rescued_topics, 1);
+      assert.deepEqual(report.remediation.commands, [
+        "npm run corpus:resummarize:dry-run",
+        "npm run corpus:resummarize",
+      ]);
+      assert.equal(report.remediation.resummarize_candidate_count, 1);
+
+      const mainProject = report.by_project.find(
+        (project) => project.project_key === "agent-session-distillery",
+      );
+      assert.ok(mainProject);
+      assert.equal(mainProject.sessions, 2);
+      assert.equal(mainProject.low_signal_topics, 1);
+      assert.equal(mainProject.low_signal_rate, 0.5);
+      assert.equal(mainProject.wrapper_leak_topics, 1);
+      assert.equal(mainProject.deterministic_topics, 2);
+      assert.equal(mainProject.llm_rescued_topics, 0);
+
+      const otherProject = report.by_project.find(
+        (project) => project.project_key === "other-project",
+      );
+      assert.ok(otherProject);
+      assert.equal(otherProject.sessions, 2);
+      assert.equal(otherProject.missing_summaries, 1);
+      assert.equal(otherProject.llm_rescued_topics, 1);
+      assert.equal(
+        report.by_project[0].project_key,
+        "agent-session-distillery",
+        "projects sort by highest low-signal rate first",
       );
     } finally {
       database.close();
