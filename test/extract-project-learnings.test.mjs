@@ -1301,3 +1301,22 @@ test("sanitizes bold emphasis and framing from decision learning statement", () 
   assert.ok(!learnings.project[0].statement.includes("**"), "bold markers should be removed");
   assert.ok(learnings.project[0].statement.startsWith("Approved "), "framing token should be removed");
 });
+
+test("does not derive workflow from prompt-instruction turn", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: [],
+    files_touched: [
+      "cohost-ai-studio/trigger-real-video-validation/docs/specs/2026-03-30-cloud-mode-design.md",
+    ],
+    user_prompt: "Re-read and review ONLY this file (updated after first review):",
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});

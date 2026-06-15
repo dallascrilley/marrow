@@ -501,17 +501,18 @@ function extractConcreteTurnFallbackCandidates(
   input: ExtractLearningsInput,
 ): ProjectLearningCandidate[] {
   const candidates: ProjectLearningCandidate[] = [];
-
   for (const [index, turn] of input.turns.entries()) {
     const promptForClassification = sanitizeUserPrompt(turn.user_prompt) || turn.user_prompt;
 
     if (
       looksLikeSkillHarnessLeak(promptForClassification) ||
       isNoSignalPrompt(promptForClassification) ||
-      looksLikeProcessNarration(promptForClassification)
+      looksLikeProcessNarration(promptForClassification) ||
+      looksLikePromptInstruction(promptForClassification)
     ) {
       continue;
     }
+
 
     const commands = usefulCommandsForTurn(turn, []);
     const files = usefulFilesForTurn(turn, []);
@@ -579,6 +580,10 @@ function isConcreteProjectPrompt(prompt: string): boolean {
   return /\b(?:fix|fixed|bug|debug|implement|implemented|resolve|resolved|refactor|refactored|migrate|migrated|upgrade|upgraded|update|updated|change|changed|add|added|remove|removed|review|audit|test|tests|optimize|performance|configure|config|install|build|deploy)\b/i.test(
     prompt,
   );
+}
+
+function looksLikePromptInstruction(prompt: string): boolean {
+  return /\b(?:re-read|review|update|edit|change)\b.*\bONLY\b/i.test(prompt) || /^\s*When working on\b/i.test(prompt);
 }
 
 function toVerifiedCompletionStatement(event: Event): string | null {
