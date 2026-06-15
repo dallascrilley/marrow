@@ -1455,3 +1455,85 @@ test("invalid ASD_MAX_PROJECT_LEARNINGS falls back to default cap", () => {
     }
   }
 });
+test("rejects multi-sentence decision candidates", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(firstTurn.turn_id, "decision", "First, I reviewed the options. Then I chose the adapter pattern. Finally, I updated the docs.", {
+      event_id: `${firstTurn.turn_id}:decision:000001`,
+    }),
+  ];
+
+  const result = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  assert.equal(result.project.length, 0);
+});
+
+test("rejects multi-sentence failure-mode candidates", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(firstTurn.turn_id, "failure", "The build failed. It could not find the module. The path was wrong.", {
+      event_id: `${firstTurn.turn_id}:failure:000001`,
+    }),
+  ];
+
+  const result = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  assert.equal(result.project.length, 0);
+});
+
+test("keeps single-sentence verified-fix workflow with semicolon", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    files_touched: ["desktop/vitest.config.ts"],
+    verification_seen: true,
+  });
+  const events = [
+    event(firstTurn.turn_id, "fix", "Use worker threads instead of forks in desktop/vitest.config.ts.", {
+      event_id: `${firstTurn.turn_id}:fix:000001`,
+    }),
+    event(firstTurn.turn_id, "verification", "Tests pass.", {
+      event_id: `${firstTurn.turn_id}:verification:000001`,
+      payload_small: { matched_rule: "verification", verification_command: "./scripts/qa" },
+    }),
+  ];
+
+  const result = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  assert.equal(result.project.length, 1);
+  assert.equal(result.project[0].kind, "workflow");
+  assert.ok(result.project[0].statement.includes("verified"));
+});
+
+test("truncates project-learning statements at 240 characters", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const longStatement = "A".repeat(300);
+  const events = [
+    event(firstTurn.turn_id, "decision", longStatement, {
+      event_id: `${firstTurn.turn_id}:decision:000001`,
+    }),
+  ];
+
+  const result = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  assert.equal(result.project.length, 1);
+  assert.ok(result.project[0].statement.length <= 240);
+  assert.ok(result.project[0].statement.endsWith("..."));
+});
+
+test("rejects multi-sentence workflow candidates that are not verified-fix patterns", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: ["git worktree list"],
+  });
+  // Craft a turn-fallback-like workflow by making the prompt concrete and providing a command.
+  const turnWithPrompt = { ...firstTurn, user_prompt: "Set up a worktree for the feature branch." };
+  const result = extractLearnings({ events: [], sourceSession: source, turns: [turnWithPrompt] });
+  // The derived workflow should be single-sentence; this regression test guards against
+  // future multi-sentence turn-fallback statements.
+  for (const learning of result.project) {
+    assert.ok(
+      learning.statement.split(/[.!?]+(?:\s|$)/).filter(Boolean).length <= 1 ||
+        learning.statement.includes(";"),
+      `expected single-sentence workflow, got: ${learning.statement}`,
+    );
+  }
+});

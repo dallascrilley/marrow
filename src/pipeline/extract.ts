@@ -18,7 +18,7 @@ import {
   sanitizeLearningTitle,
   sanitizeUserPrompt,
 } from "./prompt-sanitize.js";
-import { isProcessChatterText } from "./artifact-heuristics.js";
+import { isAtomicStatement, isProcessChatterText } from "./artifact-heuristics.js";
 export const defaultUserScopeKey = "operator";
 
 export type ExtractLearningsInput = {
@@ -142,6 +142,9 @@ function applyProjectLearningCap(
 ): ProjectLearningCandidate[] {
   const cap = getProjectLearningCap();
   if (candidates.length <= cap) return candidates.slice();
+  console.warn(
+    `[asd] project learning cap reached: ${candidates.length} candidates truncated to ${cap} (set ASD_MAX_PROJECT_LEARNINGS to override)`,
+  );
   return candidates.slice(0, cap);
 }
 
@@ -1584,6 +1587,21 @@ function finalizeProjectLearningCandidate(
 
   const statement = cleanedForDumpCheck.replace(/\s+/g, " ").trim();
 
+  // Reject multi-sentence assistant narratives unless they are verified-fix
+  // workflow patterns, which legitimately join action and verification clauses.
+  const isVerifiedFixWorkflow =
+    candidate.kind === "workflow" && candidate.dedupeKey.startsWith("verified-fix:");
+  if (!isVerifiedFixWorkflow && !isAtomicStatement(statement)) {
+    return null;
+  }
+
+  // Apply a hard statement-length ceiling.
+  const maxStatementLength = 240;
+  const finalStatement =
+    statement.length > maxStatementLength
+      ? `${statement.slice(0, maxStatementLength - 3).trimEnd()}...`
+      : statement;
+
   const evidence = uniqueStrings(
     candidate.evidence
       .map((item) => capEvidenceText(sanitizeHarnessLeakText(item)))
@@ -1592,15 +1610,15 @@ function finalizeProjectLearningCandidate(
 
   const titleBodyMax =
     candidate.kind === "decision" || candidate.title.startsWith("Decision:") ? 72 : 60;
-  const title = sanitizeLearningTitle(candidate.title, statement, titleBodyMax);
+  const title = sanitizeLearningTitle(candidate.title, finalStatement, titleBodyMax);
   if (title.length === 0 || looksLikeSkillHarnessLeak(title)) {
     return null;
   }
 
   return {
     ...candidate,
-    evidence: evidence.length > 0 ? evidence : [capEvidenceText(statement)],
-    statement,
+    evidence: evidence.length > 0 ? evidence : [capEvidenceText(finalStatement)],
+    statement: finalStatement,
     title,
   };
 }
