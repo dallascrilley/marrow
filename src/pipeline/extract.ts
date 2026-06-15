@@ -25,6 +25,23 @@ export const defaultUserScopeKey = "operator";
 /** Maximum characters for a single project-learning statement. */
 const MAX_LEARNING_STATEMENT_LENGTH = 240;
 
+/** Default ceiling for project learnings emitted from a single session. */
+export const DEFAULT_MAX_PROJECT_LEARNINGS_PER_SESSION = 12;
+
+function getMaxProjectLearningsPerSession(): number {
+  const fromEnv = process.env.ASD_MAX_PROJECT_LEARNINGS_PER_SESSION?.trim();
+  if (fromEnv === undefined || fromEnv.length === 0) {
+    return DEFAULT_MAX_PROJECT_LEARNINGS_PER_SESSION;
+  }
+
+  const parsed = Number(fromEnv);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return DEFAULT_MAX_PROJECT_LEARNINGS_PER_SESSION;
+  }
+
+  return parsed;
+}
+
 /** True when a statement contains more than one sentence. */
 function hasMultipleSentences(value: string): boolean {
   return /.+[.!?]\s+.+/.test(value);
@@ -126,11 +143,24 @@ function extractProjectLearningCandidates(
       turn,
     }),
   );
-  return dedupeProjectCandidates(
+  const deduped = dedupeProjectCandidates(
     [...eventCandidates, ...turnCandidates]
       .map(finalizeProjectLearningCandidate)
       .filter((candidate): candidate is ProjectLearningCandidate => candidate !== null),
   );
+
+  const max = getMaxProjectLearningsPerSession();
+  if (max === 0) {
+    return [];
+  }
+
+  if (deduped.length > max) {
+    console.warn(
+      `[asd] learning-cap: ${input.sourceSession.session_id} produced ${deduped.length} project learnings; truncating to ${max}.`,
+    );
+  }
+
+  return deduped.slice(0, max);
 }
 
 function hasSameTurnVerifiedFix(events: readonly Event[], turnId: string): boolean {

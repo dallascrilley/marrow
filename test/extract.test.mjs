@@ -237,3 +237,88 @@ test("verified-fix candidates with semicolon survive atomicity check", () => {
   assert.match(verifiedFix.statement, /; verified/);
   assert.ok(verifiedFix.statement.length <= 240, "statement should respect 240-char ceiling");
 });
+
+
+test("project learnings are capped per session with highest-priority survivors", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "extract-cap",
+  };
+  const turn = turnSchema.parse({
+    assistant_summary: "Many small decisions.",
+    commands_seen: [],
+    ended_at: "2026-05-16T12:05:00Z",
+    files_touched: [],
+    index: 0,
+    session_id: sourceSession.session_id,
+    started_at: "2026-05-16T12:00:00Z",
+    tool_stub_count: 0,
+    turn_id: `${sourceSession.session_id}:turn-0000`,
+    user_prompt: "Make many decisions.",
+    verification_seen: false,
+  });
+
+  const events = [];
+  for (let index = 0; index < 20; index += 1) {
+    events.push(
+      eventSchema.parse({
+        confidence: "medium",
+        event_id: `${sourceSession.session_id}:decision:${index}`,
+        payload_small: {},
+        source_offsets: { end_line: index + 1, start_line: index + 1 },
+        summary: `Decision: use approach ${index} for the ${index % 2 === 0 ? "parser" : "renderer"}.`,
+        turn_id: turn.turn_id,
+        type: "decision",
+      }),
+    );
+  }
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession,
+    turns: [turn],
+  });
+
+  assert.equal(learnings.project.length, 12);
+});
+
+test("project learning cap of zero returns empty", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "extract-cap-zero",
+  };
+  const turn = turnSchema.parse({
+    assistant_summary: "One decision.",
+    commands_seen: [],
+    ended_at: "2026-05-16T12:05:00Z",
+    files_touched: [],
+    index: 0,
+    session_id: sourceSession.session_id,
+    started_at: "2026-05-16T12:00:00Z",
+    tool_stub_count: 0,
+    turn_id: `${sourceSession.session_id}:turn-0000`,
+    user_prompt: "Make a decision.",
+    verification_seen: false,
+  });
+  const event = eventSchema.parse({
+    confidence: "medium",
+    event_id: `${sourceSession.session_id}:decision:1`,
+    payload_small: {},
+    source_offsets: { end_line: 1, start_line: 1 },
+    summary: "Decision: scope vault writes to asd-learnings/.",
+    turn_id: turn.turn_id,
+    type: "decision",
+  });
+
+  process.env.ASD_MAX_PROJECT_LEARNINGS_PER_SESSION = "0";
+  const learnings = extractLearnings({
+    events: [event],
+    sourceSession,
+    turns: [turn],
+  });
+  delete process.env.ASD_MAX_PROJECT_LEARNINGS_PER_SESSION;
+
+  assert.equal(learnings.project.length, 0);
+});
