@@ -296,7 +296,7 @@ No failures. Kimi sessions enriched cleanly and the 12-learning cap held.
 
 1. **No ingest failures across any harness.** Every `ingest sync --resume --source <harness>` completed with `failed_count: 0` after the U2 manifest-overwrite fix.
 2. **The learning cap is holding.** `max_project_learnings` and `p99` stayed at 12 across all audits, confirming the per-session cap from the earlier refactor is effective.
-3. **Cursor is the dominant backlog.** Cursor contributed ~54% of discovered sessions (3,244 / 5,802) and ~47% of total project learnings added during the sweep.
+3. **Cursor is the dominant backlog.** Cursor contributed ~56% of discovered sessions (3,244 / 5,802) and ~45% of total project learnings added during the sweep.
 4. **Low-signal/no-learning sessions dominate new ingest.** The largest issue categories are `blocked_deletion` (2,132), `no_project_learnings` (1,906), and `process_chatter` (1,548). These are content-quality issues, not code failures.
 5. **Process chatter and no-project-learnings rise with every new harness.** Each first-time sync added hundreds of `process_chatter` and `no_project_learnings` issues. This is expected because the chatter filter and learning promotion heuristics were tuned on the claude-code corpus and generalize imperfectly to other harness transcript styles.
 6. **No harness-specific parse errors observed.** All transcript parsers accepted the discovered sessions; failures were blocked only by quality gates.
