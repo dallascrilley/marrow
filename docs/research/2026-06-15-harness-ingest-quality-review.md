@@ -110,7 +110,48 @@ The deterministic topic fallback was used. After exporting `OPENROUTER_API_KEY` 
 3. **No-project-learning false negatives.** `d9298221` describes a concrete td-board cleanup task but produced zero project learnings; the no-event fallback from PR #52 did not fire because this session has events.
 4. **Pre-existing manifest collisions.** The 9 `ingest sync` failures are unrelated to recent extraction changes but block claude-code backlog drain.
 
-## U3–U6. Per-harness observations
+## U3. Pi
+
+### Commands run
+
+```bash
+export OPENROUTER_API_KEY=$(op read 'op://Private/OpenRouter API Credentials - agent-session-distillery/credential')
+export ASD_LLM_MAX_PER=20/24h
+
+asd ingest sync --source pi --resume
+asd ingest backfill --source pi --limit 10 --llm-topic
+```
+
+### Sync results
+
+- `discovered_count`: 571
+- `selected_count`: 35
+- `processed_count`: 34
+- `failed_count`: 1
+- Failure: `Immutable manifest already exists with different contents`.
+
+### Backfill results
+
+- `discovered_count`: 571
+- `processed_count`: 2 (the first 10 candidate sessions were dominated by manifest-collision failures)
+- `failed_count`: 8 (all manifest collisions)
+- `llm_topic`: true
+- One of the two processed sessions used `topic_source: "llm"`.
+
+### Sample quality observations
+
+| Session | Topic | Topic source | Project learnings | Notable issues |
+|---------|-------|--------------|-------------------|----------------|
+| `2026-03-08T05-09-07-664Z_...` | "What is the capital of France? One word answer." | deterministic | 0 | Very short (2 turns); topic is just the user prompt, but LLM rescue did not trigger. |
+| `2026-03-08T05-09-07-862Z_...` | "Handled prompt: user requested saying one" | llm | 0 | LLM rescue did fire, but topic is still low signal; no learnings extracted. |
+
+### Preliminary findings
+
+1. **Manifest collisions are widespread.** Pi shows the same immutable-manifest failure as claude-code; this is the dominant ingestion failure mode across harnesses so far.
+2. **LLM topic rescue fires but not always helpfully.** The pi session that used LLM topic still produced a vague topic and no learnings.
+3. **Very short sessions dominate the pi backlog.** Many sessions are 1–2 turns with no durable signal; they become `discardable_no_signal` or `pending_artifacts` but consume processing time.
+
+## U4–U6. Per-harness observations
 
 (TBD after each ingest run.)
 
