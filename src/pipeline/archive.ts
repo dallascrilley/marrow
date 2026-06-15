@@ -25,6 +25,7 @@ export type ArchivePhaseResult = {
 };
 
 export async function runArchivePhase(input: {
+  allowManifestOverwrite?: boolean;
   database: DatabaseSync;
   events: readonly Event[];
   knowledge: KnowledgeWriteResult;
@@ -37,6 +38,7 @@ export async function runArchivePhase(input: {
     const receiptPath = getReceiptPath(input.sourceSession.session_id);
     const sourceSessionModel = toSourceSessionModel(input.sourceSession);
     const manifest = await writeSessionManifest({
+      allowOverwrite: input.allowManifestOverwrite === true,
       artifactPaths: {
         project_knowledge_jsonl_path: input.knowledge.project.path,
         retention_receipt_path: receiptPath,

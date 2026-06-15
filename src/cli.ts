@@ -14,6 +14,7 @@ import { executeMemoryExportWiki } from "./commands/memory-export-wiki.js";
 import { executeMemoryPushWiki } from "./commands/memory-push-wiki.js";
 import { executeMigrateProjectIds } from "./commands/migrate-project-ids.js";
 import { executePipelineGate } from "./commands/pipeline-gate.js";
+import { executePipelineReextract } from "./commands/pipeline-reextract.js";
 import { executeQualityApplyLearningReview } from "./commands/quality-apply-learning-review.js";
 import { executeQualityAudit } from "./commands/quality-audit.js";
 import { executeQualityCostReport } from "./commands/quality-cost-report.js";
@@ -198,6 +199,11 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "Report pending ingest work, unreviewed learnings, and LLM budget headroom without calling OpenRouter. Pass --skip-ingest after a sync loop to avoid re-scanning adapters.",
         execute: async (context) => withLedger(context, executePipelineGate),
+      },
+      reextract: {
+        description:
+          "Re-run the extract and archive phases for stored sessions. Pass --over-extracted-only to target sessions whose project learnings exceed the per-session cap, or --session-id to target specific sessions.",
+        execute: async (context) => withLedger(context, executePipelineReextract),
       },
     },
   },

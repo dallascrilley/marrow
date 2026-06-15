@@ -36,6 +36,7 @@ export function getSessionManifestPath(sessionId: string): string {
 }
 
 export async function writeSessionManifest(input: {
+  allowOverwrite?: boolean;
   artifactPaths: SessionProvenanceManifest["artifact_paths"];
   events: readonly Event[];
   generatedAt?: string;
@@ -50,8 +51,17 @@ export async function writeSessionManifest(input: {
   const existing = await readExistingFile(path);
 
   if (existing !== null) {
-    if (existing !== serialized) {
+    if (existing !== serialized && input.allowOverwrite !== true) {
       throw new Error(`Immutable manifest already exists with different contents: ${path}`);
+    }
+
+    if (input.allowOverwrite === true && existing !== serialized) {
+      await writeFile(path, serialized, "utf8");
+      return {
+        created: true,
+        manifest,
+        path,
+      };
     }
 
     return {

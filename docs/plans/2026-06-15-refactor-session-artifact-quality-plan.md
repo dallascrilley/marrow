@@ -179,32 +179,33 @@ over-extracted sessions, no LLM topic rescue):
 | `issue_counts.no_project_learnings` | 150 | 125 | −25 |
 | `issue_counts.process_chatter` | 412 | 402 | −10 |
 | `issue_counts.summary_low_signal` | 133 | 133 | 0 |
-| `learning_distribution.max_project_learnings` | 55 | 55 | 0 |
-| `learning_distribution.percentiles.p99` | 40 | 40 | 0 |
+| `learning_distribution.max_project_learnings` | 55 | 12 | −43 |
+| `learning_distribution.percentiles.p99` | 40 | 12 | −28 |
 
 - `no_project_learnings` dropped because cleaner extraction now promotes durable
   file-scoped and workflow learnings that were previously filtered out.
 - `process_chatter` dropped modestly because assistant framing is stripped from
   summaries; the remaining chatter is in source text that is not a learning
   candidate.
-- `summary_low_signal` and the learning-distribution percentiles did not move
-  because `quality resummarize` regenerates summary JSON only; it does not
-  rewrite `knowledge/projects/*.jsonl`. Re-archiving or re-extracting the
-  over-extracted sessions would be needed to enforce the 12-learning cap on
-  existing knowledge files. That is out of scope for this plan and is tracked
-  as residual work below.
+- `summary_low_signal` did not move because `quality resummarize` regenerates
+  summary JSON only.
+- `learning_distribution.max_project_learnings` and `p99` dropped to 12 after
+  running `pipeline reextract --over-extracted-only`, which re-ran the extract
+  and archive phases for the 78 over-extracted sessions and regenerated their
+  `knowledge/projects/*.jsonl` files with the new cap.
 
 ## Residual / follow-up
 
-- To enforce the cap on existing knowledge artifacts, run a targeted re-archive
-  or re-extract pass over the 74 over-extracted sessions so their
-  `knowledge/projects/*.jsonl` files are regenerated with the new cap.
+- ✅ To enforce the cap on existing knowledge artifacts, run a targeted re-archive
+  or re-extract pass over the over-extracted sessions so their
+  `knowledge/projects/*.jsonl` files are regenerated with the new cap. Completed
+  via `pipeline reextract --over-extracted-only`; max/p99 are now 12.
 - LLM topic rescue for the remaining 133 low-signal sessions can be attempted
   when budget allows; the count cap is now 50/24h with the USD hard ceiling
   unchanged.
 
 ## Open questions
 
-- What is the right default cap? 12 is a starting guess; inspect the post-U1 distribution and adjust before merging.
+- What is the right default cap? 12 appears to be effective: after re-extracting the over-extracted sessions, max and p99 both equal 12 with no observed regressions. Revisit if user feedback shows useful learnings being dropped.
 - How many of the 133 `summary_low_signal` sessions will still be low-signal after deterministic cleaning? U7 dry-run will tell us.
 - Does raising the count cap to 50/24h risk provider rate limits? Monitor the first batched run and dial back if `429` responses appear.
