@@ -29,6 +29,14 @@ export async function executePipelineReextract(
   database: DatabaseSync,
 ): Promise<number> {
   const options = parseReextractOptions(context.args);
+  if (
+    (options.sessionIds === undefined || options.sessionIds.length === 0) &&
+    options.overExtractedOnly !== true
+  ) {
+    throw new Error(
+      "Refusing to re-extract all sessions without an explicit selector. Pass --over-extracted-only or --session-id.",
+    );
+  }
   const sessions = await selectReextractSessions(database, options);
 
   if (options.dryRun) {

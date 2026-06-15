@@ -29,3 +29,11 @@ test("parseReextractOptions rejects unknown options", () => {
 test("parseReextractOptions rejects missing --session-id value", () => {
   assert.throws(() => parseReextractOptions(["--session-id"]), /Missing value for --session-id/);
 });
+
+test("executePipelineReextract refuses to run without a selector", async () => {
+  const { executePipelineReextract } = await import("../dist/commands/pipeline-reextract.js");
+  await assert.rejects(
+    executePipelineReextract({ args: [], output: { info: () => {}, error: () => {} } }, {}),
+    /Refusing to re-extract all sessions without an explicit selector/,
+  );
+});
