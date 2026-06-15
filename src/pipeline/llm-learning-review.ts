@@ -396,11 +396,24 @@ function distributeInteger(total: number | null, count: number, index: number): 
 }
 
 function splitUsageEvenly(usage: LlmCallUsage, count: number, index: number): LlmCallUsage {
+  const inputTokens = distributeInteger(usage.input_tokens, count, index);
+  const outputTokens = distributeInteger(usage.output_tokens, count, index);
+  // Keep the per-member total internally consistent with input + output (the
+  // billed primitives) rather than distributing total independently — otherwise
+  // a member's total_tokens can disagree with its own input+output. When the
+  // provider's total isn't simply input+output, fall back to distributing it.
+  const totalTokens =
+    usage.total_tokens !== null &&
+    usage.input_tokens !== null &&
+    usage.output_tokens !== null &&
+    usage.total_tokens === usage.input_tokens + usage.output_tokens
+      ? (inputTokens ?? 0) + (outputTokens ?? 0)
+      : distributeInteger(usage.total_tokens, count, index);
   return {
     ...usage,
-    input_tokens: distributeInteger(usage.input_tokens, count, index),
-    output_tokens: distributeInteger(usage.output_tokens, count, index),
-    total_tokens: distributeInteger(usage.total_tokens, count, index),
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    total_tokens: totalTokens,
     reasoning_tokens: distributeInteger(usage.reasoning_tokens, count, index),
     cached_tokens: distributeInteger(usage.cached_tokens, count, index),
     cost: usage.cost === null ? null : usage.cost / count,
