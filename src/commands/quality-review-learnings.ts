@@ -12,10 +12,7 @@ import {
   getDefaultMaxPerWindow,
   recordLlmBudgetUse,
 } from "../pipeline/llm-budget.js";
-import {
-  type ReviewedLearning,
-  reviewLearningWithOpenRouter,
-} from "../pipeline/llm-learning-review.js";
+import { reviewLearningsBatchedWithOpenRouter } from "../pipeline/llm-learning-review.js";
 import { appendLlmTelemetry, buildLlmTelemetryRecord } from "../pipeline/llm-telemetry.js";
 import { countPendingLlmReview } from "../pipeline/pipeline-gate.js";
 import { getProjectKnowledgeSessionPath } from "../writers/knowledge-writer.js";
@@ -107,61 +104,36 @@ export async function executeQualityReviewLearnings(
     );
     prefilterSkipped.push(...skipped);
 
-    const sessionReviews: ReviewedLearning[] = [];
     const cacheDir =
       options.noCache === true
         ? undefined
         : (options.cacheDir ?? join(getRuntimePath("root"), "cache", "llm-learning-review"));
 
-    for (const learning of toReview) {
-      try {
-        let usage: ReviewedLearning["usage"] | undefined;
-        const review = await reviewLearningWithOpenRouter({
-          cacheDir,
-          learning,
-          model: options.model,
-          noCache: options.noCache,
-          onUsage: (captured) => {
-            usage = captured;
-          },
-          projectKey: session.project_key,
-          refreshLlm: options.refreshLlm,
-        });
-        sessionReviews.push({
-          learning,
-          review,
-          usage: usage ?? {
-            model: options.model ?? process.env.OPENROUTER_MODEL ?? "openai/gpt-5-nano",
-            input_tokens: null,
-            output_tokens: null,
-            total_tokens: null,
-            reasoning_tokens: null,
-            cached_tokens: null,
-            cost: null,
-            cost_source: "none",
-            cost_is_known: false,
-            missing_reason: "usage_callback_not_invoked",
-            duration_ms: 0,
-            cache_hit: false,
-          },
-        });
-      } catch (error) {
-        // A provider/transport failure is NOT a review verdict. Record it as a
-        // failure (not a `reject` sidecar entry) and leave this learning
-        // unreviewed so it remains pending for a later retry.
-        const message = error instanceof Error ? error.message : String(error);
-        failures.push({
-          learning_id: learning.learning_id,
-          reason: message,
-          session_id: session.session_id,
-        });
-        // Terminal credential/quota errors fail identically for every call, so
-        // stop early instead of hammering the dead key for every learning/session.
-        if (isTerminalProviderError(message)) {
-          terminalFailureReason = message;
-          break;
-        }
-      }
+    // Review the session's misses in bounded batches (one HTTP call each); the
+    // batch function serves cache hits without a call and amortizes the system
+    // prompt across the rest.
+    const outcome = await reviewLearningsBatchedWithOpenRouter({
+      batchSize: options.batchSize,
+      cacheDir,
+      learnings: toReview,
+      model: options.model,
+      noCache: options.noCache,
+      projectKey: session.project_key,
+      refreshLlm: options.refreshLlm,
+    });
+    const sessionReviews = outcome.reviewed;
+    for (const failure of outcome.failures) {
+      // A provider/transport failure is NOT a review verdict. Record it as a
+      // failure (not a `reject` sidecar entry) and leave the learning unreviewed
+      // so it remains pending for a later retry.
+      failures.push({
+        learning_id: failure.learning.learning_id,
+        reason: failure.reason,
+        session_id: session.session_id,
+      });
+    }
+    if (outcome.terminalFailureReason !== undefined) {
+      terminalFailureReason = outcome.terminalFailureReason;
     }
 
     for (const review of sessionReviews) {
@@ -249,6 +221,7 @@ export async function executeQualityReviewLearnings(
 }
 
 type ReviewLearningsOptions = {
+  batchSize?: number | undefined;
   ifNew?: boolean | undefined;
   limit?: number | undefined;
   cacheDir?: string | undefined;
@@ -262,6 +235,7 @@ type ReviewLearningsOptions = {
 
 function parseOptions(args: readonly string[]): ReviewLearningsOptions {
   return {
+    batchSize: parseIntegerOption(args, "--batch-size"),
     cacheDir: parseStringOption(args, "--cache-dir"),
     ifNew: args.includes("--if-new"),
     limit: parseIntegerOption(args, "--limit"),
@@ -317,18 +291,6 @@ async function readProjectLearnings(projectKey: string, sessionId: string): Prom
 
     throw error;
   }
-}
-
-function isTerminalProviderError(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes("(401)") ||
-    normalized.includes("(403)") ||
-    normalized.includes("(429)") ||
-    normalized.includes("limit exceeded") ||
-    normalized.includes("key limit") ||
-    normalized.includes("quota")
-  );
 }
 
 function isMissingFileError(error: unknown): boolean {

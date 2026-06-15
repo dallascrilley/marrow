@@ -36,6 +36,10 @@ export function buildCostReport(
 ) {
   const realCalls = records.filter((r) => r["asd.cache_hit"] === false);
   const cacheHits = records.length - realCalls.length;
+  // Each batched learning is its own record, so real_calls counts learnings, not
+  // HTTP requests. Recover the true request count by weighting each real record
+  // by 1/batch_size (a 10-learning batch → ten records contributing 0.1 each).
+  const httpCalls = sum(realCalls.map((r) => 1 / Math.max(1, r["asd.batch_size"] ?? 1)));
   const knownCost = records.filter((r) => r["gen_ai.usage.cost_is_known"] === true);
   const unknownCostCalls = realCalls.filter(
     (r) => r["gen_ai.usage.cost_is_known"] === false,
@@ -89,6 +93,7 @@ export function buildCostReport(
     totals: {
       calls: records.length,
       real_calls: realCalls.length,
+      http_calls: round(httpCalls),
       cache_hits: cacheHits,
       cache_hit_rate: records.length === 0 ? 0 : round(cacheHits / records.length),
       unknown_cost_calls: unknownCostCalls,

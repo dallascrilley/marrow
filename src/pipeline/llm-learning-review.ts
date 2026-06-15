@@ -60,7 +60,17 @@ export type LlmCallUsage = {
   missing_reason: string | null;
   duration_ms: number;
   cache_hit: boolean;
+  // How many learnings shared the single OpenRouter HTTP call this usage came
+  // from. 1 (or omitted) for unbatched calls and cache hits; N when N learnings
+  // were reviewed in one batched request and the call's cost/tokens were split
+  // evenly across them. Lets the cost-report derive true HTTP-call count without
+  // distorting per-learning cost.
+  batch_size?: number;
 };
+
+// Max learnings reviewed per batched OpenRouter request. Bounded so a single
+// retry stays cheap and the payload stays well inside the model context.
+export const defaultReviewBatchSize = 10;
 
 export type ReviewedLearning = {
   learning: Learning;
@@ -226,6 +236,218 @@ export async function reviewProjectLearningsWithOpenRouter(input: {
   }
 
   return reviewed;
+}
+
+export type BatchedReviewOutcome = {
+  reviewed: ReviewedLearning[];
+  failures: Array<{ learning: Learning; reason: string }>;
+  terminalFailureReason?: string;
+};
+
+/**
+ * Review many learnings while making as few OpenRouter calls as possible:
+ *  - cache hits are served first and never enter a batch;
+ *  - the remaining misses are grouped into batches of `batchSize`, each reviewed
+ *    in a single request whose system prompt is amortized across the batch;
+ *  - each batched call's cost/tokens are split evenly across its members and
+ *    tagged with `batch_size`, so per-learning cost stays exact while the
+ *    cost-report can still recover the true HTTP-call count.
+ *
+ * A batched call that fails marks every member of that batch as a failure (the
+ * learnings stay unreviewed for a later retry); a terminal provider error stops
+ * processing the rest so we don't hammer a dead key.
+ */
+export async function reviewLearningsBatchedWithOpenRouter(input: {
+  apiKey?: string | undefined;
+  batchSize?: number | undefined;
+  cacheDir?: string | undefined;
+  fetchImpl?: FetchLike | undefined;
+  learnings: readonly Learning[];
+  model?: string | undefined;
+  noCache?: boolean | undefined;
+  projectKey: string;
+  refreshLlm?: boolean | undefined;
+}): Promise<BatchedReviewOutcome> {
+  const model =
+    input.model ?? process.env[openRouterModelEnvVar] ?? defaultOpenRouterLearningReviewModel;
+  const batchSize = Math.max(1, input.batchSize ?? defaultReviewBatchSize);
+
+  const reviewed: ReviewedLearning[] = [];
+  const failures: Array<{ learning: Learning; reason: string }> = [];
+  const misses: Learning[] = [];
+
+  // 1. Serve cache hits first; collect misses for batching.
+  for (const rawLearning of input.learnings) {
+    const learning = learningSchema.parse(rawLearning);
+    const cachePath =
+      input.cacheDir === undefined
+        ? undefined
+        : getLearningReviewCachePath({
+            cacheDir: input.cacheDir,
+            learning,
+            model,
+            projectKey: input.projectKey,
+          });
+    if (cachePath !== undefined && input.noCache !== true && input.refreshLlm !== true) {
+      const cached = await readCachedLearningReview(cachePath);
+      if (cached !== undefined) {
+        reviewed.push({ learning, review: cached, usage: cacheHitUsage(model) });
+        continue;
+      }
+    }
+    misses.push(learning);
+  }
+
+  // 2. Review misses in bounded batches, one HTTP call each.
+  let terminalFailureReason: string | undefined;
+  for (let start = 0; start < misses.length; start += batchSize) {
+    const chunk = misses.slice(start, start + batchSize);
+    try {
+      const { content, usage } = await completeOpenRouterJson({
+        apiKey: input.apiKey,
+        errorLabel: "learning review",
+        fetchImpl: input.fetchImpl,
+        messages: [
+          { content: buildBatchedLearningReviewSystemPrompt(), role: "system" },
+          { content: buildBatchedLearningReviewPayload(chunk, input.projectKey), role: "user" },
+        ],
+        model,
+      });
+      const reviewsById = parseBatchedLearningReview(content, chunk);
+      chunk.forEach((learning, index) => {
+        const review = reviewsById.get(learning.learning_id);
+        if (review === undefined) {
+          failures.push({
+            learning,
+            reason: `batched review omitted learning ${learning.learning_id}`,
+          });
+          return;
+        }
+        const memberUsage = splitUsageEvenly(usage, chunk.length, index);
+        reviewed.push({ learning, review, usage: memberUsage });
+      });
+      if (input.cacheDir !== undefined && input.noCache !== true) {
+        for (const learning of chunk) {
+          const review = reviewsById.get(learning.learning_id);
+          if (review === undefined) {
+            continue;
+          }
+          await writeCachedLearningReview(
+            getLearningReviewCachePath({
+              cacheDir: input.cacheDir,
+              learning,
+              model,
+              projectKey: input.projectKey,
+            }),
+            review,
+          );
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      for (const learning of chunk) {
+        failures.push({ learning, reason: message });
+      }
+      if (isTerminalProviderError(message)) {
+        terminalFailureReason = message;
+        break;
+      }
+    }
+  }
+
+  return terminalFailureReason === undefined
+    ? { reviewed, failures }
+    : { reviewed, failures, terminalFailureReason };
+}
+
+function isTerminalProviderError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("(401)") ||
+    normalized.includes("(403)") ||
+    normalized.includes("(429)") ||
+    normalized.includes("limit exceeded") ||
+    normalized.includes("key limit") ||
+    normalized.includes("quota")
+  );
+}
+
+// Distribute an integer total across `count` parts as evenly as possible, giving
+// the remainder to the earliest parts so the parts sum back to the original.
+function distributeInteger(total: number | null, count: number, index: number): number | null {
+  if (total === null) {
+    return null;
+  }
+  const base = Math.floor(total / count);
+  const remainder = total - base * count;
+  return base + (index < remainder ? 1 : 0);
+}
+
+function splitUsageEvenly(usage: LlmCallUsage, count: number, index: number): LlmCallUsage {
+  return {
+    ...usage,
+    input_tokens: distributeInteger(usage.input_tokens, count, index),
+    output_tokens: distributeInteger(usage.output_tokens, count, index),
+    total_tokens: distributeInteger(usage.total_tokens, count, index),
+    reasoning_tokens: distributeInteger(usage.reasoning_tokens, count, index),
+    cached_tokens: distributeInteger(usage.cached_tokens, count, index),
+    cost: usage.cost === null ? null : usage.cost / count,
+    batch_size: count,
+  };
+}
+
+function buildBatchedLearningReviewSystemPrompt(): string {
+  return [
+    buildLearningReviewSystemPrompt(),
+    "",
+    "You will receive a JSON object with a learnings array; each learning has an id.",
+    'Return only JSON: {"reviews":[{"id","keep","verdict","durability","statement","reason"}]}.',
+    "Include exactly one review object per input learning, echoing its id verbatim.",
+    "Judge each learning independently using the rules above.",
+  ].join("\n");
+}
+
+function buildBatchedLearningReviewPayload(
+  learnings: readonly Learning[],
+  projectKey: string,
+): string {
+  return JSON.stringify(
+    {
+      project_key: projectKey,
+      learnings: learnings.map((learning) => ({
+        id: learning.learning_id,
+        kind: learning.kind,
+        statement: learning.statement,
+        evidence: learning.evidence,
+      })),
+    },
+    null,
+    2,
+  );
+}
+
+function parseBatchedLearningReview(
+  content: string,
+  expected: readonly Learning[],
+): Map<string, LearningReviewResult> {
+  const parsed = JSON.parse(content) as { reviews?: unknown };
+  if (!Array.isArray(parsed.reviews)) {
+    throw new Error("Batched learning review JSON must include a reviews array");
+  }
+
+  const expectedIds = new Set(expected.map((learning) => learning.learning_id));
+  const byId = new Map<string, LearningReviewResult>();
+  for (const entry of parsed.reviews) {
+    const id = (entry as { id?: unknown }).id;
+    if (typeof id !== "string" || !expectedIds.has(id)) {
+      // Ignore reviews for ids we did not ask about; missing ones surface later
+      // as per-learning failures so they stay pending.
+      continue;
+    }
+    byId.set(id, validateLearningReview(entry));
+  }
+
+  return byId;
 }
 
 function buildLearningReviewSystemPrompt(): string {
@@ -516,7 +738,11 @@ function parseTopicGeneration(content: string): string {
 }
 
 function parseLearningReview(content: string): LearningReviewResult {
-  const parsed = JSON.parse(content) as Partial<LearningReviewResult>;
+  return validateLearningReview(JSON.parse(content));
+}
+
+function validateLearningReview(value: unknown): LearningReviewResult {
+  const parsed = (value ?? {}) as Partial<LearningReviewResult>;
   const verdict = parseEnum(parsed.verdict, ["keep", "reject", "rewrite"] as const, "verdict");
   const durability = parseEnum(
     parsed.durability,
