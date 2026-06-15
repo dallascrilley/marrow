@@ -6,6 +6,7 @@ import type { CommandContext } from "../cli.js";
 import { getRuntimePath } from "../config/paths.js";
 import { listSourceSessions } from "../db/ledger.js";
 import { type Learning, learningSchema } from "../models/canonical.js";
+import { type PreLlmSkip, partitionLearningsForReview } from "../pipeline/learning-prefilter.js";
 import {
   assessLlmBudget,
   getDefaultMaxPerWindow,
@@ -66,6 +67,10 @@ export async function executeQualityReviewLearnings(
   const sessions = listSourceSessions(database).slice(0, options.limit);
   const reviewed = [];
   const failures: Array<{ learning_id: string; reason: string; session_id: string }> = [];
+  // Pre-LLM filter state: skips collected across the run, and a set of
+  // normalized statements seen so far so cross-session duplicates are dropped.
+  const prefilterSkipped: PreLlmSkip[] = [];
+  const seenStatements = new Set<string>();
   let reviewedLearningCount = 0;
   let terminalFailureReason: string | undefined;
 
@@ -93,13 +98,22 @@ export async function executeQualityReviewLearnings(
         remainingLearningBudget ?? learnings.length,
       ),
     );
+    // Drop deterministic junk + duplicates before paying for any review. These
+    // never reach the OpenRouter fetch.
+    const { toReview, skipped } = partitionLearningsForReview(
+      selectedLearnings,
+      session.session_id,
+      seenStatements,
+    );
+    prefilterSkipped.push(...skipped);
+
     const sessionReviews: ReviewedLearning[] = [];
     const cacheDir =
       options.noCache === true
         ? undefined
         : (options.cacheDir ?? join(getRuntimePath("root"), "cache", "llm-learning-review"));
 
-    for (const learning of selectedLearnings) {
+    for (const learning of toReview) {
       try {
         let usage: ReviewedLearning["usage"] | undefined;
         const review = await reviewLearningWithOpenRouter({
@@ -218,6 +232,11 @@ export async function executeQualityReviewLearnings(
         path: outputPath,
         rejected: reviewed.filter((entry) => !entry.keep).length,
         rewrites: reviewed.filter((entry) => entry.verdict === "rewrite").length,
+        skipped_pre_llm: prefilterSkipped.length,
+        skipped_pre_llm_breakdown: {
+          low_signal: prefilterSkipped.filter((entry) => entry.reason === "low_signal").length,
+          duplicate: prefilterSkipped.filter((entry) => entry.reason === "duplicate").length,
+        },
         total_sessions: sessions.length,
         total_reviewed_learnings: reviewedLearningCount,
       },
