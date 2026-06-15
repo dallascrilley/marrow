@@ -31,7 +31,7 @@ Node.js / TypeScript (npm)
   `type(scope): summary`. Types: `feat, fix, refactor, docs, test, chore, perf, ci`.
 - **PRs:** fill `.github/PULL_REQUEST_TEMPLATE.md`; keep them small and focused;
   `script/cibuild` must pass before requesting review.
-- **Secrets:** never commit secrets. Use env vars / a secret manager. `.env` is gitignored.
+- **Secrets:** never commit secrets. Use env vars / a secret manager. `.env` is gitignored. For OpenRouter, use the 1Password item **OpenRouter API Credentials - agent-session-distillery** (`op read 'op://Private/OpenRouter API Credentials - agent-session-distillery/credential'`).
 
 ## Working agreement
 
