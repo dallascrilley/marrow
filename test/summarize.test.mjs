@@ -452,3 +452,102 @@ test("optional LLM topic falls back to the deterministic topic when generation f
   );
   assert.equal(summary.topic_source, "deterministic");
 });
+
+test("low-signal topic heuristic catches wrapper and context-dump topics", () => {
+  assert.equal(
+    isLowSignalTopic(
+      "User initiated a review task. Here's the full review output for the changes.",
+    ),
+    true,
+  );
+  assert.equal(
+    isLowSignalTopic("Review the code changes against the base branch 'origin/main'."),
+    true,
+  );
+  assert.equal(
+    isLowSignalTopic("see context: • I have the key evidence from the transcript and SKILL.md."),
+    true,
+  );
+  assert.equal(isLowSignalTopic("resolve these:"), true);
+  assert.equal(isLowSignalTopic("fix whatever is causinf tools to hng:"), true);
+  assert.equal(isLowSignalTopic("Fix export-index contract topic provenance"), false);
+  assert.equal(isLowSignalTopic("Automation: macOS stability scan"), false);
+});
+
+test("optional LLM topic is called for weak deterministic topics like resolve these", async () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "agent-session-distillery",
+    session_id: "llm-topic-resolve-these",
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Triaged failures.",
+      commands_seen: [],
+      ended_at: "2026-05-22T20:10:00.000Z",
+      files_touched: [],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-22T20:09:00.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: "resolve these: auth latency regressions",
+      verification_seen: false,
+    }),
+  ];
+  let calls = 0;
+
+  const summary = await summarizeSessionWithOptionalLlmTopic(
+    { events: [], sourceSession, turns },
+    {
+      generateTopic: async () => {
+        calls += 1;
+        return "Resolve auth latency regressions";
+      },
+      llmTopic: true,
+    },
+  );
+
+  assert.equal(calls, 1);
+  assert.equal(summary.topic, "Resolve auth latency regressions");
+  assert.equal(summary.topic_source, "llm");
+});
+
+test("optional LLM topic is not called for high-signal deterministic topics", async () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "agent-session-distillery",
+    session_id: "llm-topic-high-signal",
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Fixed topic provenance.",
+      commands_seen: ["npm run build"],
+      ended_at: "2026-05-22T20:10:00.000Z",
+      files_touched: ["src/commands/export-index.ts"],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-22T20:09:00.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: "Fix export-index contract topic provenance",
+      verification_seen: false,
+    }),
+  ];
+  let calls = 0;
+
+  const summary = await summarizeSessionWithOptionalLlmTopic(
+    { events: [], sourceSession, turns },
+    {
+      generateTopic: async () => {
+        calls += 1;
+        return "LLM should not be used";
+      },
+      llmTopic: true,
+    },
+  );
+
+  assert.equal(calls, 0);
+  assert.equal(summary.topic, "Fix export-index contract topic provenance");
+  assert.equal(summary.topic_source, "deterministic");
+});

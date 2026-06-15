@@ -189,7 +189,11 @@ export function isLowSignalTopic(topic: string): boolean {
     return true;
   }
 
-  return false;
+  return (
+    looksLikeWrapperPromptTopic(topic) ||
+    looksLikeContextDumpTopic(topic) ||
+    looksLikeTypoOnlyFixTopic(topic)
+  );
 }
 
 export function isWrapperLeakTopic(topic: string): boolean {
@@ -203,9 +207,68 @@ export function isWrapperLeakTopic(topic: string): boolean {
     looksLikeSkillHarnessLeak(normalized) ||
     looksLikeMarkdownSkillHeaderTopic(normalized) ||
     looksLikeSlashCommandTopic(normalized) ||
+    looksLikeWrapperPromptTopic(topic) ||
+    looksLikeContextDumpTopic(topic) ||
     /^Session summary for\b/i.test(normalized) ||
     /^Base directory for this skill\b/i.test(normalized)
   );
+}
+
+function looksLikeWrapperPromptTopic(topic: string): boolean {
+  const trimmed = topic.trim();
+  const prefixes = [
+    "User initiated a review task",
+    "Review the code changes against the base branch",
+    "see context:",
+    "resolve these:",
+    "Here's the full review output",
+    "Full review output",
+    "Tether phone steering reply received",
+    "Handled prompt:",
+  ];
+
+  return prefixes.some((prefix) => trimmed.startsWith(prefix));
+}
+
+function looksLikeContextDumpTopic(topic: string): boolean {
+  const normalized = topic.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 90) {
+    return false;
+  }
+
+  const keywords = [
+    "AGENTS.md",
+    "SKILL.md",
+    "instructions",
+    "review output",
+    "context",
+    "base branch",
+    "findings",
+    "severity",
+    "json",
+    "tool",
+    "session",
+    "transcript",
+  ];
+  const matchCount = keywords.filter((keyword) =>
+    normalized.toLowerCase().includes(keyword.toLowerCase()),
+  ).length;
+
+  return matchCount >= 2;
+}
+
+function looksLikeTypoOnlyFixTopic(topic: string): boolean {
+  const normalized = topic.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!/^fix\b/i.test(normalized) && !/\bdebug\b/i.test(normalized)) {
+    return false;
+  }
+
+  if (/\bcausinf\b|\bhng\b/i.test(normalized)) {
+    return true;
+  }
+
+  const consonantOnlyWords = normalized.match(/\b[^aeiou\s\W]{4,}\b/g) ?? [];
+  return consonantOnlyWords.length >= 2;
 }
 
 function looksLikeMarkdownSkillHeaderTopic(topic: string): boolean {

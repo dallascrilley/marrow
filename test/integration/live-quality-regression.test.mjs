@@ -206,8 +206,8 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
         "d2d8b0e7-3fae-4506-927b-8f80a301ccb0",
       );
       assert.ok(noisyPlanningCandidate);
-      assert.equal(noisyPlanningCandidate.candidate_state, "pending_artifacts");
-      assert.match(noisyPlanningCandidate.reason, /no_durable_learnings/);
+      assert.equal(noisyPlanningCandidate.candidate_state, "ready");
+      assert.match(noisyPlanningCandidate.reason, /All required retention artifacts are present/);
 
       const subagentSession = getSourceSessionBySessionId(
         database,
@@ -270,9 +270,9 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
       (decision) => decision.session_id === "d2d8b0e7-3fae-4506-927b-8f80a301ccb0",
     );
     assert.ok(blockedDecision);
-    assert.equal(blockedDecision.status, "blocked");
-    assert.deepEqual(blockedDecision.missing_required_artifacts, ["knowledge_jsonl"]);
-    assert.match(blockedDecision.next_action, /Keep the source transcript/);
+    assert.equal(blockedDecision.status, "ready");
+    assert.deepEqual(blockedDecision.missing_required_artifacts, []);
+    assert.match(blockedDecision.next_action, /delete apply --apply/);
   } finally {
     if (previousHome === undefined) {
       delete process.env.HOME;

@@ -990,3 +990,261 @@ test("does not derive file-only workflow from non-concrete prompt", () => {
 
   assert.deepEqual(learnings.project, []);
 });
+
+test("rejects raw JSON reviewer findings as project learning", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "decision",
+      '{"findings":[{"severity":"high","file":"src/a.ts","line":12}]}',
+      {
+        event_id: `${firstTurn.turn_id}:decision:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});
+
+test("rejects stack-trace and multi-line error dumps as project learning", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "failure",
+      "Error: connect ECONNRESET\n    at TCPConnectWrap.afterConnect [as oncomplete] (net.js:1141:16)",
+      {
+        event_id: `${firstTurn.turn_id}:failure:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});
+
+test("rejects skill wrapper and skill doc text as project learning", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "fix",
+      [
+        "Base directory for this skill: /Users/dev/.claude/skills/example",
+        "Reference: /SKILL.md",
+        "Use when: debugging skill installation",
+      ].join("\n"),
+      {
+        event_id: `${firstTurn.turn_id}:fix:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});
+
+test("rejects long assistant narrative dumps without a concise imperative rule", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "decision",
+      [
+        "Here's what we decided: after reviewing the available options we concluded that the current approach is reasonable for the immediate term.",
+        "There are several factors to consider, including compatibility with existing callers, migration cost, and the long-term maintainability of the codebase.",
+        "We will keep an eye on the metrics and revisit if the situation changes significantly in the next development cycle.",
+      ].join(" "),
+      {
+        event_id: `${firstTurn.turn_id}:decision:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});
+
+test("derives workflow learning from concrete turn when only low-signal events exist", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: ["git commit -m 'fix: bindings'"],
+    user_prompt: "commit atomically changed files",
+  });
+  const events = [
+    event(firstTurn.turn_id, "next_step", "Next, commit the changes.", {
+      event_id: `${firstTurn.turn_id}:next_step:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "workflow");
+  assert.ok(learnings.project[0].statement.includes("git commit"));
+});
+
+test("derives workflow learning from concrete turn alongside unrelated process events", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: ["./scripts/qa"],
+    files_touched: ["src/lib/auth.ts"],
+    user_prompt: "Apply code-review follow-ups for the admin auth gate",
+  });
+  const events = [
+    event(firstTurn.turn_id, "next_step", "Next, reviewed auth setup.", {
+      event_id: `${firstTurn.turn_id}:next_step:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "workflow");
+  assert.ok(learnings.project[0].statement.includes("src/lib/auth.ts"));
+  assert.ok(learnings.project[0].statement.includes("./scripts/qa"));
+});
+
+test("does not derive workflow from skill-search wrapper prompt even when events exist", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: [],
+    files_touched: [],
+    user_prompt: [
+      "Find the skill for CI debugging.",
+      "Base directory for this skill: /Users/dev/.claude/skills/ci-debug",
+      "Reference: /SKILL.md",
+      "Use when: CI failures need triage",
+    ].join("\n"),
+  });
+  const events = [
+    event(firstTurn.turn_id, "next_step", "Reviewed skill index.", {
+      event_id: `${firstTurn.turn_id}:next_step:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});
+
+test("compresses markdown-heavy same-turn fix and verification into workflow learning", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    files_touched: ["desktop/vitest.config.ts"],
+    user_prompt: "Implement the Vitest performance optimization plan",
+  });
+  const markdownFixSummary =
+    "Summary of changes: ## Implemented **Vitest config** ([`desktop/vitest.config.ts`](desktop/vitest.config.ts)) - " +
+    "`pool: 'threads'` – use worker threads instead of forks - `environment: 'happy-dom'` – lighter DOM env than jsdom";
+  const events = [
+    event(firstTurn.turn_id, "fix", markdownFixSummary, {
+      event_id: `${firstTurn.turn_id}:fix:000001`,
+    }),
+    event(firstTurn.turn_id, "verification", "Verification noted: all tests pass", {
+      event_id: `${firstTurn.turn_id}:verification:000002`,
+      payload_small: {
+        verification_command: "npm test",
+      },
+    }),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "workflow");
+  assert.ok(learnings.project[0].statement.includes("desktop/vitest.config.ts"));
+  assert.ok(learnings.project[0].statement.includes("use worker threads"));
+});
+
+test("compresses markdown-heavy fix into file-scoped pattern learning", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    files_touched: ["desktop/vitest.config.ts"],
+    user_prompt: "Speed up the Vitest suite",
+  });
+  const markdownFixSummary =
+    "Summary of changes: ## Implemented **Vitest config** ([`desktop/vitest.config.ts`](desktop/vitest.config.ts)) - " +
+    "`pool: 'threads'` – use worker threads instead of forks - `environment: 'happy-dom'` – lighter DOM env than jsdom";
+  const events = [
+    event(firstTurn.turn_id, "fix", markdownFixSummary, {
+      event_id: `${firstTurn.turn_id}:fix:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "pattern");
+  assert.ok(learnings.project[0].statement.includes("desktop/vitest.config.ts"));
+  assert.ok(learnings.project[0].statement.includes("use worker threads"));
+});
+
+test("still rejects markdown-heavy summary without recoverable file and action", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "fix",
+      "## Changes\n- first unrelated item\n- second unrelated item\n- third unrelated item",
+      {
+        event_id: `${firstTurn.turn_id}:fix:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});

@@ -7,7 +7,6 @@ import type {
   SourceSession,
   Turn,
 } from "../models/canonical.js";
-import { learningSchema } from "../models/canonical.js";
 import {
   capEvidenceText,
   extractSubstantivePrompt,
@@ -117,8 +116,17 @@ function extractProjectLearningCandidates(
       turn,
     }),
   );
+  const hasWorkflowCandidate = [...eventCandidates, ...turnCandidates].some(
+    (candidate) => candidate.kind === "workflow",
+  );
+  const hasUsefulTurnSignal = input.turns.some(
+    (turn) => usefulCommandsForTurn(turn, []).length > 0 || usefulFilesForTurn(turn, []).length > 0,
+  );
   const fallbackCandidates =
-    input.events.length === 0 ? extractNoEventTurnFallbackCandidates(input) : [];
+    !hasWorkflowCandidate && hasUsefulTurnSignal
+      ? extractConcreteTurnFallbackCandidates(input)
+      : [];
+
   return dedupeProjectCandidates(
     [...eventCandidates, ...turnCandidates, ...fallbackCandidates]
       .map(finalizeProjectLearningCandidate)
@@ -304,9 +312,18 @@ function toProjectTurnCandidates(input: {
     const verification = verificationEvents.at(0);
     if (fix && verification) {
       const command = commands[0] ?? commandFromEvent(verification);
-      const normalizedFix = normalizeWorkflowStatement(fix.summary);
-      const fixPrefix = startsWithPastTenseVerb(normalizedFix) ? "" : "Fixed ";
-      const statement = `${fixPrefix}${lowercaseFirst(normalizedFix)}; verified${command === undefined ? "" : ` with ${formatCommand(command)}`}.`;
+      const compressedFix = compressMarkdownHeavySummary(fix.summary);
+      let statement: string;
+      if (compressedFix !== null) {
+        statement =
+          command === undefined
+            ? `In ${compressedFix.file}, ${compressedFix.action}; verified.`
+            : `In ${compressedFix.file}, ${compressedFix.action}; verified with ${formatCommand(command)}.`;
+      } else {
+        const normalizedFix = normalizeWorkflowStatement(fix.summary);
+        const fixPrefix = startsWithPastTenseVerb(normalizedFix) ? "" : "Fixed ";
+        statement = `${fixPrefix}${lowercaseFirst(normalizedFix)}; verified${command === undefined ? "" : ` with ${formatCommand(command)}`}.`;
+      }
       candidates.push({
         confidence: command === undefined ? "medium" : "high",
         dedupeKey: `verified-fix:${statement.toLowerCase()}`,
@@ -378,11 +395,12 @@ function toProjectTurnCandidates(input: {
   ) {
     const fix = fixEvents.at(0);
     const file = files.at(0);
-    if (!fix || !file) {
-      // guarded by length checks above
-    } else {
-      const fixSummary = normalizeFixSummary(fix.summary);
-      const statement = `In ${file}, ${lowercaseFirst(fixSummary)}.`;
+    if (fix && file) {
+      const compressedFix = compressMarkdownHeavySummary(fix.summary);
+      const statement =
+        compressedFix !== null
+          ? `In ${compressedFix.file}, ${compressedFix.action}.`
+          : `In ${file}, ${lowercaseFirst(normalizeFixSummary(fix.summary))}.`;
       candidates.push({
         confidence: "medium",
         dedupeKey: `file-scoped:${statement.toLowerCase()}`,
@@ -478,13 +496,9 @@ function toProjectTurnCandidates(input: {
   return candidates;
 }
 
-function extractNoEventTurnFallbackCandidates(
+function extractConcreteTurnFallbackCandidates(
   input: ExtractLearningsInput,
 ): ProjectLearningCandidate[] {
-  if (input.events.length > 0) {
-    return [];
-  }
-
   const candidates: ProjectLearningCandidate[] = [];
 
   for (const [index, turn] of input.turns.entries()) {
@@ -858,6 +872,12 @@ function isConcreteFailure(value: string): boolean {
   );
 }
 
+function isWorkflowPrompt(prompt: string): boolean {
+  return /\b(?:worktree|setup|prune|test|tests|performance|example|fixture|script|plan|strategy)\b/i.test(
+    prompt,
+  );
+}
+
 function selectWorkflowCommand(commands: readonly string[], prompt: string): string | null {
   const projectSpecific = commands.find(
     (command) => command.startsWith("./") || command.includes("worktree"),
@@ -870,13 +890,16 @@ function selectWorkflowCommand(commands: readonly string[], prompt: string): str
   const setupCommand = commands.find((command) =>
     /(?:uv sync|pnpm install|npm install|git worktree)/i.test(command),
   );
-  return setupCommand !== undefined && isWorkflowPrompt(prompt) ? setupCommand : null;
-}
+  if (setupCommand !== undefined && isWorkflowPrompt(prompt)) {
+    return setupCommand;
+  }
 
-function isWorkflowPrompt(prompt: string): boolean {
-  return /\b(?:worktree|setup|prune|test|tests|performance|example|fixture|script|plan|strategy)\b/i.test(
-    prompt,
-  );
+  const commitCommand = commands.find((command) => /^git commit\b/i.test(command));
+  if (commitCommand !== undefined && /\bcommit\b/i.test(prompt)) {
+    return commitCommand;
+  }
+
+  return null;
 }
 
 function classifyWorkflowTarget(prompt: string): string {
@@ -1253,6 +1276,164 @@ function hasExcessiveMarkdownStructure(value: string): boolean {
   return (markerMatches?.length ?? 0) >= 3;
 }
 
+function cleanActionSegment(value: string): string {
+  return value
+    .replace(/^[\w.]+:\s*['"][^'"]+['"]\s*[-–—]\s*/, "")
+    .replace(/^['"][^'"]+['"]\s*[-–—]\s*/, "")
+    .trim();
+}
+
+function extractActionFromMarkdownSegment(segment: string): string {
+  const separators = [
+    ...segment.matchAll(/(?<=\S)\s+[-–—]\s+(?=\S)/g),
+    ...segment.matchAll(/:\s+/g),
+  ].sort((left, right) => (left.index ?? 0) - (right.index ?? 0));
+
+  const changeVerbPattern =
+    /\b(?:use|add|remove|replace|switch|configure|implement|migrate|upgrade|fix|set|change|move|prefer|avoid|keep|run|pre-?bundle|pre-?load|enable|disable)\b/i;
+
+  for (const separator of separators) {
+    const after = segment.slice((separator.index ?? 0) + separator[0].length).trim();
+    if (changeVerbPattern.test(after)) {
+      return cleanActionSegment(after);
+    }
+  }
+
+  return cleanActionSegment(segment);
+}
+
+function compressMarkdownHeavySummary(value: string): { action: string; file: string } | null {
+  const trimmed = value.trim();
+  if (!hasExcessiveMarkdownStructure(trimmed)) {
+    return null;
+  }
+
+  const normalized = trimmed
+    .replace(/\[(.*?)\]\(.*?\)/g, "$1")
+    .replace(/`/g, "")
+    .replace(/\*\*/g, "")
+    .replace(/#{1,6}\s+/g, "")
+    .replace(
+      /\b(?:Summary of changes|Summary of what changed|Implemented|Verification noted)\s*:?\s*/gi,
+      "",
+    )
+    .trim();
+
+  type FileMatch = { file: string; index: number };
+  const fileMatches: FileMatch[] = [];
+  const words = normalized.split(/\s+/);
+  let charIndex = 0;
+  for (const word of words) {
+    const cleaned = word.replace(/^[("']+/, "").replace(/[.,;:!?()]+$/, "");
+    const path = normalizeFilePath(cleaned);
+    if (path !== null && /[\\/]/.test(path)) {
+      fileMatches.push({ file: path, index: charIndex });
+    }
+    charIndex += word.length + 1;
+  }
+
+  if (fileMatches.length === 0) {
+    return null;
+  }
+
+  const firstFile = fileMatches[0];
+  if (firstFile === undefined) {
+    return null;
+  }
+  const regionEnd =
+    fileMatches.length > 1 ? (fileMatches[1]?.index ?? normalized.length) : normalized.length;
+  const region = normalized.slice(firstFile.index + firstFile.file.length, regionEnd).trim();
+
+  const clauses = region
+    .split(/\s+(?:[-•*]|–|—)\s+/)
+    .map((clause) => clause.replace(/^\s*[:\-–—]\s*/, "").trim())
+    .filter((clause) => clause.length > 0);
+
+  const changeVerbPattern =
+    /\b(?:use|add|remove|replace|switch|configure|implement|migrate|upgrade|fix|set|change|move|prefer|avoid|keep|run|pre-?bundle|pre-?load|enable|disable)\b/i;
+
+  const actions: string[] = [];
+  for (const clause of clauses) {
+    const action = extractActionFromMarkdownSegment(clause);
+    const cleanedAction = action
+      .replace(
+        new RegExp(`\\b${firstFile.file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"),
+        "",
+      )
+      .trim();
+    if (cleanedAction.length >= 5 && changeVerbPattern.test(cleanedAction)) {
+      actions.push(cleanedAction);
+    }
+  }
+
+  if (actions.length === 0) {
+    return null;
+  }
+
+  const action = actions.join("; ").replace(/\s+/g, " ").trim();
+  if (action.length < 10 || action.length > 160) {
+    return null;
+  }
+
+  return { action: lowercaseFirst(action), file: firstFile.file };
+}
+function looksLikeRawKnowledgeDump(value: string): boolean {
+  const trimmed = value.trim();
+
+  if (trimmed.length === 0) {
+    return false;
+  }
+
+  if (
+    (trimmed.startsWith("{") || trimmed.startsWith("[")) &&
+    /"(?:findings|severity|verdict|file|line)"/.test(trimmed)
+  ) {
+    return true;
+  }
+
+  if (
+    trimmed.includes("Traceback (most recent call last)") ||
+    trimmed.includes("\n    at ") ||
+    (/Error: /.test(trimmed) && trimmed.includes("\n")) ||
+    trimmed.includes("npm ERR!") ||
+    trimmed.includes("pnpm ERR!") ||
+    ((trimmed.includes("ECONNRESET") || trimmed.includes("ENOENT") || trimmed.includes("EACCES")) &&
+      trimmed.includes("\n"))
+  ) {
+    return true;
+  }
+
+  if (
+    trimmed.includes("Base directory for this skill") ||
+    trimmed.includes("/SKILL.md") ||
+    trimmed.includes("<skill") ||
+    trimmed.includes("Use when:") ||
+    trimmed.includes("Triggers:") ||
+    trimmed.includes("Description:")
+  ) {
+    return true;
+  }
+
+  if (hasExcessiveMarkdownStructure(trimmed)) {
+    return true;
+  }
+
+  const normalized = trimmed.replace(/\s+/g, " ").trim();
+  if (normalized.length > 420) {
+    const leadingWindow = normalized.slice(0, 180);
+    const hasProjectLocalPath =
+      /\b(?:src|lib|app|server|scripts|tools|docs|tests?|api|core|shared|desktop|mobile)\/[^\s]+/i.test(
+        leadingWindow,
+      );
+    const hasImperativePhrase = /\b(?:use|keep|avoid|run|configure|prefer|move|add|remove)\b/i.test(
+      leadingWindow,
+    );
+    return !(hasProjectLocalPath && hasImperativePhrase);
+  }
+
+  return false;
+}
+
 function looksLikeRawWorkflowSummary(value: string): boolean {
   const normalized = value.trim().toLowerCase();
 
@@ -1318,7 +1499,7 @@ function createLearning(input: {
   statement: string;
   title: string;
 }): Learning {
-  return learningSchema.parse({
+  return {
     confidence: input.confidence,
     evidence: input.evidence,
     kind: input.kind,
@@ -1329,7 +1510,7 @@ function createLearning(input: {
     source_refs: input.sourceRefs,
     statement: input.statement,
     title: input.title,
-  } satisfies Learning);
+  } satisfies Learning;
 }
 
 function createSourceRef(
@@ -1371,7 +1552,11 @@ function finalizeProjectLearningCandidate(
   candidate: ProjectLearningCandidate,
 ): ProjectLearningCandidate | null {
   const statement = sanitizeHarnessLeakText(candidate.statement);
-  if (statement.length === 0 || looksLikeSkillHarnessLeak(statement)) {
+  if (
+    statement.length === 0 ||
+    looksLikeSkillHarnessLeak(statement) ||
+    looksLikeRawKnowledgeDump(statement)
+  ) {
     return null;
   }
 
@@ -1504,7 +1689,7 @@ function semanticCandidateKey(value: string): string {
 function isDurableCandidate(candidate: ProjectLearningCandidate): boolean {
   const statement = candidate.statement;
 
-  if (looksLikeProcessNarration(statement)) {
+  if (looksLikeProcessNarration(statement) || looksLikeRawKnowledgeDump(statement)) {
     return false;
   }
 

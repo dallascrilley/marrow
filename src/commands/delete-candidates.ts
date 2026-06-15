@@ -8,7 +8,10 @@ import {
   getProjectKnowledgeSessionPath,
   getUserKnowledgeSessionPath,
 } from "../writers/knowledge-writer.js";
-import { getSessionManifestPath } from "../writers/manifest-writer.js";
+import {
+  getSessionManifestPath,
+  getSessionManifestPathForRevision,
+} from "../writers/manifest-writer.js";
 import { getRetentionReceiptPath } from "../writers/report-writer.js";
 import {
   getSessionSummaryJsonPath,
@@ -53,8 +56,12 @@ export async function executeDeleteCandidates(
 }
 
 async function buildRetentionDecision(candidate: DeletionCandidateRow): Promise<RetentionDecision> {
+  const manifestPath = getSessionManifestPathForRevision(
+    candidate.session_id,
+    candidate.source_hash,
+  );
   const artifactPaths = {
-    manifest_json: getSessionManifestPath(candidate.session_id),
+    manifest_json: manifestPath,
     project_knowledge_jsonl: getProjectKnowledgeSessionPath(
       candidate.project_key,
       candidate.session_id,
@@ -69,9 +76,16 @@ async function buildRetentionDecision(candidate: DeletionCandidateRow): Promise<
       async ([name, path]) => [name, await pathExists(path)] as const,
     ),
   );
-  const artifactPresence = Object.fromEntries(
+  const artifactPresenceBeforeManifestFallback = Object.fromEntries(
     artifactPresenceEntries,
   ) as RetentionDecision["artifact_presence"];
+  const manifestPresent =
+    artifactPresenceBeforeManifestFallback.manifest_json ||
+    (await pathExists(getSessionManifestPath(candidate.session_id)));
+  const artifactPresence = {
+    ...artifactPresenceBeforeManifestFallback,
+    manifest_json: manifestPresent,
+  };
   const missingArtifacts = missingRequiredArtifacts(artifactPresence, candidate.candidate_state);
   const safeToDelete = candidate.safe_to_delete === 1;
 
