@@ -100,6 +100,15 @@ function summarizeSessionWithTopic(
       .map((event) => normalizeSummaryLine(event.summary)),
   );
   const fixes = summarizeWorkedOutcomes(input.events);
+  const fallbackWorkflowOutcomes =
+    fixes.length === 0
+      ? uniquePreservingOrder(
+          (input.projectLearnings ?? [])
+            .filter((learning) => learning.kind === "workflow")
+            .map((learning) => normalizeSummaryLine(learning.statement)),
+        )
+      : [];
+  const whatWorked = uniquePreservingOrder([...fixes, ...fallbackWorkflowOutcomes]);
   const nextStep = selectNextStep(input.events);
   const usefulCommands = uniquePreservingOrder(
     [
@@ -133,7 +142,7 @@ function summarizeSessionWithTopic(
     ),
     what_failed: failures,
     what_was_decided: decisions,
-    what_worked: fixes,
+    what_worked: whatWorked,
   } satisfies Summary;
 
   return summarySchema.parse(summary);

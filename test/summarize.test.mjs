@@ -551,3 +551,50 @@ test("optional LLM topic is not called for high-signal deterministic topics", as
   assert.equal(summary.topic, "Fix export-index contract topic provenance");
   assert.equal(summary.topic_source, "deterministic");
 });
+
+test("summary includes fallback workflow learning in what_worked when no fix events exist", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "studio-tools",
+    session_id: "fallback-workflow-summary",
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "No assistant summary captured.",
+      commands_seen: ["./.cursor/setup-worktree-unix.sh"],
+      ended_at: "2026-05-22T20:10:00.000Z",
+      files_touched: [],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-22T20:09:00.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: "@.cursor/worktrees.json develop a worktree setup script for this project",
+      verification_seen: false,
+    }),
+  ];
+
+  const summary = summarizeSession({
+    events: [],
+    projectLearnings: [
+      {
+        confidence: "medium",
+        evidence: ["@.cursor/worktrees.json develop a worktree setup script for this project"],
+        kind: "workflow",
+        learning_id: `${sourceSession.session_id}:project:turn-fallback:0`,
+        promotion_basis: "Derived from project-specific command usage.",
+        scope: "project",
+        scope_key: "studio-tools",
+        source_refs: [],
+        statement: "Use `./.cursor/setup-worktree-unix.sh` for worktree setup in studio-tools.",
+        title: "Workflow: Use `./.cursor/setup-worktree-unix.sh` for worktree setup...",
+      },
+    ],
+    sourceSession,
+    turns,
+  });
+
+  assert.deepEqual(summary.what_worked, [
+    "Use `./.cursor/setup-worktree-unix.sh` for worktree setup in studio-tools.",
+  ]);
+});
