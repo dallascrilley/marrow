@@ -151,9 +151,61 @@ asd ingest backfill --source pi --limit 10 --llm-topic
 2. **LLM topic rescue fires but not always helpfully.** The pi session that used LLM topic still produced a vague topic and no learnings.
 3. **Very short sessions dominate the pi backlog.** Many sessions are 1–2 turns with no durable signal; they become `discardable_no_signal` or `pending_artifacts` but consume processing time.
 
-## U4–U6. Per-harness observations
+## U4. Kimi
 
-(TBD after each ingest run.)
+### Commands run
+
+```bash
+export OPENROUTER_API_KEY=$(op read 'op://Private/OpenRouter API Credentials - agent-session-distillery/credential')
+export ASD_LLM_MAX_PER=20/24h
+
+asd ingest sync --source kimi --resume
+asd ingest backfill --source kimi --limit 10 --llm-topic
+```
+
+### Sync results
+
+- `discovered_count`: 491
+- `selected_count`: 0
+- `processed_count`: 0
+- `failed_count`: 0
+- No new kimi sessions were discovered since the last sync.
+
+### Backfill results
+
+- `discovered_count`: 491
+- `processed_count`: 7
+- `failed_count`: 3
+- Failures were all `Immutable manifest already exists with different contents`.
+- `llm_topic`: true
+- Only one of the seven processed sessions used `topic_source: "llm"`; the rest kept deterministic topics.
+
+### Sample quality observations
+
+| Session | Topic | Topic source | Project learnings | Notable issues |
+|---------|-------|--------------|-------------------|----------------|
+| `5bb0d1f5-...` | `/skill:skill search/find wp to astro` | deterministic | 1 | Learning is a verbatim skill table, not a distilled rule. |
+| `1bf30d05-...` | `/skill:git commit atomically changed files` | deterministic | 0 | Concrete git workflow session produced no project learnings. |
+| `96100643-...` | `/skill:wp-wordpress-to-astro qcare.org` | deterministic | 20 | Large session, but most learnings are raw narrative/error snippets rather than concise rules. |
+| `7b64831b-...` | `Reviewing and shipping changes for PRs #20 and #21` | llm | 1 | LLM rescued a low-signal deterministic topic; the single learning is a raw stack trace. |
+| `abd3a918-...` | `fix: [Skill conflicts]` | deterministic | 1 | Learning is verbatim assistant output (`In , ✅ Fixed...`). |
+| `615910a6-...` | `/skill:skill search oracle` | deterministic | 0 | Skill-search session with decisions and files of interest, but no project learnings. |
+| `78fd411f-...` | `resolve these:` | deterministic | 5 | All five learnings are long narrative paragraphs about skill conflicts, not actionable rules. |
+
+### Preliminary findings
+
+1. **Project learning extraction is creating narrative noise.** Most kimi project learnings are large verbatim chunks from `what_worked`, `what_failed`, or `what_was_decided` rather than distilled commands or rules. The durable-decision bypass appears to be over-promoting any assistant text.
+2. **Manifest collisions remain the dominant failure mode.** 3 of 10 candidate kimi sessions failed with the same immutable-manifest error seen in claude-code and pi.
+3. **LLM topic rescue fires rarely.** Only one session triggered LLM topic rescue; deterministic topics were mostly acceptable, but `resolve these:` is borderline low-signal and was not rescued.
+4. **No-project-learning false negatives persist.** `1bf30d05` and `615910a6` describe concrete workflows (git commit, skill search) but produced zero project learnings despite having relevant files/commands.
+
+## U5. Codex CLI
+
+(TBD)
+
+## U6. Cursor / other harnesses
+
+(TBD)
 
 ## U7. Cross-harness findings
 
