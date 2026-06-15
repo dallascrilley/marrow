@@ -96,6 +96,10 @@ ceiling, and the highest-leverage waste cuts (skip-junk-before-LLM, batching).
   (still `LearningReviewResult`) or `generateTopicWithOpenRouter` (still `string`). This keeps
   the `summarize.ts` injectable `generateTopic` contract and the review cache schema unchanged
   and non-breaking. `LlmCallUsage` also carries `model` + `cache_hit` for U2 correlation.
+- **Amended in U4:** `LlmCallUsage` extended with `cost_source`, `reasoning_tokens`,
+  `cached_tokens`, and the parser now reports **effective** cost — OpenRouter's charge when
+  it bills, else `cost_details.upstream_inference_cost` (BYOK). Discovered because the test
+  key is BYOK (OpenRouter `cost` = 0). Telemetry record + cost-report carry the new fields.
 
 ### U2. Persist OTel-GenAI telemetry receipts
 - **Goal:** each real (non-cache-hit) call appends one OTel-shaped JSONL receipt.
@@ -146,6 +150,13 @@ ceiling, and the highest-leverage waste cuts (skip-junk-before-LLM, batching).
   the whole plan — exercises U1–U3 live.
 - **Tests:** n/a (operational run; evidence is the report JSON + doc).
 - **Verification:** `cost-report` JSON shows non-zero real costs; baseline doc committed.
+- **Done (2026-06-14):** baseline in [`docs/ops/llm-cost-baseline.md`](../ops/llm-cost-baseline.md).
+  cost/learning **$0.000867**, cost/session mean **$0.0023**, full drain (3,078) **~$2.67**.
+  Two findings fed back into U1/U6: (a) the key is **BYOK** — OpenRouter `cost` is 0, real
+  spend is `cost_details.upstream_inference_cost`, so U1 was amended to record effective
+  (upstream) cost + `cost_source`; (b) **2,000 of 2,123 output tokens are reasoning** — the
+  dominant cost driver, now U6's top lever. Open question resolved: inline `usage` carries
+  cost details, so the `/generation` fallback was unnecessary.
 
 ### U5. Hard USD spend ceiling
 - **Goal:** a per-window USD cap that blocks before overspending the key.
@@ -165,7 +176,12 @@ ceiling, and the highest-leverage waste cuts (skip-junk-before-LLM, batching).
 - **Requirements:** R6
 - **Files:** `src/commands/quality-review-learnings.ts`,
   `src/pipeline/llm-learning-review.ts`.
-- **Approach (two slices):**
+- **Approach (three slices — U6c added from U4 baseline):**
+  - **U6c — cut reasoning tokens (highest-leverage, do first):** U4 showed ~2,000 of ~2,123
+    output tokens/call are reasoning on a trivial memory-lint. Set a minimal/low reasoning
+    effort (OpenRouter `reasoning: { effort: "low" }` / `max_tokens`, or disable) on the
+    review + topic requests in `completeOpenRouterJson` callers. Expected ~10x output-token
+    and cost reduction. Verify with `cost-report` reasoning_mean dropping sharply vs baseline.
   - **U6a — pre-LLM filter:** before sending, drop learnings the deterministic heuristics
     already flag as low-signal/test-session (reuse the audit's `summary_low_signal` /
     junk-topic detection — e.g. the `pi-test-*` and "Say hello" sessions), and dedupe

@@ -202,6 +202,36 @@ test("learning review captures real OpenRouter usage + cost and requests it", as
   assert.equal(typeof usage.duration_ms, "number");
 });
 
+test("learning review uses upstream cost for BYOK keys (OpenRouter charge is 0)", async () => {
+  const captured = [];
+  const fetchImpl = async () =>
+    reviewResponse({
+      prompt_tokens: 13,
+      completion_tokens: 113,
+      total_tokens: 126,
+      cost: 0,
+      cost_details: { upstream_inference_cost: 0.00004585 },
+      prompt_tokens_details: { cached_tokens: 4 },
+      completion_tokens_details: { reasoning_tokens: 64 },
+    });
+
+  await reviewLearningWithOpenRouter({
+    apiKey: "test-key",
+    fetchImpl,
+    learning: learning(),
+    model: "openai/gpt-5-nano",
+    onUsage: (usage) => captured.push(usage),
+    projectKey: "studio-tools",
+  });
+
+  const usage = captured[0];
+  assert.equal(usage.cost, 0.00004585);
+  assert.equal(usage.cost_source, "upstream");
+  assert.equal(usage.cost_is_known, true);
+  assert.equal(usage.reasoning_tokens, 64);
+  assert.equal(usage.cached_tokens, 4);
+});
+
 test("learning review fails closed on usage when the provider omits it", async () => {
   const captured = [];
   const fetchImpl = async () => reviewResponse(undefined);
