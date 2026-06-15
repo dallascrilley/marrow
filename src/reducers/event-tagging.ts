@@ -254,7 +254,7 @@ function extractVerificationCommand(record: GroupedTurn["records"][number]): str
 }
 
 function summarizeText(text: string): string {
-  const normalized = text.replace(/\s+/g, " ").trim();
+  const normalized = text.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 
   if (normalized.length <= 240) {
     return normalized;

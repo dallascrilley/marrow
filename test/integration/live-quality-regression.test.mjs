@@ -163,6 +163,14 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
     assert.equal(shortSession.archived.safeToDelete, false);
 
     const database = await createLedger();
+    function parseJsonl(path) {
+      return readFile(path, "utf8").then((text) =>
+        text
+          .split("\n")
+          .filter((line) => line.trim().length > 0)
+          .map((line) => JSON.parse(line)),
+      );
+    }
 
     try {
       const reviewCandidate = getDeletionCandidateBySessionId(
@@ -214,6 +222,49 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
         "faa99040-0737-4728-837e-9b017393476a-subagent",
       );
       assert.ok(subagentSession);
+
+      const subagentLearnings = await parseJsonl(
+        join(
+          runtimeRoot,
+          "knowledge",
+          "projects",
+          "e77ccdcea839",
+          "faa99040-0737-4728-837e-9b017393476a-subagent.jsonl",
+        ),
+      );
+      assert.ok(subagentLearnings.every((learning) => learning.kind !== "workflow"));
+      assert.ok(subagentLearnings.every((learning) => !learning.statement.includes("**")));
+      assert.ok(subagentLearnings.every((learning) => !learning.title.includes("**")));
+
+      const noisyDecisionLearnings = await parseJsonl(
+        join(
+          runtimeRoot,
+          "knowledge",
+          "projects",
+          "53e19974b576",
+          "9c6686c3-7663-495b-bd35-8e31b5a231df.jsonl",
+        ),
+      );
+      assert.ok(noisyDecisionLearnings.every((learning) => !learning.statement.includes("**")));
+      assert.ok(noisyDecisionLearnings.every((learning) => !learning.statement.includes("|")));
+      assert.ok(noisyDecisionLearnings.every((learning) => !learning.statement.includes("## ")));
+      assert.ok(noisyDecisionLearnings.every((learning) => !learning.title.includes("**")));
+
+      const vitestLearnings = await parseJsonl(
+        join(
+          runtimeRoot,
+          "knowledge",
+          "projects",
+          "53e19974b576",
+          "d2d8b0e7-3fae-4506-927b-8f80a301ccb0.jsonl",
+        ),
+      );
+      assert.ok(
+        vitestLearnings.some((learning) =>
+          learning.statement.includes("use worker threads instead of forks"),
+        ),
+      );
+      assert.ok(vitestLearnings.every((learning) => !learning.statement.includes("## ")));
     } finally {
       database.close();
     }
@@ -231,7 +282,7 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
     assert.match(summaryMarkdown, /PR #71 Review/);
     assert.doesNotMatch(summaryMarkdown, /## What Worked\n- None noted\./);
     assert.doesNotMatch(summaryMarkdown, /<attached_files>|<code_selection/);
-    assert.match(summaryMarkdown, /Completed all 7 blocking\/strongly-recommended fixes/);
+    assert.match(summaryMarkdown, /All 7 blocking\/strongly-recommended fixes/);
     assert.match(summaryMarkdown, /No open next step recorded\./);
     assert.match(summaryMarkdown, /`\.\/scripts\/qa`/);
 

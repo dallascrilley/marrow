@@ -9,6 +9,7 @@ import {
   isSkillWrapperOnlyPrompt,
   looksLikeSkillHarnessLeak,
   sanitizeHarnessLeakText,
+  sanitizeLearningStatement,
 } from "./prompt-sanitize.js";
 
 type TopicSource = "deterministic" | "llm";
@@ -493,7 +494,7 @@ function normalizeGeneratedTopic(topic: string): string {
 }
 
 function normalizeSummaryLine(value: string): string {
-  const sanitized = sanitizeHarnessLeakText(value);
+  const sanitized = sanitizeLearningStatement(sanitizeHarnessLeakText(value));
   const normalized = (sanitized.length > 0 ? sanitized : value).replace(/\s+/g, " ").trim();
   return truncateInline(normalized, 180);
 }

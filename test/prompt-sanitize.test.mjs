@@ -19,7 +19,7 @@ test("sanitizeLearningStatement strips italic emphasis", () => {
 
 test("sanitizeLearningStatement truncates markdown tables", () => {
   const raw =
-    "Given how far behind main the branches are, **cherry-picking onto fresh branches from main** is usually better than rebasing. ## Rebase vs cherry-pick vs fresh start\n| Approach | Effort | Risk | Best when |\n|----------|--------|------|-----------|\n| rebase   | high   | high | short-lived branch |";
+    "Given how far behind main the branches are, **cherry-picking onto fresh branches from main** is usually better than rebasing.\n\n## Rebase vs cherry-pick vs fresh start\n\n| Approach | Effort | Risk | Best when |\n|----------|--------|------|-----------|\n| rebase   | high   | high | short-lived branch |";
   const got = sanitizeLearningStatement(raw);
   assert.ok(!got.includes("|"), "table pipes should be removed");
   assert.ok(!got.includes("Approach"), "table header should be removed");
@@ -58,5 +58,16 @@ test("sanitizeLearningStatement strips assistant framing tokens", () => {
   assert.equal(
     sanitizeLearningStatement("Done — integrated the parser."),
     "integrated the parser.",
+  );
+});
+
+test("sanitizeLearningStatement preserves underscores inside file paths", () => {
+  assert.equal(
+    sanitizeLearningStatement("In `sql_dialect.py`, move the dedup rewrite earlier."),
+    "In `sql_dialect.py`, move the dedup rewrite earlier.",
+  );
+  assert.equal(
+    sanitizeLearningStatement("Call `_rewrite_clip_delivery_dedup` before the generic strip."),
+    "Call `_rewrite_clip_delivery_dedup` before the generic strip.",
   );
 });

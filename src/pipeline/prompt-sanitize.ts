@@ -217,11 +217,17 @@ export function sanitizeLearningTitle(
     return `${prefix}: ${truncateInline(cleanStatement, maxBodyLength)}`;
   }
 
-  const body = sanitizeHarnessLeakText(title.slice(colonIndex + 1));
+  const body = sanitizeLearningStatement(sanitizeHarnessLeakText(title.slice(colonIndex + 1)));
   const bodyIsClean =
-    body.length > 0 && !looksLikeSkillHarnessLeak(body) && !/<\/?skill\b/i.test(body);
+    body.length > 0 &&
+    !looksLikeSkillHarnessLeak(body) &&
+    !/<\/?skill\b/i.test(body) &&
+    !/\*\*/g.test(body) &&
+    !/\|/g.test(body) &&
+    !/#\s+/g.test(body);
 
   return `${prefix}: ${truncateInline(bodyIsClean ? body : cleanStatement, maxBodyLength)}`;
+
 }
 
 export function isNoSignalPrompt(raw: string): boolean {
@@ -453,7 +459,8 @@ export function sanitizeLearningStatement(
 
   // Strip emphasis/italic wrappers while preserving inner content.
   cleaned = cleaned.replace(/(\*\*|__)([^\n]+?)\1/g, " $2 ");
-  cleaned = cleaned.replace(/(\*|_)([^\n\s][^\n]*?)\1/g, " $2 ");
+  cleaned = cleaned.replace(/(?<![\w*])\*([^\n\s][^\n]*?)\*(?![\w*])/g, " $1 ");
+  cleaned = cleaned.replace(/(?<![\w_])_([^\n\s][^\n]*?)_(?![\w_])/g, " $1 ");
 
   // Strip list bullets.
   cleaned = cleaned.replace(/^[\s]*[-*+]\s+/gm, " ");
@@ -478,28 +485,33 @@ function findMarkdownTableStart(value: string): number {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? "";
     if (markdownTableSeparatorPattern.test(line)) {
-      const headerIndex = i > 0 ? i - 1 : -1;
-      const headingMatch = markdownHeadingMatchPattern.exec(lines[headerIndex] ?? "");
-      const startIndex = headingMatch ? headerIndex : i;
-      let offset = lines.slice(0, startIndex).join("\n").length + (startIndex > 0 ? 1 : 0);
-      if (headingMatch?.indices) {
-        offset += headingMatch.indices[1]?.[0] ?? 0;
-      }
-      return offset;
+      const headingIndex = findPrecedingHeadingIndex(lines, i);
+      const startIndex = headingIndex !== -1 ? headingIndex : i;
+      return lines.slice(0, startIndex).join("\n").length + (startIndex > 0 ? 1 : 0);
     }
     if (
       markdownTableRowPattern.test(line) &&
       i + 1 < lines.length &&
       markdownTableSeparatorPattern.test(lines[i + 1] ?? "")
     ) {
-      const headingMatch = markdownHeadingMatchPattern.exec(lines[i - 1] ?? "");
-      const startIndex = headingMatch ? i - 1 : i;
-      let offset = lines.slice(0, startIndex).join("\n").length + (startIndex > 0 ? 1 : 0);
-      if (headingMatch?.indices) {
-        offset += headingMatch.indices[1]?.[0] ?? 0;
-      }
-      return offset;
+      const headingIndex = findPrecedingHeadingIndex(lines, i);
+      const startIndex = headingIndex !== -1 ? headingIndex : i;
+      return lines.slice(0, startIndex).join("\n").length + (startIndex > 0 ? 1 : 0);
     }
+  }
+  return -1;
+}
+
+function findPrecedingHeadingIndex(lines: readonly string[], fromIndex: number): number {
+  for (let j = fromIndex - 1; j >= 0 && j >= fromIndex - 4; j--) {
+    const line = lines[j] ?? "";
+    if (/^\s*$/.test(line)) {
+      continue;
+    }
+    if (/^#{1,6}\s+/.test(line)) {
+      return j;
+    }
+    break;
   }
   return -1;
 }
