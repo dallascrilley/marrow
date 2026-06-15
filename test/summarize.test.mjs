@@ -88,7 +88,7 @@ test("summary synthesis skips prompt noise, prefers the latest next step, and fi
   assert.equal(summary.topic, "surely we can make these tests go faster");
   assert.deepEqual(summary.useful_commands, ["pnpm add -D happy-dom", "pnpm test:run"]);
   assert.equal(summary.next_step, "Next step is documenting the final Vitest configuration.");
-  assert.deepEqual(summary.what_worked, ["Verified: Tests passed after switching to happy-dom."]);
+  assert.deepEqual(summary.what_worked, ["Tests passed after switching to happy-dom."]);
 });
 
 test("summary synthesis turns final completion evidence into operator-ready outcomes", () => {

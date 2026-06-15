@@ -1347,13 +1347,19 @@ function finalizeProjectLearningCandidate(
     return null;
   }
 
-  // Reject multi-sentence statements unless they are a verified-fix pattern that
-  // uses a semicolon to join the fix and its verification clause.
+  // Reject multi-sentence decision/failure statements; workflow and pattern
+  // statements are truncated to the first sentence to stay atomic.
+  let atomicStatement = statement;
   if (hasMultipleSentences(statement) && !statement.includes(";")) {
-    return null;
+    if (candidate.kind === "decision" || candidate.kind === "failure_mode") {
+      return null;
+    }
+
+    const firstSentenceMatch = statement.match(/^(.+?[.!?])(?=\s+|$)/);
+    atomicStatement = firstSentenceMatch?.[1]?.trim() ?? statement;
   }
 
-  const atomicStatement = truncateInline(statement, MAX_LEARNING_STATEMENT_LENGTH);
+  atomicStatement = truncateInline(atomicStatement, MAX_LEARNING_STATEMENT_LENGTH);
 
   const evidence = uniqueStrings(
     candidate.evidence

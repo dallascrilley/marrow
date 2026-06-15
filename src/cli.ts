@@ -99,7 +99,7 @@ const commandTree: Record<string, CommandDefinition> = {
       },
       resummarize: {
         description:
-          "Regenerate summary topics for archived sessions without mutating manifests; optional --low-signal-only, --llm-topic, --max-per, --export-index, --dry-run.",
+          "Regenerate summary topics for archived sessions without mutating manifests; optional --low-signal-only, --over-extracted-only, --llm-topic, --max-per, --export-index, --dry-run.",
         execute: async (context) => withLedger(context, executeQualityResummarize),
       },
     },

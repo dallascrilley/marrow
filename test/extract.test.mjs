@@ -322,3 +322,48 @@ test("project learning cap of zero returns empty", () => {
 
   assert.equal(learnings.project.length, 0);
 });
+
+
+test("multi-sentence file-scoped pattern candidates keep the first sentence", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "extract-pattern-atomicity",
+  };
+  const turn = turnSchema.parse({
+    assistant_summary: "Fixed the import.",
+    commands_seen: [],
+    ended_at: "2026-05-16T12:05:00Z",
+    files_touched: [],
+    index: 0,
+    session_id: sourceSession.session_id,
+    started_at: "2026-05-16T12:00:00Z",
+    tool_stub_count: 0,
+    turn_id: `${sourceSession.session_id}:turn-0000`,
+    user_prompt: "Fix the import error.",
+    verification_seen: false,
+  });
+  const event = eventSchema.parse({
+    confidence: "medium",
+    event_id: `${sourceSession.session_id}:fix:1`,
+    payload_small: {
+      command_strings: ["shared/logging/__init__.py"],
+    },
+    source_offsets: { end_line: 3, start_line: 3 },
+    summary:
+      "Resolved by adding configure_logging to shared/logging/__init__.py. The worktree branch had it, but the main branch did not.",
+    turn_id: turn.turn_id,
+    type: "fix",
+  });
+
+  const learnings = extractLearnings({
+    events: [event],
+    sourceSession,
+    turns: [turn],
+  });
+
+  const pattern = learnings.project.find((learning) => learning.kind === "pattern");
+  assert.ok(pattern, "expected a file-scoped pattern learning");
+  assert.match(pattern.statement, /resolved by adding configure_logging to shared\/logging\/__init__\.py\./);
+  assert.doesNotMatch(pattern.statement, /worktree branch/);
+});

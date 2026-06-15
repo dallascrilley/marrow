@@ -169,6 +169,40 @@ Spot-check of the worst session shows:
 - New CLI quality dashboard. `quality audit` JSON is sufficient for the current metric-driven loop.
 - Deletion apply (`delete apply --apply`). Retention decisions are separate from artifact-quality work.
 
+## Results
+
+Verification run after U1–U7 (deterministic resummarize of 117 low-signal + 74
+over-extracted sessions, no LLM topic rescue):
+
+| Metric | Baseline (plan audit) | After U1–U7 | Delta |
+|---|---|---|---|
+| `issue_counts.no_project_learnings` | 150 | 125 | −25 |
+| `issue_counts.process_chatter` | 412 | 402 | −10 |
+| `issue_counts.summary_low_signal` | 133 | 133 | 0 |
+| `learning_distribution.max_project_learnings` | 55 | 55 | 0 |
+| `learning_distribution.percentiles.p99` | 40 | 40 | 0 |
+
+- `no_project_learnings` dropped because cleaner extraction now promotes durable
+  file-scoped and workflow learnings that were previously filtered out.
+- `process_chatter` dropped modestly because assistant framing is stripped from
+  summaries; the remaining chatter is in source text that is not a learning
+  candidate.
+- `summary_low_signal` and the learning-distribution percentiles did not move
+  because `quality resummarize` regenerates summary JSON only; it does not
+  rewrite `knowledge/projects/*.jsonl`. Re-archiving or re-extracting the
+  over-extracted sessions would be needed to enforce the 12-learning cap on
+  existing knowledge files. That is out of scope for this plan and is tracked
+  as residual work below.
+
+## Residual / follow-up
+
+- To enforce the cap on existing knowledge artifacts, run a targeted re-archive
+  or re-extract pass over the 74 over-extracted sessions so their
+  `knowledge/projects/*.jsonl` files are regenerated with the new cap.
+- LLM topic rescue for the remaining 133 low-signal sessions can be attempted
+  when budget allows; the count cap is now 50/24h with the USD hard ceiling
+  unchanged.
+
 ## Open questions
 
 - What is the right default cap? 12 is a starting guess; inspect the post-U1 distribution and adjust before merging.
