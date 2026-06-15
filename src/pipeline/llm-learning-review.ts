@@ -10,6 +10,10 @@ export const defaultOpenRouterLearningReviewModel = "openai/gpt-5-nano";
 export const defaultOpenRouterTopicModel = "openai/gpt-5.4-nano";
 export const openRouterApiKeyEnvVar = "OPENROUTER_API_KEY";
 export const openRouterModelEnvVar = "OPENROUTER_MODEL";
+// OpenRouter reasoning effort for the memory-lint review + topic-generation calls.
+// These are trivial structured-output classify tasks where reasoning tokens are
+// pure waste; "low" is the lowest portable effort OpenRouter accepts across models.
+export const lowReasoningEffort = "low";
 export const learningReviewCacheSchemaVersion = "llm-learning-review-cache-v1";
 export const learningReviewPromptVersion = "llm-learning-review-prompt-v1";
 export const learningReviewValidatorVersion = "llm-learning-review-validator-v1";
@@ -385,6 +389,12 @@ async function completeOpenRouterJson(input: {
       body: JSON.stringify({
         messages: input.messages,
         model: input.model,
+        // Memory-lint review and topic generation are trivial structured-output
+        // classify tasks, but the U4 calibration baseline showed ~94% of output
+        // tokens were reasoning tokens (~2,000 of ~2,123/call) — the dominant cost
+        // driver. Cap reasoning to the lowest effort to cut that waste ~10x. Models
+        // without reasoning ignore this field.
+        reasoning: { effort: lowReasoningEffort },
         response_format: { type: "json_object" },
         temperature: 0,
         // Ask OpenRouter to include the actual cost + token accounting inline so we

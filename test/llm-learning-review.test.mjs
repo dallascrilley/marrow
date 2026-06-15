@@ -90,6 +90,7 @@ test("OpenRouter learning review sends strict JSON memory-lint request", async (
   const body = JSON.parse(calls[0].init.body);
   assert.equal(body.model, "openai/gpt-5-nano");
   assert.deepEqual(body.response_format, { type: "json_object" });
+  assert.deepEqual(body.reasoning, { effort: "low" });
   assert.match(body.messages[0].content, /strict memory-lint judge/);
   assert.match(body.messages[1].content, /keeping the rule/);
 });
@@ -131,6 +132,7 @@ test("OpenRouter topic generation reuses chat completion client with strict JSON
   const body = JSON.parse(calls[0].init.body);
   assert.equal(body.model, "openai/gpt-5.4-nano");
   assert.deepEqual(body.response_format, { type: "json_object" });
+  assert.deepEqual(body.reasoning, { effort: "low" });
   assert.match(body.messages[0].content, /concise display topics/);
   assert.match(body.messages[1].content, /deterministic_topic/);
 });
