@@ -362,7 +362,7 @@ function createIssueCountMap(): Record<QualityIssueCode, number> {
   };
 }
 
-async function countProjectLearnings(sourceSession: SourceSessionRow): Promise<number> {
+export async function countProjectLearnings(sourceSession: SourceSessionRow): Promise<number> {
   try {
     const contents = await readFile(
       getProjectKnowledgeSessionPath(sourceSession.project_key, sourceSession.session_id),

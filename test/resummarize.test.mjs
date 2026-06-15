@@ -589,3 +589,65 @@ test("resummarizeSessions does not charge budget when mocked llm generator throw
     await rm(sandbox, { force: true, recursive: true });
   }
 });
+
+
+test("resummarizeSessions --over-extracted-only selects sessions above learning cap", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-over-extracted-"));
+  const runtimeRoot = join(sandbox, "runtime");
+  process.env[runtimeOverrideEnvVar] = runtimeRoot;
+
+  try {
+    const database = await createLedger();
+    const overExtractedId = "over-extracted-session";
+    const normalId = "normal-session";
+
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId: overExtractedId,
+      topic: "Fix export-index contract topic provenance",
+      userPrompt: "Fix export-index contract topic provenance.",
+    });
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId: normalId,
+      topic: "Fix export-index contract topic provenance",
+      userPrompt: "Fix export-index contract topic provenance.",
+    });
+
+    const overExtractedKnowledgePath = join(
+      runtimeRoot,
+      "knowledge",
+      "projects",
+      "demo",
+      `${overExtractedId}.jsonl`,
+    );
+    await mkdir(join(runtimeRoot, "knowledge", "projects", "demo"), { recursive: true });
+    await writeFile(overExtractedKnowledgePath, Array.from({ length: 15 }, (_, index) => `learning-${index}`).join("\n"), "utf8");
+
+    const normalKnowledgePath = join(
+      runtimeRoot,
+      "knowledge",
+      "projects",
+      "demo",
+      `${normalId}.jsonl`,
+    );
+    await writeFile(normalKnowledgePath, "learning-0\n", "utf8");
+
+    const result = await resummarizeSessions(database, {
+      overExtractedOnly: true,
+    });
+
+    assert.equal(result.processed_count, 1);
+    assert.equal(result.skipped_count, 1);
+    assert.equal(result.skipped[0]?.reason, "not_over_extracted");
+    assert.equal(result.skipped[0]?.session_id, normalId);
+    assert.equal(result.sessions[0]?.session_id, overExtractedId);
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});

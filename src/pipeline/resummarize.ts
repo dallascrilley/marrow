@@ -12,12 +12,14 @@ import {
   type LlmBudgetStatus,
   recordLlmBudgetUse,
 } from "./llm-budget.js";
+import { countProjectLearnings } from "./quality-audit.js";
 import { runParsePhase } from "./parse.js";
 import { getReducedArtifactPath, type ReducedArtifact, runReducePhase } from "./reduce.js";
 import { isLowSignalTopic, type LlmTopicGenerator, shouldAttemptLlmTopic } from "./summarize.js";
 import { runSummarizePhase } from "./summarize-phase.js";
+import { DEFAULT_MAX_PROJECT_LEARNINGS_PER_SESSION } from "./extract.js";
 
-export type ResummarizeSkipReason = "high_signal_topic" | "missing_manifest";
+export type ResummarizeSkipReason = "high_signal_topic" | "missing_manifest" | "not_over_extracted";
 
 export type ResummarizeSkip = {
   reason: ResummarizeSkipReason;
@@ -32,6 +34,7 @@ export type ResummarizeOptions = {
   llmTopic?: boolean;
   lowSignalOnly?: boolean;
   maxPer?: string;
+  overExtractedOnly?: boolean;
   projectKeys?: readonly string[];
   sessionIds?: readonly string[];
 };
@@ -82,6 +85,17 @@ export async function resummarizeSessions(
       if (existingTopic === null || !isLowSignalTopic(existingTopic)) {
         skipped.push({
           reason: "high_signal_topic",
+          session_id: sourceSession.session_id,
+        });
+        continue;
+      }
+    }
+
+    if (options.overExtractedOnly === true) {
+      const learningCount = await countProjectLearnings(sourceSession);
+      if (learningCount <= DEFAULT_MAX_PROJECT_LEARNINGS_PER_SESSION) {
+        skipped.push({
+          reason: "not_over_extracted",
           session_id: sourceSession.session_id,
         });
         continue;

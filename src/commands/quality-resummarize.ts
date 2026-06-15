@@ -30,6 +30,7 @@ function parseResummarizeOptions(args: readonly string[]): {
   llmTopic?: boolean;
   lowSignalOnly?: boolean;
   maxPer?: string;
+  overExtractedOnly?: boolean;
   projectKeys?: string[];
   sessionIds?: string[];
 } {
@@ -39,6 +40,7 @@ function parseResummarizeOptions(args: readonly string[]): {
   let lowSignalOnly = false;
   let limit: number | undefined;
   let maxPer: string | undefined;
+  let overExtractedOnly = false;
   const projectKeys: string[] = [];
   const sessionIds: string[] = [];
 
@@ -68,6 +70,11 @@ function parseResummarizeOptions(args: readonly string[]): {
 
     if (arg === "--low-signal-only") {
       lowSignalOnly = true;
+      continue;
+    }
+
+    if (arg === "--over-extracted-only") {
+      overExtractedOnly = true;
       continue;
     }
 
@@ -102,6 +109,7 @@ function parseResummarizeOptions(args: readonly string[]): {
     ...(llmTopic ? { llmTopic: true } : {}),
     ...(lowSignalOnly ? { lowSignalOnly: true } : {}),
     ...(maxPer === undefined ? {} : { maxPer }),
+    ...(overExtractedOnly ? { overExtractedOnly: true } : {}),
     ...(limit === undefined ? {} : { limit }),
     ...(projectKeys.length > 0 ? { projectKeys } : {}),
     ...(sessionIds.length > 0 ? { sessionIds } : {}),
