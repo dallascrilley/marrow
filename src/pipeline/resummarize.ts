@@ -6,18 +6,18 @@ import type { SourceSessionRow } from "../db/queries.js";
 import { summarySchema } from "../models/canonical.js";
 import { getSessionManifestPath } from "../writers/manifest-writer.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
+import { DEFAULT_MAX_PROJECT_LEARNINGS_PER_SESSION } from "./extract.js";
 import {
   assessLlmBudget,
   getDefaultMaxPerWindow,
   type LlmBudgetStatus,
   recordLlmBudgetUse,
 } from "./llm-budget.js";
-import { countProjectLearnings } from "./quality-audit.js";
 import { runParsePhase } from "./parse.js";
+import { countProjectLearnings } from "./quality-audit.js";
 import { getReducedArtifactPath, type ReducedArtifact, runReducePhase } from "./reduce.js";
 import { isLowSignalTopic, type LlmTopicGenerator, shouldAttemptLlmTopic } from "./summarize.js";
 import { runSummarizePhase } from "./summarize-phase.js";
-import { DEFAULT_MAX_PROJECT_LEARNINGS_PER_SESSION } from "./extract.js";
 
 export type ResummarizeSkipReason = "high_signal_topic" | "missing_manifest" | "not_over_extracted";
 

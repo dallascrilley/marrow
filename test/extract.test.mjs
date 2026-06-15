@@ -137,11 +137,9 @@ test("learning evidence excludes AGENTS harness text from raw user prompt", () =
   assert.doesNotMatch(evidence, /AGENTS\.md instructions/i);
 });
 
-
 test("process-chatter decision events produce no project learning", () => {
   const { event, sourceSession, turn } = makeTurnAndEvent({
-    summary:
-      "This is converging beautifully: the retry logic is now scoped to the worker queue.",
+    summary: "This is converging beautifully: the retry logic is now scoped to the worker queue.",
     type: "decision",
   });
 
@@ -170,7 +168,6 @@ test("genuine fix/decision events still produce project learnings", () => {
   assert.equal(learnings.project[0].kind, "decision");
   assert.match(learnings.project[0].statement, /scope vault writes/);
 });
-
 
 test("multi-sentence decision candidates are rejected", () => {
   const { event, sourceSession, turn } = makeTurnAndEvent({
@@ -237,7 +234,6 @@ test("verified-fix candidates with semicolon survive atomicity check", () => {
   assert.match(verifiedFix.statement, /; verified/);
   assert.ok(verifiedFix.statement.length <= 240, "statement should respect 240-char ceiling");
 });
-
 
 test("project learnings are capped per session with highest-priority survivors", () => {
   const sourceSession = {
@@ -313,16 +309,18 @@ test("project learning cap of zero returns empty", () => {
   });
 
   process.env.ASD_MAX_PROJECT_LEARNINGS_PER_SESSION = "0";
-  const learnings = extractLearnings({
-    events: [event],
-    sourceSession,
-    turns: [turn],
-  });
-  delete process.env.ASD_MAX_PROJECT_LEARNINGS_PER_SESSION;
+  try {
+    const learnings = extractLearnings({
+      events: [event],
+      sourceSession,
+      turns: [turn],
+    });
 
-  assert.equal(learnings.project.length, 0);
+    assert.equal(learnings.project.length, 0);
+  } finally {
+    delete process.env.ASD_MAX_PROJECT_LEARNINGS_PER_SESSION;
+  }
 });
-
 
 test("multi-sentence file-scoped pattern candidates keep the first sentence", () => {
   const sourceSession = {
@@ -364,6 +362,46 @@ test("multi-sentence file-scoped pattern candidates keep the first sentence", ()
 
   const pattern = learnings.project.find((learning) => learning.kind === "pattern");
   assert.ok(pattern, "expected a file-scoped pattern learning");
-  assert.match(pattern.statement, /resolved by adding configure_logging to shared\/logging\/__init__\.py\./);
+  assert.match(
+    pattern.statement,
+    /resolved by adding configure_logging to shared\/logging\/__init__\.py\./,
+  );
   assert.doesNotMatch(pattern.statement, /worktree branch/);
+});
+
+test("abbreviations do not trigger multi-sentence rejection", () => {
+  const { event, sourceSession, turn } = makeTurnAndEvent({
+    summary: "Decision: use e.g. sqlite WAL for ledger durability; validate with existing tests.",
+    type: "decision",
+  });
+
+  const learnings = extractLearnings({
+    events: [event],
+    sourceSession,
+    turns: [turn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.match(learnings.project[0].statement, /e\.g\. sqlite WAL/);
+});
+
+test("version numbers do not trigger multi-sentence truncation", () => {
+  const { event, sourceSession, turn } = makeTurnAndEvent({
+    payloadSmall: {
+      command_strings: ["package.json"],
+    },
+    summary: "Resolved by pinning to v1.2.3. The earlier release had the race condition.",
+    type: "fix",
+  });
+
+  const learnings = extractLearnings({
+    events: [event],
+    sourceSession,
+    turns: [turn],
+  });
+
+  const pattern = learnings.project.find((learning) => learning.kind === "pattern");
+  assert.ok(pattern, "expected a pattern learning");
+  assert.match(pattern.statement, /v1\.2\.3/);
+  assert.doesNotMatch(pattern.statement, /earlier release/);
 });

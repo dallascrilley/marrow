@@ -46,7 +46,10 @@ const noSignalPatterns: readonly RegExp[] = [
 export function stripAssistantFraming(value: string): string {
   return value
     .replace(/^\s*(?:Verified|Done|Good)\s*[:\u2014\u2013-]\s*/i, "")
-    .replace(/\*\*(?:Done|Verified|Changed|Changes|Implemented|Summary of changes|Summary of what changed):\*\*\s*/gi, "")
+    .replace(
+      /\*\*(?:Done|Verified|Changed|Changes|Implemented|Summary of changes|Summary of what changed):\*\*\s*/gi,
+      "",
+    )
     .replace(/\bSummary of what changed:\s*/gi, "")
     .trim();
 }

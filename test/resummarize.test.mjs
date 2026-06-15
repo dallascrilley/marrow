@@ -590,7 +590,6 @@ test("resummarizeSessions does not charge budget when mocked llm generator throw
   }
 });
 
-
 test("resummarizeSessions --over-extracted-only selects sessions above learning cap", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-over-extracted-"));
   const runtimeRoot = join(sandbox, "runtime");
@@ -626,7 +625,11 @@ test("resummarizeSessions --over-extracted-only selects sessions above learning 
       `${overExtractedId}.jsonl`,
     );
     await mkdir(join(runtimeRoot, "knowledge", "projects", "demo"), { recursive: true });
-    await writeFile(overExtractedKnowledgePath, Array.from({ length: 15 }, (_, index) => `learning-${index}`).join("\n"), "utf8");
+    await writeFile(
+      overExtractedKnowledgePath,
+      Array.from({ length: 15 }, (_, index) => `learning-${index}`).join("\n"),
+      "utf8",
+    );
 
     const normalKnowledgePath = join(
       runtimeRoot,

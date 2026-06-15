@@ -170,19 +170,31 @@ test("looksLikeAssistantProcessChatter flags observed bad phrases", () => {
     looksLikeAssistantProcessChatter("Good — and that's a genuinely important loosening."),
     true,
   );
-  assert.equal(looksLikeAssistantProcessChatter("Handoff written to .agents-state/handoff.md."), true);
+  assert.equal(
+    looksLikeAssistantProcessChatter("Handoff written to .agents-state/handoff.md."),
+    true,
+  );
   assert.equal(looksLikeAssistantProcessChatter("Cold-read check passed."), true);
   assert.equal(looksLikeAssistantProcessChatter("Verified: all tests pass."), true);
   assert.equal(looksLikeAssistantProcessChatter("Done — fixed the reducer race."), true);
-  assert.equal(looksLikeAssistantProcessChatter("Summary of what changed: added retry logic."), true);
+  assert.equal(
+    looksLikeAssistantProcessChatter("Summary of what changed: added retry logic."),
+    true,
+  );
   assert.equal(looksLikeAssistantProcessChatter("Use sqlite WAL for ledger durability."), false);
-  assert.equal(looksLikeAssistantProcessChatter("Decision: scope vault writes to asd-learnings/."), false);
+  assert.equal(
+    looksLikeAssistantProcessChatter("Decision: scope vault writes to asd-learnings/."),
+    false,
+  );
 });
 
 test("stripAssistantFraming removes completion wrappers", () => {
   assert.equal(stripAssistantFraming("Verified: tests pass."), "tests pass.");
   assert.equal(stripAssistantFraming("Done — fixed the reducer race."), "fixed the reducer race.");
-  assert.equal(stripAssistantFraming("Good — that locks the carve-out."), "that locks the carve-out.");
+  assert.equal(
+    stripAssistantFraming("Good — that locks the carve-out."),
+    "that locks the carve-out.",
+  );
   assert.equal(
     stripAssistantFraming("**Done:** wired the budget hook. **Verified:** `./scripts/qa`."),
     "wired the budget hook. `./scripts/qa`.",

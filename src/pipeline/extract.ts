@@ -42,9 +42,20 @@ function getMaxProjectLearningsPerSession(): number {
   return parsed;
 }
 
-/** True when a statement contains more than one sentence. */
+/** True when a statement contains more than one sentence.
+ *
+ *  The next token must start with an uppercase letter or digit so that
+ *  lowercase continuations (lists after a colon, abbreviations like "e.g.",
+ *  etc.) do not masquerade as a new sentence.
+ */
 function hasMultipleSentences(value: string): boolean {
-  return /.+[.!?]\s+.+/.test(value);
+  return /.+[.!?]\s+[A-Z0-9].+/.test(value);
+}
+
+/** Return the first sentence of a statement, preserving the original text. */
+function firstSentence(value: string): string {
+  const match = value.match(/^(.+?[.!?])(?=\s+[A-Z0-9]|$)/);
+  return match?.[1]?.trim() ?? value;
 }
 
 export type ExtractLearningsInput = {
@@ -515,9 +526,7 @@ function toProjectTurnCandidates(input: {
     });
   }
 
-  return candidates.filter(
-    (candidate) => !looksLikeAssistantProcessChatter(candidate.statement),
-  );
+  return candidates.filter((candidate) => !looksLikeAssistantProcessChatter(candidate.statement));
 }
 
 function toVerifiedCompletionStatement(event: Event): string | null {
@@ -1355,8 +1364,7 @@ function finalizeProjectLearningCandidate(
       return null;
     }
 
-    const firstSentenceMatch = statement.match(/^(.+?[.!?])(?=\s+|$)/);
-    atomicStatement = firstSentenceMatch?.[1]?.trim() ?? statement;
+    atomicStatement = firstSentence(statement);
   }
 
   atomicStatement = truncateInline(atomicStatement, MAX_LEARNING_STATEMENT_LENGTH);

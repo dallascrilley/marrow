@@ -176,7 +176,6 @@ test("assessLlmBudget tracks sliding-window uses", async () => {
   });
 });
 
-
 test("default count cap is 50/24h with USD hard ceiling remaining the guardrail", () => {
   const previousMaxPer = process.env.ASD_LLM_MAX_PER;
   delete process.env.ASD_LLM_MAX_PER;

@@ -6,16 +6,16 @@ import type { DeletionCandidateRow, SourceSessionRow } from "../db/queries.js";
 import type { Summary } from "../models/canonical.js";
 import { summarySchema } from "../models/canonical.js";
 import {
+  getProjectKnowledgeSessionPath,
+  getUserKnowledgeSessionPath,
+} from "../writers/knowledge-writer.js";
+import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
+import {
   hasUsefulSummarySignal,
   hasWrapperTags,
   isLowSignalSummary,
   isProcessChatterText,
 } from "./artifact-heuristics.js";
-import {
-  getProjectKnowledgeSessionPath,
-  getUserKnowledgeSessionPath,
-} from "../writers/knowledge-writer.js";
-import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
 import { defaultUserScopeKey } from "./extract.js";
 
 export type QualityIssueCode =
