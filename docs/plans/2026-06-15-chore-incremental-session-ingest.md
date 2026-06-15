@@ -34,7 +34,7 @@ Quality spot-check (`quality audit --limit 50`):
 - R1. Establish an accurate baseline of sessions already ingested per agent/source with counts and latest ingest/session dates.
 - R2. Spot-check ingestion quality and identify the dominant failure modes.
 - R3. Incrementally process the remaining discovered sessions through parse → reduce → summarize → extract → archive.
-- R4. Repair error-state sessions and remediating quality issues (missing summaries, low-signal summaries, blocked deletion candidates).
+- R4. Repair error-state sessions and remediate quality issues (missing summaries, low-signal summaries, blocked deletion candidates).
 - R5. Verify after each batch that lifecycle state counts shift toward `deletion_candidate`/`archived` and quality metrics improve.
 
 ## Key technical decisions
@@ -44,6 +44,7 @@ Quality spot-check (`quality audit --limit 50`):
 - **Batch with `--limit` and `--resume`.** Each unit uses `ingest backfill --source <x> --limit N --resume` to keep individual runs bounded and resumable. `--resume` skips already-completed phase artifacts, so re-running the same command after a failure is safe.
 - **Keep summarization deterministic by default.** The default `summarize-phase` is deterministic; LLM topic rescue is intentionally left out of the drain because the backlog is large and the existing `ASD_LLM_MAX_PER` budget is narrow.
 - **Quality remediation after the backlog is down.** Re-summarization (`quality resummarize --low-signal-only`) and error repair are deferred until the bulk of sessions have completed the pipeline, so remediation runs against a stable corpus.
+- **Rebuild before code changes.** If U7 requires an adapter fix, run `npm run build` before the next `ingest backfill`; the CLI is invoked from `dist/cli.js`.
 
 ## Implementation units
 
@@ -58,7 +59,7 @@ Quality spot-check (`quality audit --limit 50`):
   4. Run `node dist/cli.js ingest sync --resume --source kimi`.
   5. Run `node dist/cli.js ingest sync --resume --source pi`.
   6. Capture the per-source `discovered_count` and `selected_count` from each JSON output.
-- **Tests:** Each command exits 0; `selected_count` reflects new/changed files (cursor +58, claude-code +94, codex-cli +54, pi +3, kimi +0 expected based on file mtimes).
+- **Tests:** Each command exits 0; `selected_count` reflects sessions selected for processing, which should include the new/changed files on disk (cursor +58, claude-code +94, codex-cli +54, pi +3, kimi +0 expected based on file mtimes).
 - **Verification:**
   ```bash
   sqlite3 ~/.agent-session-distillery/ledger/sessions.sqlite \
@@ -92,7 +93,7 @@ Quality spot-check (`quality audit --limit 50`):
 - **Goal:** Process the ≈491 discovered kimi sessions.
 - **Requirements:** R3, R5
 - **Files:** `src/adapters/kimi/`, runtime ledger
-- **Approach:** Run `node dist/cli.js ingest backfill --source kimi --limit 500 --resume` (or split into 250/session batches if runtime is slow).
+- **Approach:** Run `node dist/cli.js ingest backfill --source kimi --limit 500 --resume` (or split into 250-session batches if runtime is slow).
 - **Tests:** Command exits 0; `failed_count: 0`; no new files are expected, so `discovered_count` should equal the prior ledger count of discovered kimi sessions.
 - **Verification:** Same SQL pattern as U2 filtered by `source_tool = 'kimi'`.
 
@@ -119,8 +120,8 @@ Quality spot-check (`quality audit --limit 50`):
 - **Approach:**
   1. Query the error sessions: `SELECT session_id, source_path, source_tool FROM source_sessions WHERE current_lifecycle_state = 'error';`.
   2. For each, inspect the most recent `run_history` row to identify the failing phase and error message.
-  3. If the failure is transient (e.g., partial file, lock contention), rerun the source-specific backfill for that session without `--resume` to rebuild derived artifacts.
-  4. If the failure is a parser bug, fix the adapter and re-run only the affected session(s).
+  3. If the failure is transient (e.g., partial file, lock contention), rerun `ingest backfill --source <tool> --limit small --resume=false` for the source to rebuild derived artifacts for the sessions that fail resume checks. (The CLI does not currently support targeting a single session id.)
+  4. If the failure is a parser bug, fix the adapter, then rerun the source-specific backfill with a tight `--limit` and `--resume=false` for the affected source.
 - **Tests:** After repair, `stats` reports `sessionsByLifecycle.error: 0`.
 - **Verification:**
   ```bash
@@ -136,7 +137,7 @@ Quality spot-check (`quality audit --limit 50`):
 - **Approach:**
   1. Run `node dist/cli.js quality resummarize --low-signal-only --dry-run` to estimate affected sessions.
   2. If the dry-run count is reasonable, run `npm run corpus:resummarize:dry-run` for a wider view.
-  3. Run `npm run corpus:resummarize` (deterministic topics by default; add `--llm-topic` only if budget allows and the dry-run shows clear value).
+  3. Run `npm run corpus:resummarize` (LLM topic by default; pass `--no-llm-topic` if the LLM budget is exhausted or the dry-run does not justify the cost).
   4. Re-run `node dist/cli.js quality audit --limit 100` and confirm `issue_counts.summary_low_signal` and `blocked_deletion` drop.
 - **Tests:** Dry-run produces finite counts; full run completes; re-audit shows fewer low-signal issues.
 - **Verification:**
