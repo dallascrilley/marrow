@@ -6,6 +6,12 @@ import type { DeletionCandidateRow, SourceSessionRow } from "../db/queries.js";
 import type { Summary } from "../models/canonical.js";
 import { summarySchema } from "../models/canonical.js";
 import {
+  hasUsefulSummarySignal,
+  hasWrapperTags,
+  isLowSignalSummary,
+  isProcessChatterText,
+} from "./artifact-heuristics.js";
+import {
   getProjectKnowledgeSessionPath,
   getUserKnowledgeSessionPath,
 } from "../writers/knowledge-writer.js";
@@ -291,11 +297,11 @@ function collectSessionIssues(
     issues.push("completion_as_next_step");
   }
 
-  if (/\b(?:let me|i(?:'|’)ll|i need to|checking|exploring)\b/i.test(summaryText)) {
+  if (isProcessChatterText(summaryText)) {
     issues.push("process_chatter");
   }
 
-  if (/<(?:attached_files|code_selection|plugin_info|skill)\b/i.test(summaryText)) {
+  if (hasWrapperTags(summaryText)) {
     issues.push("wrapper_tags");
   }
 
@@ -332,24 +338,6 @@ async function readKnowledgeArtifactState(sourceSession: SourceSessionRow): Prom
     project,
     user,
   };
-}
-
-function isLowSignalSummary(summary: Summary): boolean {
-  return (
-    !hasUsefulSummarySignal(summary) && summary.next_step === "No explicit next step recorded."
-  );
-}
-
-function hasUsefulSummarySignal(summary: Summary): boolean {
-  return (
-    summary.what_worked.length > 0 ||
-    summary.what_failed.length > 0 ||
-    summary.what_was_decided.length > 0 ||
-    summary.useful_commands.length > 0 ||
-    summary.files_of_interest.length > 0 ||
-    summary.project_learnings.length > 0 ||
-    summary.user_learnings.length > 0
-  );
 }
 
 function looksLikeCompletedOutcome(value: string): boolean {
