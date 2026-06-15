@@ -128,12 +128,32 @@ function extractProjectLearningCandidates(
       ? extractConcreteTurnFallbackCandidates(input)
       : [];
 
-  return dedupeProjectCandidates(
+  const candidates = dedupeProjectCandidates(
     [...eventCandidates, ...turnCandidates, ...fallbackCandidates]
       .map(finalizeProjectLearningCandidate)
       .filter((candidate): candidate is ProjectLearningCandidate => candidate !== null),
   );
+
+  return applyProjectLearningCap(candidates);
 }
+
+function applyProjectLearningCap(
+  candidates: readonly ProjectLearningCandidate[],
+): ProjectLearningCandidate[] {
+  const cap = getProjectLearningCap();
+  if (candidates.length <= cap) return candidates.slice();
+  return candidates.slice(0, cap);
+}
+
+const defaultProjectLearningCap = 12;
+
+function getProjectLearningCap(): number {
+  const raw = process.env.ASD_MAX_PROJECT_LEARNINGS;
+  if (raw === undefined || raw.length === 0) return defaultProjectLearningCap;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isNaN(parsed) || parsed < 1 ? defaultProjectLearningCap : parsed;
+}
+
 
 function hasSameTurnVerifiedFix(events: readonly Event[], turnId: string): boolean {
   const turnEvents = events.filter(

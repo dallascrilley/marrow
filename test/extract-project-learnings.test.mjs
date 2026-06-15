@@ -1323,3 +1323,135 @@ test("does not derive workflow from prompt-instruction turn", () => {
 
   assert.deepEqual(learnings.project, []);
 });
+test("caps project learnings per session at default 12", () => {
+  const source = sourceSession();
+  const turns = [];
+  for (let i = 0; i < 20; i++) {
+    turns.push(
+      turn({
+        commands_seen: ["./scripts/qa"],
+        files_touched: [`desktop/src/feature-${i}.ts`],
+        index: i,
+        session_id: source.session_id,
+        turn_id: `${source.session_id}:turn-${String(i).padStart(4, "0")}`,
+        user_prompt: "Fix the project issue.",
+        verification_seen: true,
+      }),
+    );
+  }
+
+  const events = [];
+  for (let i = 0; i < 20; i++) {
+    const turnId = `${source.session_id}:turn-${String(i).padStart(4, "0")}`;
+    events.push(
+      event(turnId, "fix", `Fixed issue ${i} in desktop/src/feature-${i}.ts; verified.`, {
+        event_id: `${turnId}:fix:001`,
+      }),
+    );
+    events.push(
+      event(turnId, "verification", `Verification ${i}: tests pass.`, {
+        event_id: `${turnId}:verification:001`,
+        payload_small: { matched_rule: "verification", verification_command: "./scripts/qa" },
+      }),
+    );
+  }
+
+  const result = extractLearnings({ events, sourceSession: source, turns });
+  assert.equal(result.project.length, 12);
+  assert.equal(result.project[0].kind, "workflow");
+  assert.equal(result.project[11].kind, "workflow");
+});
+
+test("respects ASD_MAX_PROJECT_LEARNINGS override", () => {
+  const original = process.env.ASD_MAX_PROJECT_LEARNINGS;
+  process.env.ASD_MAX_PROJECT_LEARNINGS = "5";
+  try {
+    const source = sourceSession();
+    const turns = [];
+    for (let i = 0; i < 10; i++) {
+      turns.push(
+        turn({
+          commands_seen: ["./scripts/qa"],
+          files_touched: [`desktop/src/feature-${i}.ts`],
+          index: i,
+          session_id: source.session_id,
+          turn_id: `${source.session_id}:turn-${String(i).padStart(4, "0")}`,
+          user_prompt: "Fix the project issue.",
+          verification_seen: true,
+        }),
+      );
+    }
+
+    const events = [];
+    for (let i = 0; i < 10; i++) {
+      const turnId = `${source.session_id}:turn-${String(i).padStart(4, "0")}`;
+      events.push(
+        event(turnId, "fix", `Fixed issue ${i} in desktop/src/feature-${i}.ts; verified.`, {
+          event_id: `${turnId}:fix:001`,
+        }),
+      );
+      events.push(
+        event(turnId, "verification", `Verification ${i}: tests pass.`, {
+          event_id: `${turnId}:verification:001`,
+          payload_small: { matched_rule: "verification", verification_command: "./scripts/qa" },
+        }),
+      );
+    }
+
+    const result = extractLearnings({ events, sourceSession: source, turns });
+    assert.equal(result.project.length, 5);
+  } finally {
+    if (original === undefined) {
+      delete process.env.ASD_MAX_PROJECT_LEARNINGS;
+    } else {
+      process.env.ASD_MAX_PROJECT_LEARNINGS = original;
+    }
+  }
+});
+
+test("invalid ASD_MAX_PROJECT_LEARNINGS falls back to default cap", () => {
+  const original = process.env.ASD_MAX_PROJECT_LEARNINGS;
+  process.env.ASD_MAX_PROJECT_LEARNINGS = "invalid";
+  try {
+    const source = sourceSession();
+    const turns = [];
+    for (let i = 0; i < 15; i++) {
+      turns.push(
+        turn({
+          commands_seen: ["./scripts/qa"],
+          files_touched: [`desktop/src/feature-${i}.ts`],
+          index: i,
+          session_id: source.session_id,
+          turn_id: `${source.session_id}:turn-${String(i).padStart(4, "0")}`,
+          user_prompt: "Fix the project issue.",
+          verification_seen: true,
+        }),
+      );
+    }
+
+    const events = [];
+    for (let i = 0; i < 15; i++) {
+      const turnId = `${source.session_id}:turn-${String(i).padStart(4, "0")}`;
+      events.push(
+        event(turnId, "fix", `Fixed issue ${i} in desktop/src/feature-${i}.ts; verified.`, {
+          event_id: `${turnId}:fix:001`,
+        }),
+      );
+      events.push(
+        event(turnId, "verification", `Verification ${i}: tests pass.`, {
+          event_id: `${turnId}:verification:001`,
+          payload_small: { matched_rule: "verification", verification_command: "./scripts/qa" },
+        }),
+      );
+    }
+
+    const result = extractLearnings({ events, sourceSession: source, turns });
+    assert.equal(result.project.length, 12);
+  } finally {
+    if (original === undefined) {
+      delete process.env.ASD_MAX_PROJECT_LEARNINGS;
+    } else {
+      process.env.ASD_MAX_PROJECT_LEARNINGS = original;
+    }
+  }
+});
