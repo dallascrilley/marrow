@@ -40,6 +40,18 @@ const noSignalPatterns: readonly RegExp[] = [
 ];
 
 /**
+ * Remove assistant framing tokens that leak into event summaries and learning
+ * statements: "Verified:", "Done —", "Good —", and completion-block headers.
+ */
+export function stripAssistantFraming(value: string): string {
+  return value
+    .replace(/^\s*(?:Verified|Done|Good)\s*[:\u2014\u2013-]\s*/i, "")
+    .replace(/\*\*(?:Done|Verified|Changed|Changes|Implemented|Summary of changes|Summary of what changed):\*\*\s*/gi, "")
+    .replace(/\bSummary of what changed:\s*/gi, "")
+    .trim();
+}
+
+/**
  * Strip harness/boot context from a raw user prompt. Does not truncate.
  */
 export function sanitizeUserPrompt(raw: string): string {
@@ -65,7 +77,7 @@ export function sanitizeUserPrompt(raw: string): string {
  * Sanitize assistant/event text that may embed harness or skill metadata.
  */
 export function sanitizeHarnessLeakText(raw: string): string {
-  const sanitized = sanitizeUserPrompt(raw);
+  const sanitized = sanitizeUserPrompt(stripAssistantFraming(raw));
   if (sanitized.length === 0) {
     return "";
   }

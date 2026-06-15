@@ -17,6 +17,7 @@ import {
   sanitizeHarnessLeakText,
   sanitizeLearningTitle,
   sanitizeUserPrompt,
+  stripAssistantFraming,
 } from "./prompt-sanitize.js";
 
 export const defaultUserScopeKey = "operator";
@@ -1299,7 +1300,7 @@ function dedupeLearnings(learnings: readonly Learning[]): Learning[] {
 function finalizeProjectLearningCandidate(
   candidate: ProjectLearningCandidate,
 ): ProjectLearningCandidate | null {
-  const statement = sanitizeHarnessLeakText(candidate.statement);
+  const statement = sanitizeHarnessLeakText(stripAssistantFraming(candidate.statement));
   if (
     statement.length === 0 ||
     looksLikeSkillHarnessLeak(statement) ||

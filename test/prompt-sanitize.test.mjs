@@ -15,6 +15,7 @@ import {
   sanitizeHarnessLeakText,
   sanitizeLearningTitle,
   sanitizeUserPrompt,
+  stripAssistantFraming,
 } from "../dist/pipeline/prompt-sanitize.js";
 
 test("sanitizeUserPrompt strips harness blocks and prefers user_query", () => {
@@ -176,4 +177,18 @@ test("looksLikeAssistantProcessChatter flags observed bad phrases", () => {
   assert.equal(looksLikeAssistantProcessChatter("Summary of what changed: added retry logic."), true);
   assert.equal(looksLikeAssistantProcessChatter("Use sqlite WAL for ledger durability."), false);
   assert.equal(looksLikeAssistantProcessChatter("Decision: scope vault writes to asd-learnings/."), false);
+});
+
+test("stripAssistantFraming removes completion wrappers", () => {
+  assert.equal(stripAssistantFraming("Verified: tests pass."), "tests pass.");
+  assert.equal(stripAssistantFraming("Done — fixed the reducer race."), "fixed the reducer race.");
+  assert.equal(stripAssistantFraming("Good — that locks the carve-out."), "that locks the carve-out.");
+  assert.equal(
+    stripAssistantFraming("**Done:** wired the budget hook. **Verified:** `./scripts/qa`."),
+    "wired the budget hook. `./scripts/qa`.",
+  );
+  assert.equal(
+    stripAssistantFraming("Summary of what changed: added retry logic."),
+    "added retry logic.",
+  );
 });
