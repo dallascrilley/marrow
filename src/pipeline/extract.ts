@@ -22,6 +22,14 @@ import {
 
 export const defaultUserScopeKey = "operator";
 
+/** Maximum characters for a single project-learning statement. */
+const MAX_LEARNING_STATEMENT_LENGTH = 240;
+
+/** True when a statement contains more than one sentence. */
+function hasMultipleSentences(value: string): boolean {
+  return /.+[.!?]\s+.+/.test(value);
+}
+
 export type ExtractLearningsInput = {
   events: readonly Event[];
   sourceSession: SourceSession;
@@ -1309,6 +1317,14 @@ function finalizeProjectLearningCandidate(
     return null;
   }
 
+  // Reject multi-sentence statements unless they are a verified-fix pattern that
+  // uses a semicolon to join the fix and its verification clause.
+  if (hasMultipleSentences(statement) && !statement.includes(";")) {
+    return null;
+  }
+
+  const atomicStatement = truncateInline(statement, MAX_LEARNING_STATEMENT_LENGTH);
+
   const evidence = uniqueStrings(
     candidate.evidence
       .map((item) => capEvidenceText(sanitizeHarnessLeakText(item)))
@@ -1317,15 +1333,15 @@ function finalizeProjectLearningCandidate(
 
   const titleBodyMax =
     candidate.kind === "decision" || candidate.title.startsWith("Decision:") ? 72 : 60;
-  const title = sanitizeLearningTitle(candidate.title, statement, titleBodyMax);
+  const title = sanitizeLearningTitle(candidate.title, atomicStatement, titleBodyMax);
   if (title.length === 0 || looksLikeSkillHarnessLeak(title)) {
     return null;
   }
 
   return {
     ...candidate,
-    evidence: evidence.length > 0 ? evidence : [capEvidenceText(statement)],
-    statement,
+    evidence: evidence.length > 0 ? evidence : [capEvidenceText(atomicStatement)],
+    statement: atomicStatement,
     title,
   };
 }

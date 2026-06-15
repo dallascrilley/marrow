@@ -170,3 +170,70 @@ test("genuine fix/decision events still produce project learnings", () => {
   assert.equal(learnings.project[0].kind, "decision");
   assert.match(learnings.project[0].statement, /scope vault writes/);
 });
+
+
+test("multi-sentence decision candidates are rejected", () => {
+  const { event, sourceSession, turn } = makeTurnAndEvent({
+    summary:
+      "Decision: scope vault writes to asd-learnings/. This keeps project-owned pages separate from vault memory.",
+    type: "decision",
+  });
+
+  const learnings = extractLearnings({
+    events: [event],
+    sourceSession,
+    turns: [turn],
+  });
+
+  assert.equal(learnings.project.length, 0);
+});
+
+test("verified-fix candidates with semicolon survive atomicity check", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "extract-verified-fix",
+  };
+  const turn = turnSchema.parse({
+    assistant_summary: "Fixed the reducer race.",
+    commands_seen: ["npm test"],
+    ended_at: "2026-05-16T12:05:00Z",
+    files_touched: ["src/reducer.ts"],
+    index: 0,
+    session_id: sourceSession.session_id,
+    started_at: "2026-05-16T12:00:00Z",
+    tool_stub_count: 0,
+    turn_id: `${sourceSession.session_id}:turn-0000`,
+    user_prompt: "Fix the reducer race in src/reducer.ts.",
+    verification_seen: true,
+  });
+  const fixEvent = eventSchema.parse({
+    confidence: "high",
+    event_id: `${sourceSession.session_id}:fix:1`,
+    payload_small: {},
+    source_offsets: { end_line: 10, start_line: 10 },
+    summary: "Fixed the reducer race by locking the dispatch queue.",
+    turn_id: turn.turn_id,
+    type: "fix",
+  });
+  const verificationEvent = eventSchema.parse({
+    confidence: "high",
+    event_id: `${sourceSession.session_id}:verification:1`,
+    payload_small: { verification_command: "npm test" },
+    source_offsets: { end_line: 12, start_line: 12 },
+    summary: "Verification noted: all tests pass.",
+    turn_id: turn.turn_id,
+    type: "verification",
+  });
+
+  const learnings = extractLearnings({
+    events: [fixEvent, verificationEvent],
+    sourceSession,
+    turns: [turn],
+  });
+
+  const verifiedFix = learnings.project.find((learning) => learning.kind === "workflow");
+  assert.ok(verifiedFix, "expected a verified-fix workflow learning");
+  assert.match(verifiedFix.statement, /; verified/);
+  assert.ok(verifiedFix.statement.length <= 240, "statement should respect 240-char ceiling");
+});
