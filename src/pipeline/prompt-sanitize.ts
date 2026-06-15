@@ -1,5 +1,13 @@
+import { isProcessChatterText } from "./artifact-heuristics.js";
+
 /** Max bytes stored in learning evidence arrays (UTF-8). */
 export const DEFAULT_EVIDENCE_MAX_BYTES = 512;
+
+/**
+ * Shared alias for the upstream/downstream process-chatter predicate so
+ * extraction and audit use the exact same rule.
+ */
+export const looksLikeAssistantProcessChatter = isProcessChatterText;
 
 const attachedFilesPattern = /<attached_files>[\s\S]*?<\/attached_files>/gi;
 const codeSelectionPattern = /<code_selection\b[^>]*>[\s\S]*?<\/code_selection>/gi;

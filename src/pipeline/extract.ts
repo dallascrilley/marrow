@@ -12,6 +12,7 @@ import {
   capEvidenceText,
   extractSubstantivePrompt,
   learningEvidenceFromPrompt,
+  looksLikeAssistantProcessChatter,
   looksLikeSkillHarnessLeak,
   sanitizeHarnessLeakText,
   sanitizeLearningTitle,
@@ -143,6 +144,13 @@ function toProjectEventCandidate(
   }
 
   if (isProcessText(event.summary) || looksLikeProcessNarration(event.summary)) {
+    return null;
+  }
+
+  if (
+    (event.type === "decision" || event.type === "failure") &&
+    looksLikeAssistantProcessChatter(event.summary)
+  ) {
     return null;
   }
 
@@ -468,7 +476,9 @@ function toProjectTurnCandidates(input: {
     });
   }
 
-  return candidates;
+  return candidates.filter(
+    (candidate) => !looksLikeAssistantProcessChatter(candidate.statement),
+  );
 }
 
 function toVerifiedCompletionStatement(event: Event): string | null {
@@ -988,7 +998,11 @@ function looksLikeProcessNarration(value: string): boolean {
       normalized,
     ) ||
     /\bi can detect\b/i.test(value) ||
-    normalized.startsWith("summary of what was done")
+    normalized.startsWith("summary of what was done") ||
+    normalized.includes("this is converging") ||
+    normalized.includes("handoff written") ||
+    normalized.includes("cold-read check passed") ||
+    normalized.includes("cold read check passed")
   );
 }
 
@@ -1026,6 +1040,16 @@ function isProcessText(summary: string): boolean {
     "the toast infrastructure",
     "the command infrastructure",
     "--- ## ",
+    "this is converging",
+    "handoff written",
+    "cold-read check passed",
+    "cold read check passed",
+    "good —",
+    "good -",
+    "verified:",
+    "done —",
+    "done -",
+    "summary of what changed:",
   ];
 
   for (const prefix of processPrefixes) {
@@ -1276,7 +1300,11 @@ function finalizeProjectLearningCandidate(
   candidate: ProjectLearningCandidate,
 ): ProjectLearningCandidate | null {
   const statement = sanitizeHarnessLeakText(candidate.statement);
-  if (statement.length === 0 || looksLikeSkillHarnessLeak(statement)) {
+  if (
+    statement.length === 0 ||
+    looksLikeSkillHarnessLeak(statement) ||
+    looksLikeAssistantProcessChatter(statement)
+  ) {
     return null;
   }
 
@@ -1409,7 +1437,7 @@ function semanticCandidateKey(value: string): string {
 function isDurableCandidate(candidate: ProjectLearningCandidate): boolean {
   const statement = candidate.statement;
 
-  if (looksLikeProcessNarration(statement)) {
+  if (looksLikeProcessNarration(statement) || looksLikeAssistantProcessChatter(statement)) {
     return false;
   }
 

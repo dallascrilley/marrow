@@ -10,6 +10,7 @@ import {
   isNoSignalPrompt,
   isTinyNoSignalSession,
   learningEvidenceFromPrompt,
+  looksLikeAssistantProcessChatter,
   looksLikeSkillHarnessLeak,
   sanitizeHarnessLeakText,
   sanitizeLearningTitle,
@@ -160,4 +161,19 @@ test("isTinyNoSignalSession accepts multi-turn smoke without durable task", () =
     ]),
     false,
   );
+});
+
+test("looksLikeAssistantProcessChatter flags observed bad phrases", () => {
+  assert.equal(looksLikeAssistantProcessChatter("This is converging beautifully."), true);
+  assert.equal(
+    looksLikeAssistantProcessChatter("Good — and that's a genuinely important loosening."),
+    true,
+  );
+  assert.equal(looksLikeAssistantProcessChatter("Handoff written to .agents-state/handoff.md."), true);
+  assert.equal(looksLikeAssistantProcessChatter("Cold-read check passed."), true);
+  assert.equal(looksLikeAssistantProcessChatter("Verified: all tests pass."), true);
+  assert.equal(looksLikeAssistantProcessChatter("Done — fixed the reducer race."), true);
+  assert.equal(looksLikeAssistantProcessChatter("Summary of what changed: added retry logic."), true);
+  assert.equal(looksLikeAssistantProcessChatter("Use sqlite WAL for ledger durability."), false);
+  assert.equal(looksLikeAssistantProcessChatter("Decision: scope vault writes to asd-learnings/."), false);
 });

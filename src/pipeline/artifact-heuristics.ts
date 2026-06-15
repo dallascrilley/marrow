@@ -14,7 +14,45 @@ export function isProcessChatterText(value: string): boolean {
     return false;
   }
 
-  return /\b(?:let me|i(?:'|’)ll|i need to|checking|exploring)\b/i.test(value);
+  // General process-language markers.
+  if (/\b(?:let me|i(?:'|’)ll|i need to|checking|exploring)\b/i.test(value)) {
+    return true;
+  }
+
+  // Concrete phrases observed in low-quality extracted sessions.
+  const processPhrases = [
+    "this is converging",
+    "that's a genuinely important",
+    "this is a genuinely important",
+    "handoff written",
+    "cold-read check passed",
+    "cold read check passed",
+    "verified:",
+    "done —",
+    "done -",
+    "good —",
+    "good -",
+    "summary of what changed:",
+    "summary of what's done",
+    "summary of what was done",
+    "summary of every",
+    "here's a summary",
+    "here is a summary",
+    "now i have enough context",
+    "now i understand",
+    "now i see",
+    "clean.",
+    "created to-dos",
+    "created todos",
+  ];
+
+  for (const phrase of processPhrases) {
+    if (normalized.includes(phrase)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /** True when text still contains harness wrapper tags that should not reach output. */

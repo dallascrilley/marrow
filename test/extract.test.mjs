@@ -4,6 +4,37 @@ import test from "node:test";
 import { eventSchema, sourceSessionFixture, turnSchema } from "../dist/models/canonical.js";
 import { extractLearnings } from "../dist/pipeline/extract.js";
 
+function makeTurnAndEvent(options) {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: options.projectKey ?? "demo",
+    session_id: options.sessionId ?? "extract-process-chatter",
+  };
+  const turn = turnSchema.parse({
+    assistant_summary: options.assistantSummary ?? "Worked on the task.",
+    commands_seen: options.commandsSeen ?? [],
+    ended_at: "2026-05-16T12:05:00Z",
+    files_touched: options.filesTouched ?? [],
+    index: 0,
+    session_id: sourceSession.session_id,
+    started_at: "2026-05-16T12:00:00Z",
+    tool_stub_count: 0,
+    turn_id: `${sourceSession.session_id}:turn-0000`,
+    user_prompt: options.userPrompt ?? "Fix the bug.",
+    verification_seen: options.verificationSeen ?? false,
+  });
+  const event = eventSchema.parse({
+    confidence: options.confidence ?? "medium",
+    event_id: `${sourceSession.session_id}:event:1`,
+    payload_small: options.payloadSmall ?? {},
+    source_offsets: { end_line: 10, start_line: 10 },
+    summary: options.summary,
+    turn_id: turn.turn_id,
+    type: options.type,
+  });
+  return { event, sourceSession, turn };
+}
+
 test("verified completion events produce conservative project learnings", () => {
   const sourceSession = {
     ...sourceSessionFixture,
@@ -104,4 +135,38 @@ test("learning evidence excludes AGENTS harness text from raw user prompt", () =
   const evidence = learnings.project.flatMap((learning) => learning.evidence).join("\n");
   assert.match(evidence, /review-pr\.md/);
   assert.doesNotMatch(evidence, /AGENTS\.md instructions/i);
+});
+
+
+test("process-chatter decision events produce no project learning", () => {
+  const { event, sourceSession, turn } = makeTurnAndEvent({
+    summary:
+      "This is converging beautifully: the retry logic is now scoped to the worker queue.",
+    type: "decision",
+  });
+
+  const learnings = extractLearnings({
+    events: [event],
+    sourceSession,
+    turns: [turn],
+  });
+
+  assert.equal(learnings.project.length, 0);
+});
+
+test("genuine fix/decision events still produce project learnings", () => {
+  const { event, sourceSession, turn } = makeTurnAndEvent({
+    summary: "Decision: scope vault writes to asd-learnings/ only.",
+    type: "decision",
+  });
+
+  const learnings = extractLearnings({
+    events: [event],
+    sourceSession,
+    turns: [turn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "decision");
+  assert.match(learnings.project[0].statement, /scope vault writes/);
 });
