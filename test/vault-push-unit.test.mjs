@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { vaultProjectDir } from "../dist/config/vault-paths.js";
 import {
   atomicWriteFile,
   contentHashOf,
   loadManifest,
   pageBasenameFromId,
-  projectSubtreePath,
   pushAll,
   readWikiMemoryJsonl,
   renderBody,
@@ -313,15 +313,12 @@ test("readWikiMemoryJsonl rejects records that don't match the schema", async ()
   }
 });
 
-test("projectSubtreePath places asd-learnings under wiki/projects/<sanitised>/", () => {
+test("vaultProjectDir places project root under wiki/projects/<sanitised>/", () => {
   assert.equal(
-    projectSubtreePath("/vault", "agent-session-distillery"),
-    "/vault/wiki/projects/agent-session-distillery/asd-learnings",
+    vaultProjectDir("/vault", "agent-session-distillery"),
+    "/vault/wiki/projects/agent-session-distillery",
   );
-  assert.equal(
-    projectSubtreePath("/vault", "../escape"),
-    "/vault/wiki/projects/escape/asd-learnings",
-  );
+  assert.equal(vaultProjectDir("/vault", "../escape"), "/vault/wiki/projects/escape");
 });
 
 test("pushAll writes pages, populates the manifest, and is idempotent on re-run", async () => {
@@ -349,13 +346,7 @@ test("pushAll writes pages, populates the manifest, and is idempotent on re-run"
     assert.equal(second.total_written, 0, "unchanged record must be a no-op on re-run");
     assert.equal(second.total_skipped_unchanged, 1);
 
-    const projectDir = join(
-      vaultRoot,
-      "wiki",
-      "projects",
-      "agent-session-distillery",
-      "asd-learnings",
-    );
+    const projectDir = join(vaultRoot, "wiki", "projects", "agent-session-distillery");
     const manifest = await loadManifest(join(projectDir, "_asd-manifest.json"), now);
     assert.equal(Object.keys(manifest.records).length, 1);
     assert.ok(manifest.records[sampleId]);

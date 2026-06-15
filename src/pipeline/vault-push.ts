@@ -3,6 +3,8 @@ import { access, mkdir, readdir, readFile, rename, writeFile } from "node:fs/pro
 import { dirname, join } from "node:path";
 import { z } from "zod";
 
+import { vaultProjectDir, vaultProjectPath } from "../config/vault-paths.js";
+
 const wikiMemorySchemaVersion = "asd.wiki_memory.v1" as const;
 const vaultPushManifestSchemaVersion = "asd.vault_push_manifest.v1" as const;
 
@@ -258,9 +260,8 @@ export type PushRecordOptions = {
  */
 export async function pushRecord(options: PushRecordOptions): Promise<PushRecordResult> {
   const { manifest, noOverwrite, now, record, vaultRoot } = options;
-  const projectDir = projectSubtreePath(vaultRoot, record.project.key);
   const basename = `${pageBasenameFromId(record.id)}.md`;
-  const pagePath = join(projectDir, basename);
+  const pagePath = vaultProjectPath(vaultRoot, record.project.key, join("asd-learnings", basename));
   const frontmatter = renderFrontmatter(record);
   const body = renderBody(record);
   const newContentHash = contentHashOf(body);
@@ -325,9 +326,9 @@ export async function pushAll(options: PushAllOptions): Promise<PushAllResult> {
   for (const projectKey of [...grouped.keys()].sort()) {
     const group = grouped.get(projectKey);
     if (!group) continue;
-    const projectDir = projectSubtreePath(vaultRoot, projectKey);
+    const projectDir = vaultProjectDir(vaultRoot, projectKey);
     await mkdir(projectDir, { recursive: true });
-    const manifestPath = join(projectDir, MANIFEST_FILENAME);
+    const manifestPath = vaultProjectPath(vaultRoot, projectKey, MANIFEST_FILENAME);
     const manifest = await loadManifest(manifestPath, now);
 
     let manifestChanged = false;
@@ -386,11 +387,6 @@ export async function readWikiMemoryJsonl(path: string): Promise<WikiMemoryRecor
   }
 
   return records;
-}
-
-/** Compute the per-project vault subtree path. Project key is sanitised. */
-export function projectSubtreePath(vaultRoot: string, projectKey: string): string {
-  return join(vaultRoot, "wiki", "projects", sanitiseProjectKey(projectKey), "asd-learnings");
 }
 
 /** Return whether the given vault root exists on disk. */
