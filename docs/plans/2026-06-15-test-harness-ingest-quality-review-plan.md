@@ -48,10 +48,11 @@ td_epic: td-3706e1
 - **Approach:**
   1. Sync: `asd ingest sync --source claude-code --resume`.
   2. Ingest a bounded batch with LLM topic rescue: `asd ingest backfill --source claude-code --limit 10 --resume --llm-topic`.
-  3. Run `asd quality audit --limit 50` and capture issue counts.
-  4. Inspect a sample of written summaries (`summary.json`) and project learnings (`project-knowledge.json`) for coherence and signal.
-- **Tests:** `failed_count: 0`; audit completes.
-- **Verification:** Written notes in `docs/research/2026-06-15-harness-ingest-quality-review.md` with claude-code observations.
+  3. Record `failed_count` and any failures; inspect whether failures are regressions or pre-existing.
+  4. Run `asd quality audit --limit 50` and capture issue counts.
+  5. Inspect a sample of written summaries (`summary.json`) and project learnings (`knowledge/projects/<project_key>/<session_id>.jsonl`) for coherence and signal.
+- **Tests:** Command exits 0; audit completes; failures are documented.
+- **Verification:** Written notes in `docs/research/2026-06-15-harness-ingest-quality-review.md` with claude-code observations and any failures.
 
 ### U3. Ingest and review pi sessions
 
@@ -96,7 +97,7 @@ td_epic: td-3706e1
 - **Files:** `docs/research/2026-06-15-harness-ingest-quality-review.md`
 - **Approach:**
   1. Compare issue-count deltas across harnesses.
-  2. Note any harness where `summary_low_signal`, `process_chatter`, or `no_project_learnings` is disproportionately high.
+  2. Note any harness where `summary_low_signal`, `process_chatter`, `no_project_learnings`, or `failed_count` is disproportionately high.
   3. Decide whether findings require code fixes, adapter tuning, or just more data.
 - **Tests:** N/A — analysis.
 - **Verification:** A research doc section with a ranked list of findings and recommended next actions.
