@@ -839,3 +839,94 @@ test("dedupes overlapping failure-mode candidates in favor of verified workflow"
     ],
   );
 });
+
+test("promotes verification workflow when command is only in the summary text", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(firstTurn.turn_id, "verification", "Verification noted: `cargo check` passes.", {
+      event_id: `${firstTurn.turn_id}:verification:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "verification_rule");
+  assert.equal(
+    learnings.project[0].statement,
+    "Run cargo check when verifying changes in studio-tools.",
+  );
+});
+
+test("promotes durable decision even when wrapped in explanatory framing", () => {
+  const source = sourceSession({ project_key: "studio-tools" });
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "decision",
+      "Here's what we decided: keep the pre-commit rule and fix bindings generation because callers require a single Result error channel.",
+      {
+        event_id: `${firstTurn.turn_id}:decision:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "decision");
+  assert.ok(
+    learnings.project[0].statement.includes("keep the pre-commit rule and fix bindings generation"),
+  );
+});
+
+test("derives project workflow from turn commands when no events are extracted", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: ["./scripts/hot-reload-fix"],
+    user_prompt: "fix hot-reload path",
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "workflow");
+  assert.equal(
+    learnings.project[0].statement,
+    "Use `./scripts/hot-reload-fix` for fix hot-reload path in studio-tools.",
+  );
+});
+
+test("derives file-scoped workflow from turn files and commands when no events are extracted", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: ["./scripts/apply-review-follow-ups"],
+    files_touched: ["src/lib/auth.ts"],
+    user_prompt: "Apply code-review follow-ups for the admin auth gate",
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "workflow");
+  assert.ok(learnings.project[0].statement.includes("src/lib/auth.ts"));
+  assert.ok(learnings.project[0].statement.includes("./scripts/apply-review-follow-ups"));
+});
