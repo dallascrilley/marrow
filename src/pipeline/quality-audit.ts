@@ -109,6 +109,27 @@ export async function auditQuality(
 
   for (const sourceSession of selectedSessions) {
     const candidate = getDeletionCandidateBySessionId(database, sourceSession.session_id);
+
+    if (sourceSession.current_lifecycle_state === "discovered") {
+      deletionReadiness.missing_candidate += 1;
+      sessions.push({
+        blocked_reason: null,
+        candidate_state: candidate?.candidate_state ?? null,
+        issue_count: 0,
+        issues: [],
+        knowledge_artifacts: {
+          project: false,
+          user: false,
+        },
+        project_key: sourceSession.project_key,
+        project_learning_count: 0,
+        safe_to_delete: null,
+        session_id: sourceSession.session_id,
+        topic: null,
+      });
+      continue;
+    }
+
     const summaryResult = await readSummary(sourceSession.session_id);
     const knowledgeArtifacts = await readKnowledgeArtifactState(sourceSession);
     const projectLearningCount = await countProjectLearnings(sourceSession);

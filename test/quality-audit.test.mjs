@@ -403,3 +403,32 @@ test("topic distribution aggregates low-signal, wrapper leaks, and llm rescue co
     }
   });
 });
+
+test("quality audit does not flag discovered sessions as summary_missing", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+
+    try {
+      upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        ingest_status: "discovered",
+        project_key: "agent-session-distillery",
+        retention_status: "kept",
+        session_id: "discovered-session",
+        source_hash: "sha256:discovered",
+      });
+
+      const report = await auditQuality(database);
+
+      const discoveredSession = report.sessions.find(
+        (session) => session.session_id === "discovered-session",
+      );
+      assert.ok(discoveredSession);
+      assert.equal(discoveredSession.issue_count, 0);
+      assert.deepEqual(discoveredSession.issues, []);
+      assert.equal(report.issue_counts.summary_missing, 0);
+    } finally {
+      database.close();
+    }
+  });
+});
