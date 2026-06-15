@@ -239,8 +239,10 @@ function toProjectEventCandidate(
         title: `Failure mode: ${truncateInline(event.summary, 68)}`,
       };
     case "verification": {
+      const payloadCommand = readPayloadString(event, "verification_command");
       const verificationCommand =
-        readPayloadString(event, "verification_command") ?? extractCommandFromText(event.summary);
+        payloadCommand ??
+        (isUsefulVerificationText(event.summary) ? extractCommandFromText(event.summary) : null);
 
       if (verificationCommand === null) {
         return null;
@@ -503,6 +505,15 @@ function extractNoEventTurnFallbackCandidates(
       continue;
     }
 
+    const file = files[0];
+    const task = isConcreteProjectPrompt(promptForClassification)
+      ? promptContextLine(turn.user_prompt)
+      : classifyWorkflowTarget(promptForClassification);
+
+    if (task === "this project") {
+      continue;
+    }
+
     const projectSpecificCommand = commands.find(
       (command) =>
         /^\.\//.test(command) ||
@@ -513,31 +524,29 @@ function extractNoEventTurnFallbackCandidates(
     const command =
       projectSpecificCommand ?? selectWorkflowCommand(commands, promptForClassification);
 
-    if (command === null) {
+    let statement: string | null = null;
+    let evidence: string[];
+
+    if (command !== null) {
+      statement = file
+        ? `Use ${formatCommand(command)} when working on ${file} in ${input.sourceSession.project_key}.`
+        : `Use ${formatCommand(command)} for ${task} in ${input.sourceSession.project_key}.`;
+      evidence = learningEvidenceFromPrompt(turn.user_prompt, command);
+    } else if (file !== undefined && isConcreteProjectPrompt(promptForClassification)) {
+      statement = `When working on ${task}, inspect ${file} in ${input.sourceSession.project_key}.`;
+      evidence = learningEvidenceFromPrompt(turn.user_prompt, file);
+    } else {
       continue;
     }
-
-    const file = files[0];
-    const task = isConcreteProjectPrompt(promptForClassification)
-      ? promptContextLine(turn.user_prompt)
-      : classifyWorkflowTarget(promptForClassification);
-
-    if (task === "this project") {
-      continue;
-    }
-
-    const statement = file
-      ? `Use ${formatCommand(command)} when working on ${file} in ${input.sourceSession.project_key}.`
-      : `Use ${formatCommand(command)} for ${task} in ${input.sourceSession.project_key}.`;
 
     candidates.push({
       confidence: "medium",
       dedupeKey: `turn-fallback:${statement.toLowerCase()}`,
-      evidence: learningEvidenceFromPrompt(turn.user_prompt, command),
+      evidence,
       kind: "workflow",
       learningId: `${input.sourceSession.session_id}:project:turn-fallback:${index}`,
       promotionBasis:
-        "Derived from project-specific command usage when no structured events were extracted.",
+        "Derived from project-specific command or file usage when no structured events were extracted.",
       sourceRefs: [
         createSourceRef(input.sourceSession, {
           turnId: turn.turn_id,
