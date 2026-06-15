@@ -198,6 +198,35 @@ node dist/cli.js ingest sync --resume --source codex-cli
 
 No failures. Codex CLI sessions enriched cleanly.
 
+### U4. pi
+
+```bash
+node dist/cli.js ingest sync --resume --source pi
+```
+
+- `discovered_count`: 537
+- `selected_count`: 529
+- `processed_count`: 529
+- `failed_count`: 0
+- `failures`: []
+
+`quality audit` delta after U4:
+
+| Metric | After U3 | After U4 | Delta |
+|---|---|---|---|
+| `issue_counts.summary_missing` | 1,150 | 638 | −512 |
+| `issue_counts.process_chatter` | 1,156 | 1,203 | +47 |
+| `issue_counts.summary_low_signal` | 594 | 735 | +141 |
+| `issue_counts.no_project_learnings` | 1,640 | 1,785 | +145 |
+| `learning_distribution.sessions_with_project_learnings` | 2,565 | 2,807 | +242 |
+| `learning_distribution.total_project_learnings` | 6,807 | 7,798 | +991 |
+| `learning_distribution.max_project_learnings` | 12 | 12 | 0 |
+| `learning_distribution.percentiles.p99` | 12 | 12 | 0 |
+| `deletion_readiness.ready` | 2,980 | 3,236 | +256 |
+| `deletion_readiness.missing_candidate` | 1,150 | 638 | −512 |
+
+No failures. Pi sessions enriched cleanly.
+
 ## Open questions
 
 - How large are the per-harness backlogs, and will any sync exceed a reasonable runtime? If so, add `--limit` and run in batches.
