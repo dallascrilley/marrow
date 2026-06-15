@@ -201,7 +201,51 @@ asd ingest backfill --source kimi --limit 10 --llm-topic
 
 ## U5. Codex CLI
 
-(TBD)
+### Commands run
+
+```bash
+export OPENROUTER_API_KEY=$(op read 'op://Private/OpenRouter API Credentials - agent-session-distillery/credential')
+export ASD_LLM_MAX_PER=20/24h
+
+asd ingest sync --source codex-cli --resume
+asd ingest backfill --source codex-cli --limit 10 --llm-topic
+```
+
+### Sync results
+
+- `discovered_count`: 915
+- `selected_count`: 0
+- `processed_count`: 0
+- `failed_count`: 0
+- No new codex-cli sessions were discovered since the last sync.
+
+### Backfill results
+
+- `discovered_count`: 915
+- `processed_count`: 7
+- `failed_count`: 3
+- Failures were all `Immutable manifest already exists with different contents`.
+- `llm_topic`: true
+- All seven processed sessions used `topic_source: "deterministic"`; none triggered LLM topic rescue.
+
+### Sample quality observations
+
+| Session | Topic | Topic source | Project learnings | Notable issues |
+|---------|-------|--------------|-------------------|----------------|
+| `rollout-2026-05-14T21-06-18-...` | `Review the code changes against the base branch 'main'...` | deterministic | 4 | First learning is a long `code-review` skill instruction paragraph, not a distilled project rule. |
+| `rollout-2026-05-14T21-44-54-...` | `User initiated a review task. Here's the full review output...` | deterministic | 0 | Repeated wrapper phrase as topic; one user learning is a clear, useful rule about exit-code collision. |
+| `rollout-2026-05-14T21-44-55-...` | `Review the code changes against the base branch 'origin/main'...` | deterministic | 1 | Learning is a raw JSON string of reviewer findings, not a natural-language rule. |
+| `rollout-2026-05-14T21-53-35-...` | `User initiated a review task...` | deterministic | 0 | Same wrapper phrase topic; no learnings extracted from a 1-turn review session. |
+| `rollout-2026-05-14T21-52-31-...` | `adding a new skill is a painful process...` | deterministic | 7 | Topic is the full user prompt; learnings are assistant planning narrative, not actionable rules. |
+| `rollout-2026-05-14T20-31-06-...` | `see context: • I have the key evidence...` | deterministic | 9 | Topic is a context dump; learnings mix useful rules with long narrative paragraphs. |
+| `rollout-2026-05-14T22-18-56-...` | `Tether phone steering reply received.` | deterministic | 0 | Concrete, short topic, but no learnings extracted. |
+
+### Preliminary findings
+
+1. **Codex-cli topics are often long wrapper/context dumps.** The deterministic topic is frequently the first user prompt, which can be an entire skill instruction or context dump. `isLowSignalTopic()` does not flag these long topics, so LLM rescue never runs.
+2. **Project learnings include machine-structured output.** The review session produced a project learning that is a raw JSON string of findings; this should probably be parsed or summarized before entering the knowledge base.
+3. **User learnings can be high signal.** The review-related user learning about exit-code collision is concise and actionable, suggesting the user-learning path is sometimes cleaner than the project-learning path.
+4. **Same manifest collisions.** 3 of 10 candidate sessions failed with the immutable-manifest error, consistent with claude-code, pi, and kimi.
 
 ## U6. Cursor / other harnesses
 
