@@ -109,6 +109,27 @@ export async function auditQuality(
 
   for (const sourceSession of selectedSessions) {
     const candidate = getDeletionCandidateBySessionId(database, sourceSession.session_id);
+
+    if (sourceSession.current_lifecycle_state === "discovered") {
+      deletionReadiness.missing_candidate += 1;
+      sessions.push({
+        blocked_reason: null,
+        candidate_state: candidate?.candidate_state ?? null,
+        issue_count: 0,
+        issues: [],
+        knowledge_artifacts: {
+          project: false,
+          user: false,
+        },
+        project_key: sourceSession.project_key,
+        project_learning_count: 0,
+        safe_to_delete: null,
+        session_id: sourceSession.session_id,
+        topic: null,
+      });
+      continue;
+    }
+
     const summaryResult = await readSummary(sourceSession.session_id);
     const knowledgeArtifacts = await readKnowledgeArtifactState(sourceSession);
     const projectLearningCount = await countProjectLearnings(sourceSession);
@@ -291,7 +312,7 @@ function collectSessionIssues(
     issues.push("completion_as_next_step");
   }
 
-  if (/\b(?:let me|i(?:'|’)ll|i need to|checking|exploring)\b/i.test(summaryText)) {
+  if (hasProcessChatter(summaryText)) {
     issues.push("process_chatter");
   }
 
@@ -357,6 +378,44 @@ function looksLikeCompletedOutcome(value: string): boolean {
     /\b(?:done|completed|implemented|fixed|resolved|merged|pushed)\b/i.test(value) &&
     /\b(?:verified|tests? pass(?:ed)?|all checks passed|0 failures)\b/i.test(value)
   );
+}
+
+function hasProcessChatter(summaryText: string): boolean {
+  const lines = summaryText.split(/\r?\n/);
+
+  for (const line of lines) {
+    if (looksLikeProcessChatterLine(line)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function looksLikeProcessChatterLine(line: string): boolean {
+  const normalized = line.trim().toLowerCase();
+
+  if (normalized.length === 0) {
+    return false;
+  }
+
+  // Process-only prefixes/phrases that strongly signal assistant narration.
+  const processPhrasePattern =
+    /^(?:let me|i(?:'|’)ll|i will|i need to|i(?:'|’)m|checking|exploring|now let me|now i(?:'|’)ll|now i(?:'|’)m|first, let me|first, i(?:'|’)ll|first, i(?:'|’)m)\b/i;
+
+  if (!processPhrasePattern.test(normalized)) {
+    return false;
+  }
+
+  // If the same line also contains concrete outcome signal or is long enough
+  // to convey substance, it is durable content wrapped in process wording,
+  // not pure chatter.
+  const concreteSignalPattern =
+    /\b(?:fix|fixed|implement|implemented|resolve|resolved|verify|verified|test|tests?|pass|passed|fail|failed|error|add|added|update|updated|remove|removed|create|created|commit|committed|push|pushed|merge|merged|build|built|run|ran|command|file|path|change|changes|outcome|result|results|output|done|completed|deployed|released|refactored|migrated|upgraded|downgraded|configured|installed)\b/i;
+  const hasConcreteSignal = concreteSignalPattern.test(normalized);
+  const isSubstantiveLength = normalized.length >= 60;
+
+  return !(hasConcreteSignal || isSubstantiveLength);
 }
 
 function createIssueCountMap(): Record<QualityIssueCode, number> {

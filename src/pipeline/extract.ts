@@ -11,6 +11,7 @@ import { learningSchema } from "../models/canonical.js";
 import {
   capEvidenceText,
   extractSubstantivePrompt,
+  isNoSignalPrompt,
   learningEvidenceFromPrompt,
   looksLikeSkillHarnessLeak,
   sanitizeHarnessLeakText,
@@ -116,8 +117,10 @@ function extractProjectLearningCandidates(
       turn,
     }),
   );
+  const fallbackCandidates =
+    input.events.length === 0 ? extractNoEventTurnFallbackCandidates(input) : [];
   return dedupeProjectCandidates(
-    [...eventCandidates, ...turnCandidates]
+    [...eventCandidates, ...turnCandidates, ...fallbackCandidates]
       .map(finalizeProjectLearningCandidate)
       .filter((candidate): candidate is ProjectLearningCandidate => candidate !== null),
   );
@@ -160,6 +163,7 @@ function toProjectEventCandidate(
 
   if (
     event.type === "decision" &&
+    !hasDurableDecisionSignal(event.summary) &&
     (looksLikeExplanationNotDecision(event.summary) || looksLikeNonDurableSummary(event.summary))
   ) {
     return null;
@@ -235,7 +239,8 @@ function toProjectEventCandidate(
         title: `Failure mode: ${truncateInline(event.summary, 68)}`,
       };
     case "verification": {
-      const verificationCommand = readPayloadString(event, "verification_command");
+      const verificationCommand =
+        readPayloadString(event, "verification_command") ?? extractCommandFromText(event.summary);
 
       if (verificationCommand === null) {
         return null;
@@ -469,6 +474,87 @@ function toProjectTurnCandidates(input: {
   }
 
   return candidates;
+}
+
+function extractNoEventTurnFallbackCandidates(
+  input: ExtractLearningsInput,
+): ProjectLearningCandidate[] {
+  if (input.events.length > 0) {
+    return [];
+  }
+
+  const candidates: ProjectLearningCandidate[] = [];
+
+  for (const [index, turn] of input.turns.entries()) {
+    const promptForClassification = sanitizeUserPrompt(turn.user_prompt) || turn.user_prompt;
+
+    if (
+      looksLikeSkillHarnessLeak(promptForClassification) ||
+      isNoSignalPrompt(promptForClassification) ||
+      looksLikeProcessNarration(promptForClassification)
+    ) {
+      continue;
+    }
+
+    const commands = usefulCommandsForTurn(turn, []);
+    const files = usefulFilesForTurn(turn, []);
+
+    if (commands.length === 0 && files.length === 0) {
+      continue;
+    }
+
+    const projectSpecificCommand = commands.find(
+      (command) =>
+        /^\.\//.test(command) ||
+        /\b(?:tools|scripts|src|lib|app|server|desktop|mobile|api|core|shared)\/[^\s]+/i.test(
+          command,
+        ),
+    );
+    const command =
+      projectSpecificCommand ?? selectWorkflowCommand(commands, promptForClassification);
+
+    if (command === null) {
+      continue;
+    }
+
+    const file = files[0];
+    const task = isConcreteProjectPrompt(promptForClassification)
+      ? promptContextLine(turn.user_prompt)
+      : classifyWorkflowTarget(promptForClassification);
+
+    if (task === "this project") {
+      continue;
+    }
+
+    const statement = file
+      ? `Use ${formatCommand(command)} when working on ${file} in ${input.sourceSession.project_key}.`
+      : `Use ${formatCommand(command)} for ${task} in ${input.sourceSession.project_key}.`;
+
+    candidates.push({
+      confidence: "medium",
+      dedupeKey: `turn-fallback:${statement.toLowerCase()}`,
+      evidence: learningEvidenceFromPrompt(turn.user_prompt, command),
+      kind: "workflow",
+      learningId: `${input.sourceSession.session_id}:project:turn-fallback:${index}`,
+      promotionBasis:
+        "Derived from project-specific command usage when no structured events were extracted.",
+      sourceRefs: [
+        createSourceRef(input.sourceSession, {
+          turnId: turn.turn_id,
+        }),
+      ],
+      statement,
+      title: `Workflow: ${truncateInline(statement, 60)}`,
+    });
+  }
+
+  return candidates;
+}
+
+function isConcreteProjectPrompt(prompt: string): boolean {
+  return /\b(?:fix|fixed|bug|debug|implement|implemented|resolve|resolved|refactor|refactored|migrate|migrated|upgrade|upgraded|update|updated|change|changed|add|added|remove|removed|review|audit|test|tests|optimize|performance|configure|config|install|build|deploy)\b/i.test(
+    prompt,
+  );
 }
 
 function toVerifiedCompletionStatement(event: Event): string | null {
