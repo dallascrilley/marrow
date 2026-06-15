@@ -238,7 +238,7 @@ OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --cache-dir /tm
 OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --refresh-llm
 ```
 
-This writes `reports/llm-learning-review.jsonl`. LLM reviews are cached by exact learning/model/prompt/validator input under `cache/llm-learning-review/` by default; pass `--refresh-llm` to overwrite cached entries or `--no-cache` to bypass cache reads and writes. Individual session failures are recorded as rejected review entries so a batch can continue.
+This writes `reports/llm-learning-review.jsonl`. LLM reviews are cached by exact learning/model/prompt/validator input under `cache/llm-learning-review/` by default; pass `--refresh-llm` to overwrite cached entries or `--no-cache` to bypass cache reads and writes. Provider or transport failures are reported in the command output and left pending for retry; they are not written as rejected review entries.
 
 Apply the LLM review into a separate reviewed namespace:
 
