@@ -10,8 +10,11 @@
 # only in script/lib/profile.sh.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$ROOT"
+# CDPATH causes `cd` to print the destination directory to stdout; redirect it
+# so the ROOT capture and the subsequent cd stay clean without altering the
+# user's environment.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." >/dev/null && pwd)"
+cd "$ROOT" >/dev/null
 
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mwarn:\033[0m %s\n' "$*" >&2; }
