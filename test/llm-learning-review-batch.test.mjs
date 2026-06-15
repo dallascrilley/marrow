@@ -94,6 +94,44 @@ test("batched review issues one call and demultiplexes verdicts by id", async ()
   assert.equal(totalReasoning, 330, "split token totals sum back to the original");
 });
 
+test("partial-batch failure attributes full call cost to the returned members", async () => {
+  const learnings = [learning(), learning(), learning()];
+  const fetchImpl = async () =>
+    // The model returns reviews for only 2 of the 3 requested ids.
+    batchResponse(
+      [learnings[0], learnings[2]].map((l) => ({
+        id: l.learning_id,
+        keep: true,
+        verdict: "keep",
+        durability: "durable",
+        statement: l.statement,
+        reason: "judged",
+      })),
+      { prompt_tokens: 300, completion_tokens: 30, total_tokens: 330, cost: 0.0009 },
+    );
+
+  const outcome = await reviewLearningsBatchedWithOpenRouter({
+    apiKey: "test-key",
+    fetchImpl,
+    learnings,
+    noCache: true,
+    projectKey: "studio-tools",
+  });
+
+  assert.equal(outcome.reviewed.length, 2);
+  assert.equal(outcome.failures.length, 1, "the omitted learning stays pending");
+  assert.equal(outcome.failures[0].learning.learning_id, learnings[1].learning_id);
+
+  // Cost splits across the 2 returned members, not the full chunk of 3, so no
+  // spend is left unattributed in telemetry (the USD gate stays accurate).
+  for (const r of outcome.reviewed) {
+    assert.equal(r.usage.batch_size, 2);
+    assert.equal(r.usage.cost, 0.0009 / 2);
+  }
+  const attributedCost = outcome.reviewed.reduce((s, r) => s + (r.usage.cost ?? 0), 0);
+  assert.ok(Math.abs(attributedCost - 0.0009) < 1e-9, "full call cost is attributed");
+});
+
 test("batched review serves cache hits without a second call", async () => {
   const cacheDir = await mkdtemp(join(tmpdir(), "asd-batch-cache-"));
   try {

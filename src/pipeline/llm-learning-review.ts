@@ -314,16 +314,28 @@ export async function reviewLearningsBatchedWithOpenRouter(input: {
         model,
       });
       const reviewsById = parseBatchedLearningReview(content, chunk);
-      chunk.forEach((learning, index) => {
-        const review = reviewsById.get(learning.learning_id);
-        if (review === undefined) {
+      // Learnings the model omitted from an otherwise-successful response stay
+      // pending (recorded as failures); the rest carry the call's cost.
+      const present = chunk.filter((learning) => reviewsById.has(learning.learning_id));
+      for (const learning of chunk) {
+        if (!reviewsById.has(learning.learning_id)) {
           failures.push({
             learning,
             reason: `batched review omitted learning ${learning.learning_id}`,
           });
+        }
+      }
+      // Split the call's cost/tokens across the learnings that actually came
+      // back, not the full chunk — otherwise an omitted id leaves a K/N slice of
+      // spend unattributed in telemetry, making the USD gate under-count. (If the
+      // whole batch is omitted, present is empty and all members are already
+      // failures, so the call's cost has no reviewed record to attach to.)
+      present.forEach((learning, index) => {
+        const review = reviewsById.get(learning.learning_id);
+        if (review === undefined) {
           return;
         }
-        const memberUsage = splitUsageEvenly(usage, chunk.length, index);
+        const memberUsage = splitUsageEvenly(usage, present.length, index);
         reviewed.push({ learning, review, usage: memberUsage });
       });
       if (input.cacheDir !== undefined && input.noCache !== true) {
