@@ -45,7 +45,7 @@ on real runtime sessions, then `quality cost-report --json --since <run> --backl
 ## Reproduce
 
 ```bash
-KEY="$(op read 'op://your-vault/<item-id>/credential')"
+KEY="$(op read 'op://your-vault/OpenRouter API Credentials - agent-session-distillery/credential')"
 OPENROUTER_API_KEY="$KEY" node dist/cli.js quality review-learnings \
   --limit 6000 --max-total-learnings 8 --no-cache
 node dist/cli.js quality cost-report --json --backlog-learnings 3078

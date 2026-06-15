@@ -36,7 +36,9 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 - Node `22.x`
 - npm
 - Local Cursor transcript files on disk
-- Optional: `OPENROUTER_API_KEY` for LLM-gated project-learning review commands
+- Optional: `OPENROUTER_API_KEY` for LLM-gated project-learning review commands.
+  - Source the key from the 1Password item **OpenRouter API Credentials - agent-session-distillery** (`op read 'op://your-vault/OpenRouter API Credentials - agent-session-distillery/credential'`).
+  - Load it via `op read` or your secret-manager flow and never commit the key.
 
 ## Install
 
@@ -232,11 +234,14 @@ artifact presence, and the worst sessions by deterministic output-quality checks
 Review deterministic project learnings with an OpenRouter memory-lint sidecar:
 
 ```bash
-OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --model openai/gpt-5-nano
-OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --limit 25 --max-total-learnings 100
-OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --cache-dir /tmp/asd-review-cache
-OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --refresh-llm
-OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --max-usd 1/24h --batch-size 10
+# Source the key from 1Password: "OpenRouter API Credentials - agent-session-distillery"
+export OPENROUTER_API_KEY="$(op read 'op://your-vault/OpenRouter API Credentials - agent-session-distillery/credential')"
+
+node dist/cli.js quality review-learnings --model openai/gpt-5-nano
+node dist/cli.js quality review-learnings --limit 25 --max-total-learnings 100
+node dist/cli.js quality review-learnings --cache-dir /tmp/asd-review-cache
+node dist/cli.js quality review-learnings --refresh-llm
+node dist/cli.js quality review-learnings --max-usd 1/24h --batch-size 10
 ```
 
 This writes `reports/llm-learning-review.jsonl`. LLM reviews are cached by exact learning/model/prompt/validator input under `cache/llm-learning-review/` by default; pass `--refresh-llm` to overwrite cached entries or `--no-cache` to bypass cache reads and writes. Provider or transport failures are reported in the command output and left pending for retry; they are not written as rejected review entries.
