@@ -1299,7 +1299,10 @@ test("sanitizes bold emphasis and framing from decision learning statement", () 
   assert.equal(learnings.project.length, 1);
   assert.equal(learnings.project[0].kind, "decision");
   assert.ok(!learnings.project[0].statement.includes("**"), "bold markers should be removed");
-  assert.ok(learnings.project[0].statement.startsWith("Approved "), "framing token should be removed");
+  assert.ok(
+    learnings.project[0].statement.startsWith("Approved "),
+    "framing token should be removed",
+  );
 });
 
 test("does not derive workflow from prompt-instruction turn", () => {

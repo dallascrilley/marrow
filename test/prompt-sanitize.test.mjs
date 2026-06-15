@@ -47,14 +47,8 @@ test("sanitizeLearningStatement strips fenced code blocks", () => {
   );
 });
 test("sanitizeLearningStatement strips assistant framing tokens", () => {
-  assert.equal(
-    sanitizeLearningStatement("Verified: the fix works."),
-    "the fix works.",
-  );
-  assert.equal(
-    sanitizeLearningStatement("Summary of changes: added tests."),
-    "added tests.",
-  );
+  assert.equal(sanitizeLearningStatement("Verified: the fix works."), "the fix works.");
+  assert.equal(sanitizeLearningStatement("Summary of changes: added tests."), "added tests.");
   assert.equal(
     sanitizeLearningStatement("Done — integrated the parser."),
     "integrated the parser.",

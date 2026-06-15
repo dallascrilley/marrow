@@ -227,7 +227,6 @@ export function sanitizeLearningTitle(
     !/#\s+/g.test(body);
 
   return `${prefix}: ${truncateInline(bodyIsClean ? body : cleanStatement, maxBodyLength)}`;
-
 }
 
 export function isNoSignalPrompt(raw: string): boolean {
@@ -429,7 +428,6 @@ function uniqueNonEmpty(values: readonly string[]): string[] {
 const markdownTableRowPattern = /^\s*\|([^\n]+\|)+[^\n]*$/m;
 const markdownTableSeparatorPattern = /^\s*\|?\s*:?-+:?\s*\|/m;
 const markdownHeadingPattern = /^(#{1,6})\s+([^\n]+)$/gm;
-const markdownHeadingMatchPattern = /^[^#\n]*?(#{1,6}\s+)/d;
 const markdownBlockFencePattern = /^```[\s\S]*?^```/gm;
 
 /**
@@ -467,7 +465,10 @@ export function sanitizeLearningStatement(
 
   // Strip common assistant framing tokens.
   cleaned = cleaned
-    .replace(/^\s*(?:Verified:|Done\s*[-—]|Good\s*[-—]|Summary of changes:|Summary of what changed:|\*\*Verdict:\*\*|Verdict:)\s*/i, " ")
+    .replace(
+      /^\s*(?:Verified:|Done\s*[-—]|Good\s*[-—]|Summary of changes:|Summary of what changed:|\*\*Verdict:\*\*|Verdict:)\s*/i,
+      " ",
+    )
     .trim();
 
   // Collapse whitespace unless asked to keep newlines for downstream dump detection.

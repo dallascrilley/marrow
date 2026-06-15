@@ -513,7 +513,6 @@ function extractConcreteTurnFallbackCandidates(
       continue;
     }
 
-
     const commands = usefulCommandsForTurn(turn, []);
     const files = usefulFilesForTurn(turn, []);
 
@@ -583,7 +582,10 @@ function isConcreteProjectPrompt(prompt: string): boolean {
 }
 
 function looksLikePromptInstruction(prompt: string): boolean {
-  return /\b(?:re-read|review|update|edit|change)\b.*\bONLY\b/i.test(prompt) || /^\s*When working on\b/i.test(prompt);
+  return (
+    /\b(?:re-read|review|update|edit|change)\b.*\bONLY\b/i.test(prompt) ||
+    /^\s*When working on\b/i.test(prompt)
+  );
 }
 
 function toVerifiedCompletionStatement(event: Event): string | null {
