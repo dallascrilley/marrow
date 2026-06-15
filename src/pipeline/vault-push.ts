@@ -261,7 +261,8 @@ export type PushRecordOptions = {
 export async function pushRecord(options: PushRecordOptions): Promise<PushRecordResult> {
   const { manifest, noOverwrite, now, record, vaultRoot } = options;
   const basename = `${pageBasenameFromId(record.id)}.md`;
-  const pagePath = vaultProjectPath(vaultRoot, record.project.key, join("asd-learnings", basename));
+  const pageRelativePath = join("asd-learnings", basename);
+  const pagePath = vaultProjectPath(vaultRoot, record.project.key, pageRelativePath);
   const frontmatter = renderFrontmatter(record);
   const body = renderBody(record);
   const newContentHash = contentHashOf(body);
@@ -282,7 +283,7 @@ export async function pushRecord(options: PushRecordOptions): Promise<PushRecord
   await atomicWriteFile(pagePath, `${frontmatter}${body}`);
 
   manifest.records[record.id] = {
-    page: basename,
+    page: pageRelativePath,
     content_hash: newContentHash,
     written_at: now,
     schema_version: wikiMemorySchemaVersion,

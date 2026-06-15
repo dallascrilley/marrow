@@ -272,13 +272,13 @@ test("serialiseManifest sorts records by id and pretty-prints", () => {
     last_push_at: "2026-05-18T00:00:00.000Z",
     records: {
       "sha256:b": {
-        page: "b.md",
+        page: "asd-learnings/b.md",
         content_hash: "sha256:bb",
         written_at: "2026-05-18T00:00:00.000Z",
         schema_version: "asd.wiki_memory.v1",
       },
       "sha256:a": {
-        page: "a.md",
+        page: "asd-learnings/a.md",
         content_hash: "sha256:aa",
         written_at: "2026-05-18T00:00:00.000Z",
         schema_version: "asd.wiki_memory.v1",
@@ -350,6 +350,11 @@ test("pushAll writes pages, populates the manifest, and is idempotent on re-run"
     const manifest = await loadManifest(join(projectDir, "_asd-manifest.json"), now);
     assert.equal(Object.keys(manifest.records).length, 1);
     assert.ok(manifest.records[sampleId]);
+    assert.equal(
+      manifest.records[sampleId].page,
+      `asd-learnings/${pageBasenameFromId(sampleId)}.md`,
+      "manifest page path must be relative to the project root",
+    );
     assert.equal(
       manifest.last_push_at,
       now,
