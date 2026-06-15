@@ -247,9 +247,38 @@ asd ingest backfill --source codex-cli --limit 10 --llm-topic
 3. **User learnings can be high signal.** The review-related user learning about exit-code collision is concise and actionable, suggesting the user-learning path is sometimes cleaner than the project-learning path.
 4. **Same manifest collisions.** 3 of 10 candidate sessions failed with the immutable-manifest error, consistent with claude-code, pi, and kimi.
 
-## U6. Cursor / other harnesses
+## U6. Cursor
 
-(TBD)
+### Commands run
+
+```bash
+export OPENROUTER_API_KEY=$(op read 'op://Private/OpenRouter API Credentials - agent-session-distillery/credential')
+export ASD_LLM_MAX_PER=20/24h
+
+asd ingest sync --source cursor --resume
+asd ingest backfill --source cursor --limit 10 --llm-topic
+```
+
+### Sync results
+
+- `discovered_count`: 3274
+- `selected_count`: 0
+- `processed_count`: 0
+- `failed_count`: 0
+- No new cursor sessions were selected for processing, though 7 manifest-collision warnings were emitted during discovery/resume.
+
+### Backfill results
+
+- `discovered_count`: 3274
+- `processed_count`: 0
+- `failed_count`: 10
+- All 10 candidate sessions failed with `Immutable manifest already exists with different contents`.
+- No cursor summaries were produced for quality inspection in this run.
+
+### Preliminary findings
+
+1. **Cursor is currently blocked by manifest collisions.** Unlike the other harnesses, the first 10 cursor candidates all collided on immutable manifests, leaving zero processed sessions.
+2. **No quality signal to evaluate.** Because no cursor sessions were reprocessed, this unit cannot compare extraction/enrichment quality for cursor yet.
 
 ## U7. Cross-harness findings
 
