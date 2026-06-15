@@ -371,7 +371,8 @@ test("multi-sentence file-scoped pattern candidates keep the first sentence", ()
 
 test("abbreviations do not trigger multi-sentence rejection", () => {
   const { event, sourceSession, turn } = makeTurnAndEvent({
-    summary: "Decision: use e.g. sqlite WAL for ledger durability; validate with existing tests.",
+    summary:
+      "Decision: use e.g. sqlite WAL for ledger durability and validate with existing tests.",
     type: "decision",
   });
 

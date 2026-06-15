@@ -45,13 +45,21 @@ In `src/pipeline/extract.ts` `finalizeProjectLearningCandidate`:
   instead of dropping the candidate.
 
 ```typescript
+function hasMultipleSentences(value: string): boolean {
+  return /.+[.!?]\s+[A-Z0-9].+/.test(value);
+}
+
+function firstSentence(value: string): string {
+  const match = value.match(/^(.+?[.!?])(?=\s+[A-Z0-9]|$)/);
+  return match?.[1]?.trim() ?? value;
+}
+
 let atomicStatement = statement;
 if (hasMultipleSentences(statement) && !statement.includes(";")) {
   if (candidate.kind === "decision" || candidate.kind === "failure_mode") {
     return null;
   }
-  const firstSentenceMatch = statement.match(/^(.+?[.!?])(?=\s+|$)/);
-  atomicStatement = firstSentenceMatch?.[1]?.trim() ?? statement;
+  atomicStatement = firstSentence(statement);
 }
 atomicStatement = truncateInline(atomicStatement, MAX_LEARNING_STATEMENT_LENGTH);
 ```

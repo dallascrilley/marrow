@@ -95,7 +95,7 @@ Spot-check of the worst session shows:
 - **Requirements:** R3
 - **Files:** `src/pipeline/extract.ts`, `src/pipeline/llm-learning-review.ts`
 - **Approach:**
-  1. In `finalizeProjectLearningCandidate`, reject candidates whose statement contains more than one sentence (heuristic: `/.+[.!?]\s+.+/`) **unless** it is a verified-fix pattern with a semicolon.
+  1. In `finalizeProjectLearningCandidate`, reject candidates whose statement contains more than one sentence (heuristic: `/.+[.!?]\s+[A-Z0-9].+/`) **unless** it is a verified-fix pattern with a semicolon.
   2. Keep the existing 180-char truncation in `normalizeSummaryLine`; add a 240-char ceiling for learning statements.
   3. Let the LLM reviewer still rewrite, but make its input less noisy.
 - **Tests:** Multi-sentence decision candidates are dropped; single concise verified-fix candidates are kept.
