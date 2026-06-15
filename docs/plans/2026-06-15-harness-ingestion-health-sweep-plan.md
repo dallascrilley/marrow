@@ -103,6 +103,37 @@ td_epic: td-db91c2
 - LLM topic rescue or `quality review-learnings` (budgeted separately).
 - `memory export-wiki` / `memory push-wiki`.
 
+## Results
+
+### U1. claude-code
+
+```bash
+node dist/cli.js ingest sync --resume --source claude-code
+```
+
+- `discovered_count`: 635
+- `selected_count`: 51
+- `processed_count`: 51
+- `failed_count`: 0
+- `failures`: []
+
+`quality audit` delta after U1:
+
+| Metric | Before U1 | After U1 | Delta |
+|---|---|---|---|
+| `issue_counts.summary_missing` | 5,237 | 5,225 | −12 |
+| `issue_counts.process_chatter` | 402 | 436 | +34 |
+| `issue_counts.summary_low_signal` | 133 | 135 | +2 |
+| `issue_counts.no_project_learnings` | 125 | 130 | +5 |
+| `learning_distribution.sessions_with_project_learnings` | 435 | 479 | +44 |
+| `learning_distribution.total_project_learnings` | 2,288 | 2,441 | +153 |
+| `learning_distribution.max_project_learnings` | 12 | 12 | 0 |
+| `learning_distribution.percentiles.p99` | 12 | 12 | 0 |
+| `deletion_readiness.ready` | 562 | 610 | +48 |
+| `deletion_readiness.missing_candidate` | 5,237 | 5,225 | −12 |
+
+No failures. New sessions enriched cleanly; cap held at 12.
+
 ## Open questions
 
 - How large are the per-harness backlogs, and will any sync exceed a reasonable runtime? If so, add `--limit` and run in batches.
