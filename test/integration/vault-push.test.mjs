@@ -85,8 +85,9 @@ test("memory push-wiki writes one page per JSONL record into the scoped subtree"
     assert.equal(payload.total_records, 2);
     assert.equal(payload.total_written, 2);
 
-    const subtree = join(vaultRoot, "wiki", "projects", LEGACY_PROJECT_KEY, "asd-learnings");
-    const manifest = JSON.parse(await readFile(join(subtree, "_asd-manifest.json"), "utf8"));
+    const projectDir = join(vaultRoot, "wiki", "projects", LEGACY_PROJECT_KEY);
+    const subtree = join(projectDir, "asd-learnings");
+    const manifest = JSON.parse(await readFile(join(projectDir, "_asd-manifest.json"), "utf8"));
     assert.equal(Object.keys(manifest.records).length, 2);
 
     const page = await readFile(join(subtree, `${"0".repeat(63)}1.md`), "utf8");
@@ -200,8 +201,8 @@ test("memory push-wiki --refresh re-runs export-wiki against the runtime", async
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Exported 1 wiki memory record/);
 
-    const subtree = join(vaultRoot, "wiki", "projects", RESOLVED_PROJECT_ID, "asd-learnings");
-    const manifest = JSON.parse(await readFile(join(subtree, "_asd-manifest.json"), "utf8"));
+    const projectDir = join(vaultRoot, "wiki", "projects", RESOLVED_PROJECT_ID);
+    const manifest = JSON.parse(await readFile(join(projectDir, "_asd-manifest.json"), "utf8"));
     assert.equal(Object.keys(manifest.records).length, 1);
   } finally {
     await rm(sandbox, { force: true, recursive: true });

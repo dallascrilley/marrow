@@ -2,10 +2,10 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { getRuntimePath } from "../../config/paths.js";
+import { vaultProjectDir, vaultProjectPath } from "../../config/vault-paths.js";
 import { replayBundles } from "../instinct/bundle.js";
 import type { Domain, Instinct } from "../instinct/schema.js";
 import { parseInstinctYaml } from "../instinct/yaml-io.js";
-import { projectVaultDir } from "../project/resolve.js";
 
 export const MEMORY_LINE_CAP = 200;
 
@@ -153,15 +153,15 @@ export async function renderProjectMemoryToVault(input: {
   const selected = selectInstinctsForRollup(projectInstincts, globalInstincts);
   const rendered = renderMemoryMarkdown(selected);
 
-  const projectDir = projectVaultDir(input.vaultRoot, input.projectId);
+  const projectDir = vaultProjectDir(input.vaultRoot, input.projectId);
   await mkdir(projectDir, { recursive: true });
 
-  const memoryPath = join(projectDir, "MEMORY.md");
+  const memoryPath = vaultProjectPath(input.vaultRoot, input.projectId, "MEMORY.md");
   await writeFile(memoryPath, rendered.memory, "utf8");
 
   const topicFiles: Record<string, string> = {};
   for (const [filename, content] of Object.entries(rendered.topics)) {
-    const topicPath = join(projectDir, filename);
+    const topicPath = vaultProjectPath(input.vaultRoot, input.projectId, filename);
     await writeFile(topicPath, content, "utf8");
     topicFiles[filename] = topicPath;
   }

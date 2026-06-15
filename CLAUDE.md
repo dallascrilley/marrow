@@ -35,9 +35,11 @@ If you are an agent working in this repo:
   `wiki/canvases/`, any `_index.md`, and `.raw/.manifest.json`.
   Those remain owned by `~/vault/` sessions.
 - The carve-out is keyed to the eight named paths above. The
-  enforcement is **structural**: vault push and memory render modules
-  hardcode those paths only; there is no generic vault writer that
-  can reach other `~/vault` locations.
+  enforcement is **structural + code-enforced**: `src/config/vault-paths.ts`
+  owns the allowlist, and every vault write routes through
+  `vaultProjectPath`, which throws before creating a file outside the
+  carve-out. There is no generic vault writer that can reach other
+  `~/vault` locations.
 - `<project-id>` is resolved per ADR-0002 (git-remote-hash with
   fallback chain).
 

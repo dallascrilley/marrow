@@ -1,22 +1,23 @@
 ---
 date: 2026-05-19
-status: applied (2026-05-19)
+status: applied (2026-06-15)
 supersedes: docs/claude-md-amendment-draft.md (the v1 vault-push amendment)
 related:
   - docs/decisions/0003-primary-render.md
   - docs/decisions/0004-carve-out-boundary.md
   - docs/specs/atomic-instinct-schema.md
+  - src/config/vault-paths.ts
 ---
 
-# v2 carve-out amendment (draft)
+# v2 carve-out amendment (applied)
 
-This is a **draft** amendment to the personal-vault carve-out rule
-currently published at `~/.claude/CLAUDE.md` (Personal Hub Vault
-section) and reflected in this project's `CLAUDE.md` (Vault write
-surface section).
+This amendment is **applied** to the personal-vault carve-out rule
+published at `~/.claude/CLAUDE.md` (Personal Hub Vault section) and
+reflected in this project's `CLAUDE.md` (Vault write surface section).
 
-It is **not yet applied.** Operator must paste the new block into the
-two files when ADR-0003 + ADR-0004 are accepted.
+The technical guardrail is implemented in `src/config/vault-paths.ts`
+and enforced by every asd vault-write code path (`memory push-wiki` and
+v2 `renderProjectMemoryToVault`).
 
 ## Why an amendment
 
@@ -57,7 +58,7 @@ require re-opening the design discussion. This is that discussion.
 > `wiki/entities/`, `wiki/concepts/`, `wiki/synthesis/`,
 > `wiki/canvases/`, any `_index.md`, or `.raw/.manifest.json`. The
 > exception is strictly scoped and named for asd v2; new artifacts
-> outside the seven patterns above require re-opening this
+> outside the eight patterns above require re-opening this
 > discussion, not silent expansion. It does not extend by precedent
 > to other tools.
 >
@@ -67,21 +68,21 @@ require re-opening the design discussion. This is that discussion.
 
 ## Operator action checklist
 
-- [ ] ADR-0003 marked `accepted` (primary render = curated MEMORY.md).
-- [ ] ADR-0004 marked `accepted` (carve-out scope expansion).
-- [ ] ADR-0002 marked `accepted` (project ID strategy).
-- [ ] Paste the v2 carve-out block into `~/.claude/CLAUDE.md`
+- [x] ADR-0003 marked `accepted` (primary render = curated MEMORY.md).
+- [x] ADR-0004 marked `accepted` (carve-out scope expansion).
+- [x] ADR-0002 marked `accepted` (project ID strategy).
+- [x] Paste the v2 carve-out block into `~/.claude/CLAUDE.md`
       "Personal Hub Vault" section, replacing the current named
       exception paragraph for asd.
-- [ ] Paste the v2 carve-out block into this project's `CLAUDE.md`
+- [x] Paste the v2 carve-out block into this project's `CLAUDE.md`
       "Vault write surface" section, replacing the current carve-out
       paragraph.
-- [ ] Update the v1 amendment file (`docs/claude-md-amendment-draft.md`)
+- [x] Update the v1 amendment file (`docs/claude-md-amendment-draft.md`)
       to point at this v2 amendment as its successor.
-- [ ] Land the technical guardrail: asd code asserts every vault
-      write matches the seven-pattern allowlist; tests cover both
+- [x] Land the technical guardrail: asd code asserts every vault
+      write matches the eight-pattern allowlist; tests cover both
       allowed and forbidden write attempts (per ADR-0004
-      Consequences).
+      Consequences). Implemented in `src/config/vault-paths.ts`.
 
 ## Why this is safe
 
