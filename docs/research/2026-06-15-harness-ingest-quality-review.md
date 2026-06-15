@@ -284,15 +284,16 @@ asd ingest backfill --source cursor --limit 10 --llm-topic
 
 ### Ingest failure mode comparison
 
-| Harness | Sync processed | Backfill processed | Backfill failed | Dominant failure |
-|---------|---------------:|-------------------:|----------------:|------------------|
-| claude-code | 17 | 10 | 0 → 9* | Manifest collision during sync |
-| pi | 34 | 2 | 8 | Manifest collision |
-| kimi | 0 | 7 | 3 | Manifest collision |
-| codex-cli | 0 | 7 | 3 | Manifest collision |
-| cursor | 0 | 0 | 10 | Manifest collision |
+| Harness | Sync processed | Sync failed | Backfill processed | Backfill failed | Dominant failure |
+|---------|---------------:|------------:|-------------------:|----------------:|------------------|
+| claude-code | 17 | 9* | 10 | 0 | Manifest collision |
+| pi | 34 | 1 | 2 | 8 | Manifest collision |
+| kimi | 0 | 0 | 7 | 3 | Manifest collision |
+| codex-cli | 0 | 0 | 7 | 3 | Manifest collision |
+| cursor | 0 | 0† | 0 | 10 | Manifest collision |
 
-\* The 9 claude-code `ingest sync` failures were emitted as warnings; the JSON `failed_count` was 0 because the sessions were not selected.
+\* The claude-code sync failures were emitted as warnings; the JSON `failed_count` was 0 because the sessions were not selected.  
+† Cursor emitted 7 manifest-collision warnings during discovery/resume but selected 0 sessions for sync.
 
 ### Quality signal comparison
 
@@ -323,7 +324,7 @@ The audit moved slightly in the right direction (`no_project_learnings` down, mo
 
 1. **Manifest collisions are the primary ingestion blocker across every harness.** Cursor is completely blocked at the first 10 candidates; pi, kimi, and codex-cli lose 30–80% of candidates to the same error. This is a pre-existing state/adapter issue, not a regression from recent extraction changes, but it prevents the test from evaluating cursor quality at all.
 2. **Project learnings are too often raw text, not distilled rules.** Across claude-code, kimi, and codex-cli, project learnings frequently contain full assistant paragraphs, JSON blobs, error snippets, or skill instructions. The durable-decision bypass and event summarization are promoting text verbatim instead of extracting an actionable statement.
-3. **LLM topic rescue is underused.** Only 2 of ~36 reprocessed sessions triggered LLM topic rescue. Long codex-cli wrapper prompts and kimi’s `resolve these:` are obvious low-signal topics that `isLowSignalTopic()` did not flag.
+3. **LLM topic rescue is underused.** Only 2 of 26 reprocessed sessions triggered LLM topic rescue. Long codex-cli wrapper prompts and kimi’s `resolve these:` are obvious low-signal topics that `isLowSignalTopic()` did not flag.
 4. **No-project-learning false negatives persist.** Concrete sessions with clear tasks (git commit, skill search, tether steering reply) produced zero project learnings despite having files, commands, and decisions.
 5. **Pi sessions are mostly very short chatter.** Pi had the lowest signal density; even LLM-rescued topics remained vague.
 6. **User learnings can be higher signal than project learnings.** The codex-cli review user learning about exit-code collision was concise and actionable, suggesting the user-learning path may be less noisy.
