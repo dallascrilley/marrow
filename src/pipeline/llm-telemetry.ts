@@ -19,9 +19,12 @@ export type LlmTelemetryRecord = {
   "gen_ai.usage.input_tokens": number | null;
   "gen_ai.usage.output_tokens": number | null;
   "gen_ai.usage.total_tokens": number | null;
+  "gen_ai.usage.reasoning_tokens": number | null;
+  "gen_ai.usage.cached_tokens": number | null;
   "gen_ai.usage.cost": number | null;
   "gen_ai.usage.cost_is_known": boolean;
   "gen_ai.client.operation.duration_ms": number;
+  "asd.cost_source": string;
   "asd.session_id": string;
   "asd.learning_id": string | null;
   "asd.cache_hit": boolean;
@@ -48,9 +51,12 @@ export function buildLlmTelemetryRecord(input: {
     "gen_ai.usage.input_tokens": usage.input_tokens,
     "gen_ai.usage.output_tokens": usage.output_tokens,
     "gen_ai.usage.total_tokens": usage.total_tokens,
+    "gen_ai.usage.reasoning_tokens": usage.reasoning_tokens,
+    "gen_ai.usage.cached_tokens": usage.cached_tokens,
     "gen_ai.usage.cost": usage.cost,
     "gen_ai.usage.cost_is_known": usage.cost_is_known,
     "gen_ai.client.operation.duration_ms": usage.duration_ms,
+    "asd.cost_source": usage.cost_source,
     "asd.session_id": input.sessionId,
     "asd.learning_id": input.learningId ?? null,
     "asd.cache_hit": usage.cache_hit,

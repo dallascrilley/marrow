@@ -37,12 +37,21 @@ export type LearningReviewResult = {
  * from a pricing table — when the provider does not return it we fail closed
  * with `cost_is_known: false` and a `missing_reason`.
  */
+/** Where the effective `cost` figure came from. */
+export type LlmCostSource = "openrouter" | "upstream" | "cache" | "none";
+
 export type LlmCallUsage = {
   model: string;
   input_tokens: number | null;
   output_tokens: number | null;
   total_tokens: number | null;
+  reasoning_tokens: number | null;
+  cached_tokens: number | null;
+  // `cost` is the effective spend: OpenRouter's own charge when it bills us, or
+  // the upstream provider cost for BYOK keys (where OpenRouter's charge is 0 but
+  // real money is still spent on the upstream key). `cost_source` says which.
   cost: number | null;
+  cost_source: LlmCostSource;
   cost_is_known: boolean;
   missing_reason: string | null;
   duration_ms: number;
@@ -64,7 +73,10 @@ export function cacheHitUsage(model: string): LlmCallUsage {
     input_tokens: 0,
     output_tokens: 0,
     total_tokens: 0,
+    reasoning_tokens: 0,
+    cached_tokens: 0,
     cost: 0,
+    cost_source: "cache",
     cost_is_known: true,
     missing_reason: null,
     duration_ms: 0,
@@ -401,12 +413,7 @@ async function completeOpenRouterJson(input: {
 
   const payload = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
-    usage?: {
-      prompt_tokens?: number;
-      completion_tokens?: number;
-      total_tokens?: number;
-      cost?: number;
-    };
+    usage?: OpenRouterUsage;
   };
   return {
     content: extractMessageContent(payload, input.errorLabel),
@@ -414,31 +421,58 @@ async function completeOpenRouterJson(input: {
   };
 }
 
+type OpenRouterUsage = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  cost?: number;
+  cost_details?: { upstream_inference_cost?: number };
+  prompt_tokens_details?: { cached_tokens?: number };
+  completion_tokens_details?: { reasoning_tokens?: number };
+};
+
 function parseOpenRouterUsage(
-  usage:
-    | {
-        prompt_tokens?: number;
-        completion_tokens?: number;
-        total_tokens?: number;
-        cost?: number;
-      }
-    | undefined,
+  usage: OpenRouterUsage | undefined,
   model: string,
   durationMs: number,
 ): LlmCallUsage {
-  const costKnown = typeof usage?.cost === "number" && Number.isFinite(usage.cost);
+  // OpenRouter's `cost` is what it bills us. For BYOK keys that is 0 while real
+  // money is still spent upstream (`cost_details.upstream_inference_cost`), so
+  // the effective cost prefers a non-zero OpenRouter charge and otherwise falls
+  // back to the upstream cost. Fail closed when neither is a finite number.
+  const openRouterCost = numberOrNull(usage?.cost);
+  const upstreamCost = numberOrNull(usage?.cost_details?.upstream_inference_cost);
+
+  let cost: number | null = null;
+  let costSource: LlmCostSource = "none";
+  if (openRouterCost !== null && openRouterCost > 0) {
+    cost = openRouterCost;
+    costSource = "openrouter";
+  } else if (upstreamCost !== null) {
+    cost = upstreamCost;
+    costSource = "upstream";
+  } else if (openRouterCost !== null) {
+    // OpenRouter explicitly reported 0 and there is no upstream figure.
+    cost = openRouterCost;
+    costSource = "openrouter";
+  }
+
   return {
     model,
     input_tokens: numberOrNull(usage?.prompt_tokens),
     output_tokens: numberOrNull(usage?.completion_tokens),
     total_tokens: numberOrNull(usage?.total_tokens),
-    cost: costKnown ? (usage?.cost as number) : null,
-    cost_is_known: costKnown,
-    missing_reason: costKnown
-      ? null
-      : usage === undefined
-        ? "openrouter_usage_absent"
-        : "openrouter_cost_absent",
+    reasoning_tokens: numberOrNull(usage?.completion_tokens_details?.reasoning_tokens),
+    cached_tokens: numberOrNull(usage?.prompt_tokens_details?.cached_tokens),
+    cost,
+    cost_source: costSource,
+    cost_is_known: cost !== null,
+    missing_reason:
+      cost !== null
+        ? null
+        : usage === undefined
+          ? "openrouter_usage_absent"
+          : "openrouter_cost_absent",
     duration_ms: durationMs,
     cache_hit: false,
   };

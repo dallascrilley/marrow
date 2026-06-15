@@ -49,6 +49,12 @@ export function buildCostReport(
     costByOperation[op] = round((costByOperation[op] ?? 0) + (r["gen_ai.usage.cost"] ?? 0));
   }
 
+  const callsByCostSource: Record<string, number> = {};
+  for (const r of records) {
+    const src = r["asd.cost_source"];
+    callsByCostSource[src] = (callsByCostSource[src] ?? 0) + 1;
+  }
+
   // Cost per session: sum known cost grouped by session, then describe the spread.
   const perSession = new Map<string, number>();
   for (const r of knownCost) {
@@ -89,11 +95,13 @@ export function buildCostReport(
       total_cost_usd: round(totalCost),
     },
     cost_by_operation_usd: costByOperation,
+    calls_by_cost_source: callsByCostSource,
     cost_per_session_usd: describe(sessionCosts),
     cost_per_learning_usd: round(costPerLearning),
     tokens_per_call: {
       input_mean: meanField(knownCost, "gen_ai.usage.input_tokens"),
       output_mean: meanField(knownCost, "gen_ai.usage.output_tokens"),
+      reasoning_mean: meanField(knownCost, "gen_ai.usage.reasoning_tokens"),
       total_mean: meanField(knownCost, "gen_ai.usage.total_tokens"),
     },
     projection,
@@ -125,7 +133,11 @@ function percentile(values: readonly number[], p: number): number {
 
 function meanField(
   records: readonly LlmTelemetryRecord[],
-  field: "gen_ai.usage.input_tokens" | "gen_ai.usage.output_tokens" | "gen_ai.usage.total_tokens",
+  field:
+    | "gen_ai.usage.input_tokens"
+    | "gen_ai.usage.output_tokens"
+    | "gen_ai.usage.reasoning_tokens"
+    | "gen_ai.usage.total_tokens",
 ): number | null {
   const present = records.map((r) => r[field]).filter((v): v is number => typeof v === "number");
   return present.length === 0 ? null : round(sum(present) / present.length);
