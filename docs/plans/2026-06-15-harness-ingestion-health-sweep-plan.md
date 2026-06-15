@@ -169,6 +169,35 @@ node dist/cli.js ingest sync --resume --source cursor
 
 No failures after the manifest-overwrite fix. Cursor added the bulk of the corpus; many new sessions are low-signal or have no durable learnings, which is expected for a first-time sync.
 
+### U3. codex-cli
+
+```bash
+node dist/cli.js ingest sync --resume --source codex-cli
+```
+
+- `discovered_count`: 895
+- `selected_count`: 880
+- `processed_count`: 880
+- `failed_count`: 0
+- `failures`: []
+
+`quality audit` delta after U3:
+
+| Metric | After U2 | After U3 | Delta |
+|---|---|---|---|
+| `issue_counts.summary_missing` | 2,029 | 1,150 | −879 |
+| `issue_counts.process_chatter` | 787 | 1,156 | +369 |
+| `issue_counts.summary_low_signal` | 553 | 594 | +41 |
+| `issue_counts.no_project_learnings` | 1,256 | 1,640 | +384 |
+| `learning_distribution.sessions_with_project_learnings` | 2,111 | 2,565 | +454 |
+| `learning_distribution.total_project_learnings` | 5,545 | 6,807 | +1,262 |
+| `learning_distribution.max_project_learnings` | 12 | 12 | 0 |
+| `learning_distribution.percentiles.p99` | 12 | 12 | 0 |
+| `deletion_readiness.ready` | 2,452 | 2,980 | +528 |
+| `deletion_readiness.missing_candidate` | 2,029 | 1,150 | −879 |
+
+No failures. Codex CLI sessions enriched cleanly.
+
 ## Open questions
 
 - How large are the per-harness backlogs, and will any sync exceed a reasonable runtime? If so, add `--limit` and run in batches.
