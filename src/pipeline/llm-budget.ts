@@ -25,7 +25,8 @@ type BudgetState = {
   uses: string[];
 };
 
-const defaultMaxPer = "5/24h";
+// Count cap is a courtesy throttle; the USD ceiling below is the hard financial guardrail.
+const defaultMaxPer = "50/24h";
 
 export function parseMaxPerWindow(spec: string): MaxPerWindow {
   const match = /^(\d+)\/(\d+)(h|m)$/.exec(spec.trim());

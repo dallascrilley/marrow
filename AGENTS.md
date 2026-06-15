@@ -89,6 +89,8 @@ discovered during bootstrap are appended below this baseline as a
   (v1 of td-02cfd4 adherence analysis).
 - **Skill report:** `asd skill report <id>` scores checklist adherence and suggests SKILL.md
   improvements ([`docs/recipes/skill-adherence-report.md`](docs/recipes/skill-adherence-report.md)).
+- **LLM budget:** optional LLM calls use a `50/24h` count cap as a courtesy throttle and a
+  hard `1/24h` USD ceiling as the real guardrail. See [`docs/recipes/llm-budget.md`](docs/recipes/llm-budget.md).
 
 ### Project-relevant skills
 

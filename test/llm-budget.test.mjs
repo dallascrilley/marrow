@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   assessLlmBudget,
   assessUsdBudget,
+  getDefaultMaxPerWindow,
   parseMaxPerWindow,
   parseMaxUsdWindow,
   recordLlmBudgetUse,
@@ -173,4 +174,16 @@ test("assessLlmBudget tracks sliding-window uses", async () => {
     assert.equal(status.remaining, 0);
     assert.equal(status.allowed, false);
   });
+});
+
+
+test("default count cap is 50/24h with USD hard ceiling remaining the guardrail", () => {
+  const previousMaxPer = process.env.ASD_LLM_MAX_PER;
+  delete process.env.ASD_LLM_MAX_PER;
+  assert.equal(getDefaultMaxPerWindow(), "50/24h");
+  if (previousMaxPer === undefined) {
+    delete process.env.ASD_LLM_MAX_PER;
+  } else {
+    process.env.ASD_LLM_MAX_PER = previousMaxPer;
+  }
 });
