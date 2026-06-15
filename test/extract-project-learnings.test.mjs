@@ -930,3 +930,63 @@ test("derives file-scoped workflow from turn files and commands when no events a
   assert.ok(learnings.project[0].statement.includes("src/lib/auth.ts"));
   assert.ok(learnings.project[0].statement.includes("./scripts/apply-review-follow-ups"));
 });
+
+test("does not promote verification command from failed verification summary without payload", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "verification",
+      "Verification attempt failed: `npm test` errored with 4 failures.",
+      {
+        event_id: `${firstTurn.turn_id}:verification:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});
+
+test("derives file-only workflow from turn files when no commands and no events are extracted", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: [],
+    files_touched: ["src/lib/auth.ts"],
+    user_prompt: "Apply code-review follow-ups for the admin auth gate",
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "workflow");
+  assert.ok(learnings.project[0].statement.includes("src/lib/auth.ts"));
+  assert.ok(learnings.project[0].statement.includes("admin auth gate"));
+});
+
+test("does not derive file-only workflow from non-concrete prompt", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: [],
+    files_touched: ["src/lib/auth.ts"],
+    user_prompt: "What do you think about the current auth setup?",
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});
