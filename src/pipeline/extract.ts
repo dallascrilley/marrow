@@ -18,7 +18,7 @@ import {
   sanitizeLearningTitle,
   sanitizeUserPrompt,
 } from "./prompt-sanitize.js";
-
+import { isProcessChatterText } from "./artifact-heuristics.js";
 export const defaultUserScopeKey = "operator";
 
 export type ExtractLearningsInput = {
@@ -1139,17 +1139,13 @@ function looksLikeProcessNarration(value: string): boolean {
 }
 
 function isProcessText(summary: string): boolean {
+  if (isProcessChatterText(summary)) {
+    return true;
+  }
+
   const normalized = summary.trim().toLowerCase();
 
   const processPrefixes = [
-    "let me ",
-    "i'll ",
-    "i will ",
-    "i'm ",
-    "i'll ",
-    "i'm ",
-    "exploring ",
-    "checking ",
     "reading ",
     "loading ",
     "creating a ",
@@ -1160,9 +1156,6 @@ function isProcessText(summary: string): boolean {
     "now i understand",
     "now i see",
     "first, the ",
-    "first, i'll ",
-    "first, i'm ",
-    "first, let me ",
     "i see - there's",
     "i see - the",
     "i need to add",
