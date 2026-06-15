@@ -50,3 +50,22 @@ OPENROUTER_API_KEY="$KEY" node dist/cli.js quality review-learnings \
   --limit 6000 --max-total-learnings 8 --no-cache
 node dist/cli.js quality cost-report --json --backlog-learnings 3078
 ```
+
+## After U5/U6 (verification, 2026-06-14)
+
+Re-run on the same key (`quality review-learnings --limit 6000
+--max-total-learnings 12 --no-cache --batch-size 6`, 12 real reviews), then
+`cost-report --json --since <run> --backlog-learnings 3078`:
+
+| Metric | U4 baseline | After U5/U6 | Change |
+|--------|-------------|-------------|--------|
+| Cost per learning | $0.000867 | **$0.000132** | ~6.6x cheaper |
+| **Reasoning tokens / call (mean)** | **2,000** | **138.7** | ~14x fewer |
+| Output tokens / call (mean) | 2,123 | 283.8 | ~7.5x fewer |
+| HTTP calls (12 learnings) | 12 | **4** | batching (`--batch-size 6`) |
+| Projected full drain (3,078) | ~$2.67 | **~$0.41** | ~6.5x cheaper |
+
+`unknown_cost_calls: 0`; all 12 receipts `cost_source: "upstream"`; `usd_budget`
+surfaced and under cap. Capping reasoning effort (U6c) is the dominant win;
+batching (U6b) cuts the HTTP-call count; the USD ceiling (U5) and pre-filter
+(U6a) bound and trim spend. Total spend for this verification run: ~$0.0016.
