@@ -46,6 +46,18 @@ test("sanitizeLearningStatement strips fenced code blocks", () => {
     "Use this config.",
   );
 });
+test("sanitizeLearningStatement strips unclosed fenced code blocks", () => {
+  assert.equal(
+    sanitizeLearningStatement("Do this locally:\n```bash\ngit stash\n"),
+    "Do this locally:",
+  );
+});
+test("sanitizeLearningStatement strips markdown links keeping text", () => {
+  assert.equal(
+    sanitizeLearningStatement("See [PR #462](https://github.com/example/pull/462) for details."),
+    "See PR #462 for details.",
+  );
+});
 test("sanitizeLearningStatement strips assistant framing tokens", () => {
   assert.equal(sanitizeLearningStatement("Verified: the fix works."), "the fix works.");
   assert.equal(sanitizeLearningStatement("Summary of changes: added tests."), "added tests.");

@@ -429,6 +429,8 @@ const markdownTableRowPattern = /^\s*\|([^\n]+\|)+[^\n]*$/m;
 const markdownTableSeparatorPattern = /^\s*\|?\s*:?-+:?\s*\|/m;
 const markdownHeadingPattern = /^(#{1,6})\s+([^\n]+)$/gm;
 const markdownBlockFencePattern = /^```[\s\S]*?^```/gm;
+const markdownUnclosedFencePattern = /^```[\s\S]*$/gm;
+const markdownLinkPattern = /\[([^\]]+)\]\([^)]+\)/g;
 
 /**
  * Remove markdown tables, headings, emphasis, block fences, and list bullets,
@@ -439,11 +441,11 @@ export function sanitizeLearningStatement(
   options: { preserveNewlines?: boolean } = {},
 ): string {
   if (!value) return value;
-
   let cleaned = value;
 
   // Strip fenced code blocks first so their content doesn't leak.
   cleaned = cleaned.replace(markdownBlockFencePattern, " ");
+  cleaned = cleaned.replace(markdownUnclosedFencePattern, " ");
 
   // Truncate at the start of a markdown table.
   const tableStart = findMarkdownTableStart(cleaned);
@@ -459,6 +461,9 @@ export function sanitizeLearningStatement(
   cleaned = cleaned.replace(/(\*\*|__)([^\n]+?)\1/g, " $2 ");
   cleaned = cleaned.replace(/(?<![\w*])\*([^\n\s][^\n]*?)\*(?![\w*])/g, " $1 ");
   cleaned = cleaned.replace(/(?<![\w_])_([^\n\s][^\n]*?)_(?![\w_])/g, " $1 ");
+
+  // Strip markdown links, keeping only the link text.
+  cleaned = cleaned.replace(markdownLinkPattern, "$1");
 
   // Strip list bullets.
   cleaned = cleaned.replace(/^[\s]*[-*+]\s+/gm, " ");
