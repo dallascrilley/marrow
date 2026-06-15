@@ -1248,3 +1248,56 @@ test("still rejects markdown-heavy summary without recoverable file and action",
 
   assert.deepEqual(learnings.project, []);
 });
+
+test("sanitizes markdown table from decision learning statement", () => {
+  const source = sourceSession({ project_key: "studio-tools" });
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "decision",
+      "Given how far behind main the branches are, **cherry-picking onto fresh branches from main** is usually better than rebasing. ## Rebase vs cherry-pick vs fresh start\n| Approach | Effort | Risk | Best when |\n|----------|--------|------|-----------|\n| rebase   | high   | high | short-lived branch |",
+      {
+        event_id: `${firstTurn.turn_id}:decision:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "decision");
+  assert.ok(!learnings.project[0].statement.includes("|"), "table pipes should be removed");
+  assert.ok(!learnings.project[0].statement.includes("Approach"), "table header should be removed");
+  assert.match(learnings.project[0].statement, /cherry-picking onto fresh branches from main/);
+});
+
+test("sanitizes bold emphasis and framing from decision learning statement", () => {
+  const source = sourceSession({ project_key: "cohost-ai-studio" });
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "decision",
+      "**Verdict: Approved** The spec is internally consistent: storage abstraction, `blob_ref` vs `file_path` precedence, worker materialize/write-back contract.",
+      {
+        event_id: `${firstTurn.turn_id}:decision:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "decision");
+  assert.ok(!learnings.project[0].statement.includes("**"), "bold markers should be removed");
+  assert.ok(learnings.project[0].statement.startsWith("Approved "), "framing token should be removed");
+});

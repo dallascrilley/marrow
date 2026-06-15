@@ -430,7 +430,10 @@ const markdownBlockFencePattern = /^```[\s\S]*?^```/gm;
  * Remove markdown tables, headings, emphasis, block fences, and list bullets,
  * then collapse whitespace. Intended for project-learning statements only.
  */
-export function sanitizeLearningStatement(value: string): string {
+export function sanitizeLearningStatement(
+  value: string,
+  options: { preserveNewlines?: boolean } = {},
+): string {
   if (!value) return value;
 
   let cleaned = value;
@@ -460,9 +463,12 @@ export function sanitizeLearningStatement(value: string): string {
     .replace(/^\s*(?:Verified:|Done\s*[-—]|Good\s*[-—]|Summary of changes:|Summary of what changed:|\*\*Verdict:\*\*|Verdict:)\s*/i, " ")
     .trim();
 
-  // Collapse whitespace and trim trailing punctuation.
-  cleaned = cleaned.replace(/\s+/g, " ").trim();
-  cleaned = cleaned.replace(/[.!?]+$/g, "").trim();
+  // Collapse whitespace unless asked to keep newlines for downstream dump detection.
+  if (options.preserveNewlines) {
+    cleaned = cleaned.replace(/[ \t]+/g, " ").trim();
+  } else {
+    cleaned = cleaned.replace(/\s+/g, " ").trim();
+  }
 
   return cleaned;
 }

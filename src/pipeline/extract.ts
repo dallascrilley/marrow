@@ -14,6 +14,7 @@ import {
   learningEvidenceFromPrompt,
   looksLikeSkillHarnessLeak,
   sanitizeHarnessLeakText,
+  sanitizeLearningStatement,
   sanitizeLearningTitle,
   sanitizeUserPrompt,
 } from "./prompt-sanitize.js";
@@ -1551,14 +1552,17 @@ function dedupeLearnings(learnings: readonly Learning[]): Learning[] {
 function finalizeProjectLearningCandidate(
   candidate: ProjectLearningCandidate,
 ): ProjectLearningCandidate | null {
-  const statement = sanitizeHarnessLeakText(candidate.statement);
+  const rawStatement = sanitizeHarnessLeakText(candidate.statement);
+  const cleanedForDumpCheck = sanitizeLearningStatement(rawStatement, { preserveNewlines: true });
   if (
-    statement.length === 0 ||
-    looksLikeSkillHarnessLeak(statement) ||
-    looksLikeRawKnowledgeDump(statement)
+    cleanedForDumpCheck.length === 0 ||
+    looksLikeSkillHarnessLeak(cleanedForDumpCheck) ||
+    looksLikeRawKnowledgeDump(cleanedForDumpCheck)
   ) {
     return null;
   }
+
+  const statement = cleanedForDumpCheck.replace(/\s+/g, " ").trim();
 
   const evidence = uniqueStrings(
     candidate.evidence
