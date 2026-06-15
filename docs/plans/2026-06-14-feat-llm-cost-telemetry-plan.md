@@ -170,6 +170,11 @@ ceiling, and the highest-leverage waste cuts (skip-junk-before-LLM, batching).
 - **Tests:** extend `test/llm-budget.test.mjs` — receipts under cap → allowed; over cap →
   blocked with `skip_reason:"llm_usd_budget_exhausted"`; window expiry releases budget.
 - **Verification:** `npm test`; gate JSON shows `usd_budget`.
+- **Done (2026-06-14):** `assessUsdBudget` + `parseMaxUsdWindow` in `llm-budget.ts`;
+  both `review-learnings` and `pipeline-gate` gate on count **and** USD budgets and surface
+  `usd_budget`. `--max-usd` flag + `ASD_LLM_MAX_USD` (default `1/24h`); fractional USD amounts
+  allowed. Budgets on **effective** cost; unknown-cost calls never counted. Tests cover
+  under/over cap, window expiry, unknown-cost exclusion, and the command-level block.
 
 ### U6. Cut LLM waste — skip junk before paying, then batch
 - **Goal:** stop spending on low-signal/test/duplicate learnings; reduce per-call overhead.
@@ -196,6 +201,21 @@ ceiling, and the highest-leverage waste cuts (skip-junk-before-LLM, batching).
   cache hits bypass the batch. Compare call-count before/after on a fixture.
 - **Verification:** `npm test`; `cost-report` on a re-run shows lower cost/learning + lower
   call count vs the U4 baseline.
+- **Done (2026-06-14):**
+  - **U6c:** `reasoning: { effort: "low" }` set centrally in `completeOpenRouterJson` (covers
+    review + topic); body-shape asserted in the review/topic tests.
+  - **U6a:** new `learning-prefilter.ts` `partitionLearningsForReview` reuses
+    `isLowSignalTopic` (harness/boot/path/skill-slug/bare-command leaks that contaminate
+    statements) and dedupes normalized statements across the run; `review-learnings` reports
+    `skipped_pre_llm` (+ `low_signal`/`duplicate` breakdown). Note: `isLowSignalTopic` does not
+    flag a bare greeting like "Say hello"; such test sessions are already filtered upstream by
+    producing no durable learnings.
+  - **U6b:** `reviewLearningsBatchedWithOpenRouter` batches cache-miss learnings (default 10,
+    `--batch-size`), demultiplexes a `{reviews:[…]}` response by id, keeps the per-learning
+    cache, and splits each call's cost/tokens evenly across members.
+  - **Deviation from this unit's file list:** also touched `llm-telemetry.ts` (additive
+    `asd.batch_size`) and `quality-cost-report.ts` (new `http_calls` total) so the call-count
+    win is measurable without distorting per-learning cost.
 
 ## Prior learnings applied
 - (none in `docs/solutions/` touch LLM cost — this plan should emit one via `ce-compound`
