@@ -99,7 +99,26 @@ export async function processDiscoveredSessions(
         reduced.events,
         resume,
       );
+      const archiveCheckpoint = getPhaseCheckpoint(database, sourceSession.id, "archived");
+      const archiveUpToDate =
+        archiveCheckpoint?.phase_state === "completed" &&
+        archiveCheckpoint.source_hash === sourceSession.source_hash;
+
+      if (resume && archiveUpToDate) {
+        sessions.push({
+          archived: null,
+          parsed: parsed.recordCount,
+          project_key: sourceSession.project_key,
+          session_id: sourceSession.session_id,
+          source_changed: entry.ledger.sourceChanged,
+          summary_path: summary.summaryPath,
+          turns: reduced.turns.length,
+        });
+        continue;
+      }
+
       const archived = await runArchivePhase({
+        allowManifestOverwrite: resume,
         database,
         events: reduced.events,
         knowledge: extracted,

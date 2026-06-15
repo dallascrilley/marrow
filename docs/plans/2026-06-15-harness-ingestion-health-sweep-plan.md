@@ -23,6 +23,7 @@ td_epic: td-db91c2
 - Do **not** enable `--llm-topic` by default to avoid consuming the OpenRouter budget during a diagnostic sweep.
 - Run `quality audit` after each harness so deltas are attributable to a single source.
 - Use the existing `AGENT_SESSION_DISTILLERY_ROOT` runtime; do not create an isolated worktree because this is an operational check against live operator data.
+- When `ingest sync --resume` reprocesses sessions that already have archived manifests, allow the archive phase to overwrite stale manifests and skip up-to-date archived sessions. This prevents "Immutable manifest already exists with different contents" failures on resumed incremental ingests.
 
 ## Implementation units
 
@@ -133,6 +134,40 @@ node dist/cli.js ingest sync --resume --source claude-code
 | `deletion_readiness.missing_candidate` | 5,237 | 5,225 | −12 |
 
 No failures. New sessions enriched cleanly; cap held at 12.
+
+### U2. cursor
+
+```bash
+node dist/cli.js ingest sync --resume --source cursor
+```
+
+- `discovered_count`: 3,244
+- `selected_count`: 1,030
+- `processed_count`: 1,030
+- `failed_count`: 0
+- `failures`: []
+
+**Bug found and fixed during U2:** `ingest sync --resume` was failing on sessions that already had archived manifests with `Immutable manifest already exists with different contents`. The fix in `src/commands/ingest-backfill.ts`:
+
+- Skip the archive phase when `resume` is true and the existing `archived` checkpoint is completed with the same source hash.
+- Allow manifest overwrite during archive when `resume` is true and the checkpoint is missing or stale.
+
+`quality audit` delta after U2:
+
+| Metric | After U1 | After U2 | Delta |
+|---|---|---|---|
+| `issue_counts.summary_missing` | 5,225 | 2,029 | −3,196 |
+| `issue_counts.process_chatter` | 436 | 787 | +351 |
+| `issue_counts.summary_low_signal` | 135 | 553 | +418 |
+| `issue_counts.no_project_learnings` | 130 | 1,256 | +1,126 |
+| `learning_distribution.sessions_with_project_learnings` | 479 | 2,111 | +1,632 |
+| `learning_distribution.total_project_learnings` | 2,441 | 5,545 | +3,104 |
+| `learning_distribution.max_project_learnings` | 12 | 12 | 0 |
+| `learning_distribution.percentiles.p99` | 12 | 12 | 0 |
+| `deletion_readiness.ready` | 610 | 2,452 | +1,842 |
+| `deletion_readiness.missing_candidate` | 5,225 | 2,029 | −3,196 |
+
+No failures after the manifest-overwrite fix. Cursor added the bulk of the corpus; many new sessions are low-signal or have no durable learnings, which is expected for a first-time sync.
 
 ## Open questions
 
