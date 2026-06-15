@@ -248,6 +248,17 @@ node dist/cli.js quality apply-learning-review
 
 This writes `knowledge/projects-reviewed/` and `reports/llm-learning-review-apply.json` without mutating `knowledge/projects/`. The apply step keeps only durable keep/rewrite verdicts that pass strict post-validation.
 
+Report OpenRouter LLM cost from the telemetry receipts written during review (`reports/llm-telemetry.jsonl`):
+
+```bash
+node dist/cli.js quality cost-report
+node dist/cli.js quality cost-report --json
+node dist/cli.js quality cost-report --since 2026-06-14T00:00:00Z
+node dist/cli.js quality cost-report --backlog-learnings 3000   # project full-drain cost
+```
+
+Each OpenRouter call records actual token usage and USD cost (`usage: { include: true }`) using OpenTelemetry GenAI field names; cache hits are zero-cost receipts. The report aggregates cost per session (mean/p50/p90/max), cost per learning, cache-hit rate, and unknown-cost calls. Cost is taken from the provider response, never estimated — calls where OpenRouter omits cost are counted as `unknown_cost_calls` rather than guessed.
+
 Upgrade topics for already-archived sessions without re-ingesting transcripts (manifests stay immutable; summaries and `export-index` output refresh):
 
 ```bash

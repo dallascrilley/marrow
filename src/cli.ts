@@ -16,6 +16,7 @@ import { executeMigrateProjectIds } from "./commands/migrate-project-ids.js";
 import { executePipelineGate } from "./commands/pipeline-gate.js";
 import { executeQualityApplyLearningReview } from "./commands/quality-apply-learning-review.js";
 import { executeQualityAudit } from "./commands/quality-audit.js";
+import { executeQualityCostReport } from "./commands/quality-cost-report.js";
 import { executeQualityResummarize } from "./commands/quality-resummarize.js";
 import { executeQualityReviewLearnings } from "./commands/quality-review-learnings.js";
 import { executeReviewQueue } from "./commands/review-queue.js";
@@ -90,6 +91,11 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "Apply an LLM learning-review sidecar into knowledge/projects-reviewed without mutating originals.",
         execute: async (context) => withLedger(context, executeQualityApplyLearningReview),
+      },
+      "cost-report": {
+        description:
+          "Report OpenRouter LLM cost from telemetry receipts: cost per session (mean/p50/p90/max), cost per learning, cache-hit rate. Flags: --json, --since <iso>, --backlog-learnings <n>.",
+        execute: async (context) => executeQualityCostReport(context),
       },
       resummarize: {
         description:
