@@ -60,7 +60,7 @@ Spot-check of the worst session shows:
 ### U1. Cap project learnings per session
 - **Goal:** No session contributes more than a configurable number of project learnings (default 12).
 - **Requirements:** R1
-- **Files:** `src/pipeline/extract.ts`, `src/models/canonical.ts` (if a schema cap is added), `test/extract.test.mjs`
+- **Files:** `src/pipeline/extract.ts`, `test/extract.test.mjs`
 - **Approach:**
   1. Add `DEFAULT_MAX_PROJECT_LEARNINGS_PER_SESSION = 12` constant in `extract.ts` (overridable via `ASD_MAX_PROJECT_LEARNINGS_PER_SESSION`).
   2. After `dedupeProjectCandidates`, slice the returned array to the cap, preserving the existing priority order.
