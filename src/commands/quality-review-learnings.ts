@@ -9,7 +9,9 @@ import { type Learning, learningSchema } from "../models/canonical.js";
 import { type PreLlmSkip, partitionLearningsForReview } from "../pipeline/learning-prefilter.js";
 import {
   assessLlmBudget,
+  assessUsdBudget,
   getDefaultMaxPerWindow,
+  getDefaultMaxUsd,
   recordLlmBudgetUse,
 } from "../pipeline/llm-budget.js";
 import { reviewLearningsBatchedWithOpenRouter } from "../pipeline/llm-learning-review.js";
@@ -43,15 +45,20 @@ export async function executeQualityReviewLearnings(
   }
 
   const maxPer = options.maxPer ?? getDefaultMaxPerWindow();
+  const maxUsd = options.maxUsd ?? getDefaultMaxUsd();
   const budget = await assessLlmBudget(maxPer);
-  if (!budget.allowed) {
+  const usdBudget = await assessUsdBudget(maxUsd);
+  // Run only when BOTH the count cap and the hard USD ceiling allow it. The USD
+  // gate budgets on effective (upstream) cost so it still fires for BYOK keys.
+  if (!budget.allowed || !usdBudget.allowed) {
     context.output.info(
       JSON.stringify(
         {
           count: 0,
           llm_budget: budget,
+          usd_budget: usdBudget,
           skipped: true,
-          skip_reason: "llm_budget_exhausted",
+          skip_reason: budget.allowed ? "llm_usd_budget_exhausted" : "llm_budget_exhausted",
           total_reviewed_learnings: 0,
         },
         null,
@@ -209,6 +216,7 @@ export async function executeQualityReviewLearnings(
           low_signal: prefilterSkipped.filter((entry) => entry.reason === "low_signal").length,
           duplicate: prefilterSkipped.filter((entry) => entry.reason === "duplicate").length,
         },
+        usd_budget: usdBudget,
         total_sessions: sessions.length,
         total_reviewed_learnings: reviewedLearningCount,
       },
@@ -228,6 +236,7 @@ type ReviewLearningsOptions = {
   maxLearnings?: number | undefined;
   maxPer?: string | undefined;
   maxTotalLearnings?: number | undefined;
+  maxUsd?: string | undefined;
   model?: string | undefined;
   noCache?: boolean | undefined;
   refreshLlm?: boolean | undefined;
@@ -242,6 +251,7 @@ function parseOptions(args: readonly string[]): ReviewLearningsOptions {
     maxLearnings: parseIntegerOption(args, "--max-learnings"),
     maxPer: parseStringOption(args, "--max-per"),
     maxTotalLearnings: parseIntegerOption(args, "--max-total-learnings"),
+    maxUsd: parseStringOption(args, "--max-usd"),
     model: parseStringOption(args, "--model"),
     noCache: args.includes("--no-cache"),
     refreshLlm: args.includes("--refresh-llm"),
