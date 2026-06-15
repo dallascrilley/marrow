@@ -30,10 +30,47 @@ export type LearningReviewResult = {
   verdict: LearningReviewVerdict;
 };
 
+/**
+ * Per-call OpenRouter usage + cost, captured at the source boundary.
+ * Field names mirror OpenTelemetry GenAI semantics for later portability.
+ * Cost is the actual amount OpenRouter reports (USD); we never estimate it
+ * from a pricing table — when the provider does not return it we fail closed
+ * with `cost_is_known: false` and a `missing_reason`.
+ */
+export type LlmCallUsage = {
+  model: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  total_tokens: number | null;
+  cost: number | null;
+  cost_is_known: boolean;
+  missing_reason: string | null;
+  duration_ms: number;
+  cache_hit: boolean;
+};
+
 export type ReviewedLearning = {
   learning: Learning;
   review: LearningReviewResult;
+  usage: LlmCallUsage;
 };
+
+export type LlmUsageSink = (usage: LlmCallUsage) => void;
+
+/** Usage record for a cache hit: no API call, so it cost nothing. */
+export function cacheHitUsage(model: string): LlmCallUsage {
+  return {
+    model,
+    input_tokens: 0,
+    output_tokens: 0,
+    total_tokens: 0,
+    cost: 0,
+    cost_is_known: true,
+    missing_reason: null,
+    duration_ms: 0,
+    cache_hit: true,
+  };
+}
 
 type FetchLike = typeof fetch;
 type ChatMessage = {
@@ -48,6 +85,7 @@ export async function reviewLearningWithOpenRouter(input: {
   learning: Learning;
   model?: string | undefined;
   noCache?: boolean | undefined;
+  onUsage?: LlmUsageSink | undefined;
   projectKey: string;
   refreshLlm?: boolean | undefined;
 }): Promise<LearningReviewResult> {
@@ -67,11 +105,12 @@ export async function reviewLearningWithOpenRouter(input: {
   if (cachePath !== undefined && input.noCache !== true && input.refreshLlm !== true) {
     const cached = await readCachedLearningReview(cachePath);
     if (cached !== undefined) {
+      input.onUsage?.(cacheHitUsage(model));
       return cached;
     }
   }
 
-  const content = await completeOpenRouterJson({
+  const { content, usage } = await completeOpenRouterJson({
     apiKey: input.apiKey,
     errorLabel: "learning review",
     fetchImpl: input.fetchImpl,
@@ -96,6 +135,7 @@ export async function reviewLearningWithOpenRouter(input: {
     ],
     model,
   });
+  input.onUsage?.(usage);
 
   const review = parseLearningReview(content);
   if (cachePath !== undefined && input.noCache !== true) {
@@ -110,11 +150,12 @@ export async function generateTopicWithOpenRouter(input: {
   deterministicTopic: string;
   fetchImpl?: FetchLike | undefined;
   model?: string | undefined;
+  onUsage?: LlmUsageSink | undefined;
   sourceSession: SourceSession;
   turns: readonly Turn[];
 }): Promise<string> {
   const model = input.model ?? process.env[openRouterModelEnvVar] ?? defaultOpenRouterTopicModel;
-  const content = await completeOpenRouterJson({
+  const { content, usage } = await completeOpenRouterJson({
     apiKey: input.apiKey,
     errorLabel: "topic generation",
     fetchImpl: input.fetchImpl,
@@ -130,6 +171,7 @@ export async function generateTopicWithOpenRouter(input: {
     ],
     model,
   });
+  input.onUsage?.(usage);
 
   return parseTopicGeneration(content);
 }
@@ -141,24 +183,30 @@ export async function reviewProjectLearningsWithOpenRouter(input: {
   learnings: readonly Learning[];
   model?: string | undefined;
   noCache?: boolean | undefined;
+  onUsage?: LlmUsageSink | undefined;
   projectKey: string;
   refreshLlm?: boolean | undefined;
 }): Promise<ReviewedLearning[]> {
+  const resolvedModel =
+    input.model ?? process.env[openRouterModelEnvVar] ?? defaultOpenRouterLearningReviewModel;
   const reviewed: ReviewedLearning[] = [];
   for (const learning of input.learnings) {
-    reviewed.push({
+    let captured: LlmCallUsage | undefined;
+    const review = await reviewLearningWithOpenRouter({
+      apiKey: input.apiKey,
+      cacheDir: input.cacheDir,
+      fetchImpl: input.fetchImpl,
       learning,
-      review: await reviewLearningWithOpenRouter({
-        apiKey: input.apiKey,
-        cacheDir: input.cacheDir,
-        fetchImpl: input.fetchImpl,
-        learning,
-        model: input.model,
-        noCache: input.noCache,
-        projectKey: input.projectKey,
-        refreshLlm: input.refreshLlm,
-      }),
+      model: input.model,
+      noCache: input.noCache,
+      onUsage: (usage) => {
+        captured = usage;
+        input.onUsage?.(usage);
+      },
+      projectKey: input.projectKey,
+      refreshLlm: input.refreshLlm,
     });
+    reviewed.push({ learning, review, usage: captured ?? cacheHitUsage(resolvedModel) });
   }
 
   return reviewed;
@@ -309,7 +357,7 @@ async function completeOpenRouterJson(input: {
   fetchImpl?: FetchLike | undefined;
   messages: readonly ChatMessage[];
   model: string;
-}): Promise<string> {
+}): Promise<{ content: string; usage: LlmCallUsage }> {
   const apiKey = input.apiKey ?? process.env[openRouterApiKeyEnvVar];
   if (apiKey === undefined || apiKey.trim().length === 0) {
     throw new Error(`${openRouterApiKeyEnvVar} is required for LLM ${input.errorLabel}`);
@@ -318,6 +366,7 @@ async function completeOpenRouterJson(input: {
   const fetchImpl = input.fetchImpl ?? fetch;
   const abortController = new AbortController();
   const timeout = setTimeout(() => abortController.abort(), 30_000);
+  const startedAt = Date.now();
   let response: Response;
   try {
     response = await fetchImpl("https://openrouter.ai/api/v1/chat/completions", {
@@ -326,6 +375,9 @@ async function completeOpenRouterJson(input: {
         model: input.model,
         response_format: { type: "json_object" },
         temperature: 0,
+        // Ask OpenRouter to include the actual cost + token accounting inline so we
+        // capture spend from the source of truth instead of estimating it later.
+        usage: { include: true },
       }),
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -340,6 +392,8 @@ async function completeOpenRouterJson(input: {
     clearTimeout(timeout);
   }
 
+  const durationMs = Date.now() - startedAt;
+
   if (!response.ok) {
     const body = await response.text();
     throw new Error(`OpenRouter ${input.errorLabel} failed (${response.status}): ${body}`);
@@ -347,8 +401,51 @@ async function completeOpenRouterJson(input: {
 
   const payload = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
+    usage?: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      total_tokens?: number;
+      cost?: number;
+    };
   };
-  return extractMessageContent(payload, input.errorLabel);
+  return {
+    content: extractMessageContent(payload, input.errorLabel),
+    usage: parseOpenRouterUsage(payload.usage, input.model, durationMs),
+  };
+}
+
+function parseOpenRouterUsage(
+  usage:
+    | {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+        cost?: number;
+      }
+    | undefined,
+  model: string,
+  durationMs: number,
+): LlmCallUsage {
+  const costKnown = typeof usage?.cost === "number" && Number.isFinite(usage.cost);
+  return {
+    model,
+    input_tokens: numberOrNull(usage?.prompt_tokens),
+    output_tokens: numberOrNull(usage?.completion_tokens),
+    total_tokens: numberOrNull(usage?.total_tokens),
+    cost: costKnown ? (usage?.cost as number) : null,
+    cost_is_known: costKnown,
+    missing_reason: costKnown
+      ? null
+      : usage === undefined
+        ? "openrouter_usage_absent"
+        : "openrouter_cost_absent",
+    duration_ms: durationMs,
+    cache_hit: false,
+  };
+}
+
+function numberOrNull(value: number | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function extractMessageContent(

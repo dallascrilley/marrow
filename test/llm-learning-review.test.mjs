@@ -135,6 +135,169 @@ test("OpenRouter topic generation reuses chat completion client with strict JSON
   assert.match(body.messages[1].content, /deterministic_topic/);
 });
 
+function reviewResponse(usage) {
+  return {
+    ok: true,
+    status: 200,
+    async json() {
+      return {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                durability: "durable",
+                keep: true,
+                reason: "Useful project decision.",
+                statement: "Keep the rule and fix generation.",
+                verdict: "keep",
+              }),
+            },
+          },
+        ],
+        ...(usage === undefined ? {} : { usage }),
+      };
+    },
+    async text() {
+      return "";
+    },
+  };
+}
+
+test("learning review captures real OpenRouter usage + cost and requests it", async () => {
+  const calls = [];
+  const captured = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    return reviewResponse({
+      prompt_tokens: 120,
+      completion_tokens: 30,
+      total_tokens: 150,
+      cost: 0.00042,
+    });
+  };
+
+  await reviewLearningWithOpenRouter({
+    apiKey: "test-key",
+    fetchImpl,
+    learning: learning(),
+    model: "openai/gpt-5-nano",
+    onUsage: (usage) => captured.push(usage),
+    projectKey: "studio-tools",
+  });
+
+  // We must explicitly ask OpenRouter to include cost accounting.
+  const body = JSON.parse(calls[0].init.body);
+  assert.deepEqual(body.usage, { include: true });
+
+  assert.equal(captured.length, 1);
+  const usage = captured[0];
+  assert.equal(usage.model, "openai/gpt-5-nano");
+  assert.equal(usage.input_tokens, 120);
+  assert.equal(usage.output_tokens, 30);
+  assert.equal(usage.total_tokens, 150);
+  assert.equal(usage.cost, 0.00042);
+  assert.equal(usage.cost_is_known, true);
+  assert.equal(usage.missing_reason, null);
+  assert.equal(usage.cache_hit, false);
+  assert.equal(typeof usage.duration_ms, "number");
+});
+
+test("learning review fails closed on usage when the provider omits it", async () => {
+  const captured = [];
+  const fetchImpl = async () => reviewResponse(undefined);
+
+  await reviewLearningWithOpenRouter({
+    apiKey: "test-key",
+    fetchImpl,
+    learning: learning(),
+    model: "openai/gpt-5-nano",
+    onUsage: (usage) => captured.push(usage),
+    projectKey: "studio-tools",
+  });
+
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].cost, null);
+  assert.equal(captured[0].cost_is_known, false);
+  assert.equal(captured[0].missing_reason, "openrouter_usage_absent");
+  assert.equal(captured[0].total_tokens, null);
+});
+
+test("learning review reports a cache hit as zero-cost usage without fetching", async () => {
+  const cacheDir = await mkdtemp(join(tmpdir(), "asd-llm-usage-cache-"));
+  const item = learning();
+  const cacheKey = buildLearningReviewCacheKey({
+    learning: item,
+    model: "openai/gpt-5-nano",
+    projectKey: "studio-tools",
+  });
+  const captured = [];
+  try {
+    await writeFile(
+      join(cacheDir, `${cacheKey}.json`),
+      `${JSON.stringify({
+        durability: "durable",
+        keep: true,
+        reason: "Cached.",
+        statement: "Cached statement.",
+        verdict: "keep",
+      })}\n`,
+      "utf8",
+    );
+    const fetchImpl = async () => {
+      throw new Error("fetch should not be called on cache hit");
+    };
+
+    await reviewLearningWithOpenRouter({
+      apiKey: "test-key",
+      cacheDir,
+      fetchImpl,
+      learning: item,
+      model: "openai/gpt-5-nano",
+      onUsage: (usage) => captured.push(usage),
+      projectKey: "studio-tools",
+    });
+
+    assert.equal(captured.length, 1);
+    assert.equal(captured[0].cache_hit, true);
+    assert.equal(captured[0].cost, 0);
+    assert.equal(captured[0].cost_is_known, true);
+  } finally {
+    await rm(cacheDir, { force: true, recursive: true });
+  }
+});
+
+test("topic generation reports usage through onUsage", async () => {
+  const captured = [];
+  const fetchImpl = async () => ({
+    ok: true,
+    status: 200,
+    async json() {
+      return {
+        choices: [{ message: { content: JSON.stringify({ topic: "telemetry capture" }) } }],
+        usage: { prompt_tokens: 80, completion_tokens: 8, total_tokens: 88, cost: 0.00009 },
+      };
+    },
+    async text() {
+      return "";
+    },
+  });
+
+  const topic = await generateTopicWithOpenRouter({
+    apiKey: "test-key",
+    deterministicTopic: "First message",
+    fetchImpl,
+    onUsage: (usage) => captured.push(usage),
+    sourceSession: sourceSessionFixture,
+    turns: [],
+  });
+
+  assert.equal(topic, "telemetry capture");
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].cost, 0.00009);
+  assert.equal(captured[0].total_tokens, 88);
+  assert.equal(captured[0].cache_hit, false);
+});
+
 test("OpenRouter learning review rejects invalid JSON schema", async () => {
   const fetchImpl = async () => ({
     ok: true,
