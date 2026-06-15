@@ -6,15 +6,15 @@ import type { CommandContext } from "../cli.js";
 import { getRuntimePath } from "../config/paths.js";
 import { listSourceSessions } from "../db/ledger.js";
 import { type Learning, learningSchema } from "../models/canonical.js";
+import { type PreLlmSkip, partitionLearningsForReview } from "../pipeline/learning-prefilter.js";
 import {
   assessLlmBudget,
+  assessUsdBudget,
   getDefaultMaxPerWindow,
+  getDefaultMaxUsd,
   recordLlmBudgetUse,
 } from "../pipeline/llm-budget.js";
-import {
-  type ReviewedLearning,
-  reviewLearningWithOpenRouter,
-} from "../pipeline/llm-learning-review.js";
+import { reviewLearningsBatchedWithOpenRouter } from "../pipeline/llm-learning-review.js";
 import { appendLlmTelemetry, buildLlmTelemetryRecord } from "../pipeline/llm-telemetry.js";
 import { countPendingLlmReview } from "../pipeline/pipeline-gate.js";
 import { getProjectKnowledgeSessionPath } from "../writers/knowledge-writer.js";
@@ -45,15 +45,20 @@ export async function executeQualityReviewLearnings(
   }
 
   const maxPer = options.maxPer ?? getDefaultMaxPerWindow();
+  const maxUsd = options.maxUsd ?? getDefaultMaxUsd();
   const budget = await assessLlmBudget(maxPer);
-  if (!budget.allowed) {
+  const usdBudget = await assessUsdBudget(maxUsd);
+  // Run only when BOTH the count cap and the hard USD ceiling allow it. The USD
+  // gate budgets on effective (upstream) cost so it still fires for BYOK keys.
+  if (!budget.allowed || !usdBudget.allowed) {
     context.output.info(
       JSON.stringify(
         {
           count: 0,
           llm_budget: budget,
+          usd_budget: usdBudget,
           skipped: true,
-          skip_reason: "llm_budget_exhausted",
+          skip_reason: budget.allowed ? "llm_usd_budget_exhausted" : "llm_budget_exhausted",
           total_reviewed_learnings: 0,
         },
         null,
@@ -66,6 +71,10 @@ export async function executeQualityReviewLearnings(
   const sessions = listSourceSessions(database).slice(0, options.limit);
   const reviewed = [];
   const failures: Array<{ learning_id: string; reason: string; session_id: string }> = [];
+  // Pre-LLM filter state: skips collected across the run, and a set of
+  // normalized statements seen so far so cross-session duplicates are dropped.
+  const prefilterSkipped: PreLlmSkip[] = [];
+  const seenStatements = new Set<string>();
   let reviewedLearningCount = 0;
   let terminalFailureReason: string | undefined;
 
@@ -93,61 +102,45 @@ export async function executeQualityReviewLearnings(
         remainingLearningBudget ?? learnings.length,
       ),
     );
-    const sessionReviews: ReviewedLearning[] = [];
+    // Drop deterministic junk + duplicates before paying for any review. These
+    // never reach the OpenRouter fetch.
+    const { toReview, skipped } = partitionLearningsForReview(
+      selectedLearnings,
+      session.session_id,
+      seenStatements,
+    );
+    prefilterSkipped.push(...skipped);
+
     const cacheDir =
       options.noCache === true
         ? undefined
         : (options.cacheDir ?? join(getRuntimePath("root"), "cache", "llm-learning-review"));
 
-    for (const learning of selectedLearnings) {
-      try {
-        let usage: ReviewedLearning["usage"] | undefined;
-        const review = await reviewLearningWithOpenRouter({
-          cacheDir,
-          learning,
-          model: options.model,
-          noCache: options.noCache,
-          onUsage: (captured) => {
-            usage = captured;
-          },
-          projectKey: session.project_key,
-          refreshLlm: options.refreshLlm,
-        });
-        sessionReviews.push({
-          learning,
-          review,
-          usage: usage ?? {
-            model: options.model ?? process.env.OPENROUTER_MODEL ?? "openai/gpt-5-nano",
-            input_tokens: null,
-            output_tokens: null,
-            total_tokens: null,
-            reasoning_tokens: null,
-            cached_tokens: null,
-            cost: null,
-            cost_source: "none",
-            cost_is_known: false,
-            missing_reason: "usage_callback_not_invoked",
-            duration_ms: 0,
-            cache_hit: false,
-          },
-        });
-      } catch (error) {
-        // A provider/transport failure is NOT a review verdict. Record it as a
-        // failure (not a `reject` sidecar entry) and leave this learning
-        // unreviewed so it remains pending for a later retry.
-        const message = error instanceof Error ? error.message : String(error);
-        failures.push({
-          learning_id: learning.learning_id,
-          reason: message,
-          session_id: session.session_id,
-        });
-        // Terminal credential/quota errors fail identically for every call, so
-        // stop early instead of hammering the dead key for every learning/session.
-        if (isTerminalProviderError(message)) {
-          terminalFailureReason = message;
-          break;
-        }
-      }
+    // Review the session's misses in bounded batches (one HTTP call each); the
+    // batch function serves cache hits without a call and amortizes the system
+    // prompt across the rest.
+    const outcome = await reviewLearningsBatchedWithOpenRouter({
+      batchSize: options.batchSize,
+      cacheDir,
+      learnings: toReview,
+      model: options.model,
+      noCache: options.noCache,
+      projectKey: session.project_key,
+      refreshLlm: options.refreshLlm,
+    });
+    const sessionReviews = outcome.reviewed;
+    for (const failure of outcome.failures) {
+      // A provider/transport failure is NOT a review verdict. Record it as a
+      // failure (not a `reject` sidecar entry) and leave the learning unreviewed
+      // so it remains pending for a later retry.
+      failures.push({
+        learning_id: failure.learning.learning_id,
+        reason: failure.reason,
+        session_id: session.session_id,
+      });
+    }
+    if (outcome.terminalFailureReason !== undefined) {
+      terminalFailureReason = outcome.terminalFailureReason;
     }
 
     for (const review of sessionReviews) {
@@ -218,6 +211,12 @@ export async function executeQualityReviewLearnings(
         path: outputPath,
         rejected: reviewed.filter((entry) => !entry.keep).length,
         rewrites: reviewed.filter((entry) => entry.verdict === "rewrite").length,
+        skipped_pre_llm: prefilterSkipped.length,
+        skipped_pre_llm_breakdown: {
+          low_signal: prefilterSkipped.filter((entry) => entry.reason === "low_signal").length,
+          duplicate: prefilterSkipped.filter((entry) => entry.reason === "duplicate").length,
+        },
+        usd_budget: usdBudget,
         total_sessions: sessions.length,
         total_reviewed_learnings: reviewedLearningCount,
       },
@@ -230,12 +229,14 @@ export async function executeQualityReviewLearnings(
 }
 
 type ReviewLearningsOptions = {
+  batchSize?: number | undefined;
   ifNew?: boolean | undefined;
   limit?: number | undefined;
   cacheDir?: string | undefined;
   maxLearnings?: number | undefined;
   maxPer?: string | undefined;
   maxTotalLearnings?: number | undefined;
+  maxUsd?: string | undefined;
   model?: string | undefined;
   noCache?: boolean | undefined;
   refreshLlm?: boolean | undefined;
@@ -243,12 +244,14 @@ type ReviewLearningsOptions = {
 
 function parseOptions(args: readonly string[]): ReviewLearningsOptions {
   return {
+    batchSize: parseIntegerOption(args, "--batch-size"),
     cacheDir: parseStringOption(args, "--cache-dir"),
     ifNew: args.includes("--if-new"),
     limit: parseIntegerOption(args, "--limit"),
     maxLearnings: parseIntegerOption(args, "--max-learnings"),
     maxPer: parseStringOption(args, "--max-per"),
     maxTotalLearnings: parseIntegerOption(args, "--max-total-learnings"),
+    maxUsd: parseStringOption(args, "--max-usd"),
     model: parseStringOption(args, "--model"),
     noCache: args.includes("--no-cache"),
     refreshLlm: args.includes("--refresh-llm"),
@@ -298,18 +301,6 @@ async function readProjectLearnings(projectKey: string, sessionId: string): Prom
 
     throw error;
   }
-}
-
-function isTerminalProviderError(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes("(401)") ||
-    normalized.includes("(403)") ||
-    normalized.includes("(429)") ||
-    normalized.includes("limit exceeded") ||
-    normalized.includes("key limit") ||
-    normalized.includes("quota")
-  );
 }
 
 function isMissingFileError(error: unknown): boolean {

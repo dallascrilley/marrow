@@ -118,11 +118,16 @@ test("review-learnings records telemetry for successful calls before a later pro
                   {
                     message: {
                       content: JSON.stringify({
-                        durability: "durable",
-                        keep: true,
-                        reason: "Useful durable learning.",
-                        statement: "Keep telemetry for successful calls before failures.",
-                        verdict: "rewrite",
+                        reviews: [
+                          {
+                            id: "learning-1",
+                            durability: "durable",
+                            keep: true,
+                            reason: "Useful durable learning.",
+                            statement: "Keep telemetry for successful calls before failures.",
+                            verdict: "rewrite",
+                          },
+                        ],
                       }),
                     },
                   },
@@ -171,9 +176,11 @@ test("review-learnings records telemetry for successful calls before a later pro
         "utf8",
       );
 
+      // batch-size 1 keeps each learning a separate HTTP call so we can exercise
+      // "first call succeeds, second call fails" with batched semantics.
       const exitCode = await executeQualityReviewLearnings(
         {
-          args: ["--no-cache"],
+          args: ["--no-cache", "--batch-size", "1"],
           commandPath: ["quality", "review-learnings"],
           output: {
             error: (message) => messages.push(message),
@@ -205,6 +212,7 @@ test("review-learnings records telemetry for successful calls before a later pro
       const telemetry = JSON.parse(telemetryLines[0]);
       assert.equal(telemetry["asd.learning_id"], "learning-1");
       assert.equal(telemetry["gen_ai.usage.cost"], 0.00042);
+      assert.equal(telemetry["asd.batch_size"], 1);
     } finally {
       globalThis.fetch = previousFetch;
       database.close();

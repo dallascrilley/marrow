@@ -6,7 +6,14 @@ import { getRuntimePath, getRuntimeRoot } from "../config/paths.js";
 import { learningSchema } from "../models/canonical.js";
 import { getProjectKnowledgeSessionPath } from "../writers/knowledge-writer.js";
 import { runDiscoverPhase, type SupportedSource, supportedSources } from "./discover.js";
-import { assessLlmBudget, getDefaultMaxPerWindow, type LlmBudgetStatus } from "./llm-budget.js";
+import {
+  assessLlmBudget,
+  assessUsdBudget,
+  getDefaultMaxPerWindow,
+  getDefaultMaxUsd,
+  type LlmBudgetStatus,
+  type LlmUsdBudgetStatus,
+} from "./llm-budget.js";
 
 export type IngestGateSource = {
   discovered_count: number;
@@ -20,6 +27,7 @@ export type PipelineGateReport = {
     skipped: boolean;
   };
   llm_budget: LlmBudgetStatus;
+  usd_budget: LlmUsdBudgetStatus;
   llm_review: {
     pending_learnings: number;
     pending_sessions: number;
@@ -35,11 +43,13 @@ export async function assessPipelineGate(
   database: DatabaseSync,
   options: {
     maxPer?: string;
+    maxUsd?: string;
     skipIngest?: boolean;
     sources?: readonly SupportedSource[];
   } = {},
 ): Promise<PipelineGateReport> {
   const maxPer = options.maxPer ?? getDefaultMaxPerWindow();
+  const maxUsd = options.maxUsd ?? getDefaultMaxUsd();
   const bySource: Record<string, IngestGateSource> = {};
   let pendingSessions = 0;
 
@@ -61,12 +71,15 @@ export async function assessPipelineGate(
 
   const llmReview = await countPendingLlmReview();
   const llmBudget = await assessLlmBudget(maxPer);
+  const usdBudget = await assessUsdBudget(maxUsd);
 
   let skipReviewReason: string | null = null;
   if (llmReview.pending_learnings === 0) {
     skipReviewReason = "no_unreviewed_project_learnings";
   } else if (!llmBudget.allowed) {
     skipReviewReason = "llm_budget_exhausted";
+  } else if (!usdBudget.allowed) {
+    skipReviewReason = "llm_usd_budget_exhausted";
   }
 
   return {
@@ -76,6 +89,7 @@ export async function assessPipelineGate(
       skipped: options.skipIngest === true,
     },
     llm_budget: llmBudget,
+    usd_budget: usdBudget,
     llm_review: llmReview,
     recommendations: {
       run_ingest: pendingSessions > 0,
