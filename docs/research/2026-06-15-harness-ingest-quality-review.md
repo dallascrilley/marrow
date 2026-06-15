@@ -54,7 +54,63 @@ export ASD_LLM_MAX_PER=20/24h
 
 These numbers are the baseline against which each harness's incremental ingest will be compared.
 
-## U2–U6. Per-harness observations
+## U2. Claude-code
+
+### Commands run
+
+```bash
+export OPENROUTER_API_KEY=$(op read 'op://Private/OpenRouter API Credentials - agent-session-distillery/credential')
+export ASD_LLM_MAX_PER=20/24h
+
+# Sync new/changed sessions
+asd ingest sync --source claude-code --resume
+
+# Re-process 10 sessions with LLM topic rescue enabled
+asd ingest backfill --source claude-code --limit 10 --llm-topic
+```
+
+### Sync results
+
+- `discovered_count`: 649
+- `selected_count`: 26
+- `processed_count`: 17
+- `failed_count`: 9
+- Failures were all `Immutable manifest already exists with different contents` for the same session ids. This appears to be a pre-existing adapter/state issue, not a regression from the latest extraction changes.
+
+### Initial OpenRouter issue
+
+The first `ingest backfill --llm-topic` attempt failed with:
+
+```
+OpenRouter topic generation failed (401): {"error":{"message":"User not found.","code":401}}
+```
+
+The deterministic topic fallback was used. After exporting `OPENROUTER_API_KEY` from 1Password, the next run succeeded without the 401 warning.
+
+### Backfill results
+
+- `processed_count`: 10
+- `failed_count`: 0
+- All 10 sessions used `topic_source: "deterministic"`; none triggered LLM topic rescue because their deterministic topics did not pass `isLowSignalTopic()`.
+
+### Sample quality observations
+
+| Session | Topic | Topic source | Project learnings | Notable issues |
+|---------|-------|--------------|-------------------|----------------|
+| `5ea31e0d-...` | "Fixed looks like this:" | deterministic | 0 | Very short session (2 turns); empty summary, not ready for deletion. |
+| `c5197a22-...` | "A session-scoped Stop hook is now active..." | deterministic | 8 | Project learnings contain full narrative decision text rather than concise rules; some are useful, others are noisy verbatim snippets. |
+| `3cbb7e8b-...` | "debug why push notifications aren't reaching watch/phone" | deterministic | 2 | Clear topic; one learning is a long paragraph from `what_was_decided` instead of a distilled rule. |
+| `79bdb185-...` | "fix whatever is causinf tools to hng:" | deterministic | 0 | Topic has typos and is low signal, yet LLM rescue did not trigger. |
+| `d9298221-...` | "review td board..." | deterministic | 0 | Concrete task, useful user learnings, but no project learnings extracted. |
+
+### Preliminary findings
+
+1. **Project learning noise.** `c5197a22` and `3cbb7e8b` show project learnings that are verbatim chunks of assistant text rather than distilled commands/rules. The durable-decision bypass in PR #52 may be over-promoting narrative decisions.
+2. **Missed low-signal topics.** `79bdb185` has an obviously low-signal/topic-with-typos topic, but `isLowSignalTopic()` did not flag it for LLM rescue.
+3. **No-project-learning false negatives.** `d9298221` describes a concrete td-board cleanup task but produced zero project learnings; the no-event fallback from PR #52 did not fire because this session has events.
+4. **Pre-existing manifest collisions.** The 9 `ingest sync` failures are unrelated to recent extraction changes but block claude-code backlog drain.
+
+## U3–U6. Per-harness observations
 
 (TBD after each ingest run.)
 
