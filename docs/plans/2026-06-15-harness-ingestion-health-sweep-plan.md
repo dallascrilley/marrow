@@ -227,7 +227,95 @@ node dist/cli.js ingest sync --resume --source pi
 
 No failures. Pi sessions enriched cleanly.
 
-## Open questions
+### U5. kimi
+
+```bash
+node dist/cli.js ingest sync --resume --source kimi
+```
+
+- `discovered_count`: 491
+- `selected_count`: 0 (already processed by earlier run)
+- `processed_count`: 0
+- `failed_count`: 0
+- `failures`: []
+
+The re-run was idempotent: all 491 kimi sessions were already ingested. Initial U5 processing had `selected_count: 491` and `processed_count: 491` with `failed_count: 0`.
+
+`quality audit` delta after U5 (final state):
+
+| Metric | After U4 | After U5 | Delta |
+|---|---|---|---|
+| `issue_counts.summary_missing` | 638 | 147 | −491 |
+| `issue_counts.process_chatter` | 1,203 | 1,548 | +345 |
+| `issue_counts.summary_low_signal` | 735 | 770 | +35 |
+| `issue_counts.no_project_learnings` | 1,785 | 1,906 | +121 |
+| `learning_distribution.sessions_with_project_learnings` | 2,807 | 3,142 | +335 |
+| `learning_distribution.total_project_learnings` | 7,798 | 9,202 | +1,404 |
+| `learning_distribution.max_project_learnings` | 12 | 12 | 0 |
+| `learning_distribution.percentiles.p99` | 12 | 12 | 0 |
+| `deletion_readiness.ready` | 3,236 | 3,577 | +341 |
+| `deletion_readiness.missing_candidate` | 638 | 147 | −491 |
+
+No failures. Kimi sessions enriched cleanly and the 12-learning cap held.
+
+## U6. Synthesize findings and remediate
+
+### Cross-harness summary
+
+| Harness | Discovered | Selected | Processed | Failed | summary_missing Δ | process_chatter Δ | no_project_learnings Δ | sessions_with_project_learnings Δ | total_project_learnings Δ | ready Δ |
+|---|---|---|---|---|---|---|---|---|---|---|
+| claude-code | 635 | 51 | 51 | 0 | −12 | +34 | +5 | +44 | +153 | +48 |
+| cursor | 3,244 | 1,030 | 1,030 | 0 | −3,196 | +351 | +1,126 | +1,632 | +3,104 | +1,842 |
+| codex-cli | 895 | 880 | 880 | 0 | −879 | +369 | +384 | +454 | +1,262 | +528 |
+| pi | 537 | 529 | 529 | 0 | −512 | +47 | +145 | +242 | +991 | +256 |
+| kimi | 491 | 491* | 491* | 0 | −491 | +345 | +121 | +335 | +1,404 | +341 |
+
+\* Initial U5 values; re-run was idempotent with 0 selected/processed.
+
+### Final corpus state
+
+| Metric | Value |
+|---|---|
+| `totals.audited` | 6,050 |
+| `totals.with_issues` | 4,670 |
+| `issue_counts.blocked_deletion` | 2,132 |
+| `issue_counts.summary_missing` | 147 |
+| `issue_counts.summary_low_signal` | 770 |
+| `issue_counts.process_chatter` | 1,548 |
+| `issue_counts.no_project_learnings` | 1,906 |
+| `issue_counts.no_useful_commands` | 874 |
+| `issue_counts.no_files_of_interest` | 1,200 |
+| `learning_distribution.max_project_learnings` | 12 |
+| `learning_distribution.percentiles.p99` | 12 |
+| `learning_distribution.sessions_with_project_learnings` | 3,142 |
+| `learning_distribution.total_project_learnings` | 9,202 |
+| `deletion_readiness.ready` | 3,577 |
+| `deletion_readiness.blocked` | 2,132 |
+
+### Findings
+
+1. **No ingest failures across any harness.** Every `ingest sync --resume --source <harness>` completed with `failed_count: 0` after the U2 manifest-overwrite fix.
+2. **The learning cap is holding.** `max_project_learnings` and `p99` stayed at 12 across all audits, confirming the per-session cap from the earlier refactor is effective.
+3. **Cursor is the dominant backlog.** Cursor contributed ~54% of discovered sessions (3,244 / 5,802) and ~47% of total project learnings added during the sweep.
+4. **Low-signal/no-learning sessions dominate new ingest.** The largest issue categories are `blocked_deletion` (2,132), `no_project_learnings` (1,906), and `process_chatter` (1,548). These are content-quality issues, not code failures.
+5. **Process chatter and no-project-learnings rise with every new harness.** Each first-time sync added hundreds of `process_chatter` and `no_project_learnings` issues. This is expected because the chatter filter and learning promotion heuristics were tuned on the claude-code corpus and generalize imperfectly to other harness transcript styles.
+6. **No harness-specific parse errors observed.** All transcript parsers accepted the discovered sessions; failures were blocked only by quality gates.
+
+### Remediation applied
+
+- **Code fix in U2:** `src/commands/ingest-backfill.ts` now skips the archive phase when a resumed session has an up-to-date archived checkpoint, and allows manifest overwrite when the checkpoint is stale. This fixed the only code bug surfaced by the sweep.
+- **Documentation:** `docs/solutions/tooling/resume-manifest-overwrite.md` captures the resume + immutable-manifest pattern so future harness adapters do not repeat it.
+
+### Follow-up tasks filed
+
+See `td tree td-db91c2` for child tasks:
+
+- **td-4ea028** Reduce `process_chatter` false positives for cursor/codex/pi/kimi transcripts.
+- **td-243ae5** Improve project-learning promotion for non-claude-code harnesses.
+- **td-6d462b** Investigate 147 remaining `summary_missing` candidates (mostly kimi adapter transcripts).
+- **td-4783df** Run `quality review-learnings` on the 770 `summary_low_signal` sessions once budget is allocated.
+
+### Open questions
 
 - How large are the per-harness backlogs, and will any sync exceed a reasonable runtime? If so, add `--limit` and run in batches.
 - Are the harness adapter directories (Cursor, Codex CLI, Pi, Kimi) installed and readable on this machine? If an adapter has no transcripts, the sync will report `discovered_count: 0`.
