@@ -29,6 +29,9 @@ export type LlmTelemetryRecord = {
   "asd.learning_id": string | null;
   "asd.cache_hit": boolean;
   "asd.missing_reason": string | null;
+  // Learnings that shared this record's underlying OpenRouter HTTP call. 1 for
+  // unbatched calls and cache hits; N for a member of an N-learning batch.
+  "asd.batch_size": number;
   "asd.created_at": string;
 };
 
@@ -61,6 +64,7 @@ export function buildLlmTelemetryRecord(input: {
     "asd.learning_id": input.learningId ?? null,
     "asd.cache_hit": usage.cache_hit,
     "asd.missing_reason": usage.missing_reason,
+    "asd.batch_size": usage.batch_size ?? 1,
     "asd.created_at": input.createdAt,
   };
 }

@@ -27,7 +27,7 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 |------|----------------|
 | SessionEnd → ingest (Claude Code) | `asd hooks install` — [`docs/recipes/session-end-ingest-hook.md`](docs/recipes/session-end-ingest-hook.md) |
 | Scheduled ingest + wiki push | [`docs/recipes/scheduled-memory-pipeline.md`](docs/recipes/scheduled-memory-pipeline.md) |
-| Pipeline gate (skip LLM when idle) | `asd pipeline gate --max-per 5/24h` — ADR-0007 |
+| Pipeline gate (skip LLM when idle) | `asd pipeline gate --max-per 5/24h --max-usd 1/24h` — ADR-0007 |
 | Skill usage evidence in corpus | `asd skill evidence <skill-id>` (after `export-index`) |
 | Skill adherence report | `asd skill report <skill-id>` — [`docs/recipes/skill-adherence-report.md`](docs/recipes/skill-adherence-report.md) |
 
@@ -236,9 +236,12 @@ OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --model openai/
 OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --limit 25 --max-total-learnings 100
 OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --cache-dir /tmp/asd-review-cache
 OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --refresh-llm
+OPENROUTER_API_KEY=... node dist/cli.js quality review-learnings --max-usd 1/24h --batch-size 10
 ```
 
 This writes `reports/llm-learning-review.jsonl`. LLM reviews are cached by exact learning/model/prompt/validator input under `cache/llm-learning-review/` by default; pass `--refresh-llm` to overwrite cached entries or `--no-cache` to bypass cache reads and writes. Provider or transport failures are reported in the command output and left pending for retry; they are not written as rejected review entries.
+
+**Cost controls.** Reviews use a minimal OpenRouter reasoning effort (the memory-lint is a trivial classify task, so reasoning tokens are pure waste) and run only when **both** budgets allow: the call-count cap (`--max-per` / `ASD_LLM_MAX_PER`, default `5/24h`) and a hard USD ceiling (`--max-usd` / `ASD_LLM_MAX_USD`, default `1/24h`). The USD ceiling sums the **effective** (upstream-aware) cost of telemetry receipts in the trailing window, so it still fires for BYOK keys whose OpenRouter `usage.cost` is 0; over the cap the command skips with `skip_reason: "llm_usd_budget_exhausted"`. Before paying for any review the command drops deterministic junk and duplicate statements (reported as `skipped_pre_llm`), then reviews the remaining cache-miss learnings in batches of `--batch-size` (default 10, `1` disables batching) — one OpenRouter call per batch, demultiplexed by learning id, with cache hits served without a call.
 
 Apply the LLM review into a separate reviewed namespace:
 
@@ -257,7 +260,7 @@ node dist/cli.js quality cost-report --since 2026-06-14T00:00:00Z
 node dist/cli.js quality cost-report --backlog-learnings 3000   # project full-drain cost
 ```
 
-Each OpenRouter call records actual token usage and USD cost (`usage: { include: true }`) using OpenTelemetry GenAI field names; cache hits are zero-cost receipts. The report aggregates cost per session (mean/p50/p90/max), cost per learning, cache-hit rate, and unknown-cost calls. Cost is taken from the provider response, never estimated — calls where OpenRouter omits cost are counted as `unknown_cost_calls` rather than guessed.
+Each OpenRouter call records actual token usage and USD cost (`usage: { include: true }`) using OpenTelemetry GenAI field names; cache hits are zero-cost receipts. The report aggregates cost per session (mean/p50/p90/max), cost per learning, cache-hit rate, unknown-cost calls, and `http_calls` (the true OpenRouter request count, recovered by weighting each batched receipt by `1/batch_size`). Cost is taken from the provider response, never estimated — calls where OpenRouter omits cost are counted as `unknown_cost_calls` rather than guessed.
 
 Upgrade topics for already-archived sessions without re-ingesting transcripts (manifests stay immutable; summaries and `export-index` output refresh):
 

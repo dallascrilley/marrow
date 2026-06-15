@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
 import { type SupportedSource, supportedSources } from "../pipeline/discover.js";
-import { getDefaultMaxPerWindow } from "../pipeline/llm-budget.js";
+import { getDefaultMaxPerWindow, getDefaultMaxUsd } from "../pipeline/llm-budget.js";
 import { assessPipelineGate } from "../pipeline/pipeline-gate.js";
 
 export async function executePipelineGate(
@@ -12,6 +12,7 @@ export async function executePipelineGate(
   const options = parsePipelineGateOptions(context.args);
   const report = await assessPipelineGate(database, {
     maxPer: options.maxPer,
+    maxUsd: options.maxUsd,
     skipIngest: options.skipIngest,
     ...(options.sources === undefined ? {} : { sources: options.sources }),
   });
@@ -22,10 +23,12 @@ export async function executePipelineGate(
 
 function parsePipelineGateOptions(args: readonly string[]): {
   maxPer: string;
+  maxUsd: string;
   skipIngest: boolean;
   sources?: SupportedSource[];
 } {
   let maxPer: string | undefined;
+  let maxUsd: string | undefined;
   let skipIngest = false;
   const sources: SupportedSource[] = [];
 
@@ -46,6 +49,16 @@ function parsePipelineGateOptions(args: readonly string[]): {
         throw new Error("pipeline gate --max-per requires a value like 5/24h");
       }
       maxPer = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--max-usd") {
+      const value = args[index + 1];
+      if (value === undefined || value.trim().length === 0) {
+        throw new Error("pipeline gate --max-usd requires a value like 1/24h");
+      }
+      maxUsd = value;
       index += 1;
       continue;
     }
@@ -74,6 +87,7 @@ function parsePipelineGateOptions(args: readonly string[]): {
 
   return {
     maxPer: maxPer ?? getDefaultMaxPerWindow(),
+    maxUsd: maxUsd ?? getDefaultMaxUsd(),
     skipIngest,
     ...(sources.length > 0 ? { sources } : {}),
   };
