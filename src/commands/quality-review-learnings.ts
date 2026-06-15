@@ -15,6 +15,7 @@ import {
   type ReviewedLearning,
   reviewProjectLearningsWithOpenRouter,
 } from "../pipeline/llm-learning-review.js";
+import { appendLlmTelemetry, buildLlmTelemetryRecord } from "../pipeline/llm-telemetry.js";
 import { countPendingLlmReview } from "../pipeline/pipeline-gate.js";
 import { getProjectKnowledgeSessionPath } from "../writers/knowledge-writer.js";
 
@@ -140,6 +141,15 @@ export async function executeQualityReviewLearnings(
         durability: review.review.durability,
         keep: review.review.keep,
       });
+      await appendLlmTelemetry(
+        buildLlmTelemetryRecord({
+          usage: review.usage,
+          operation: "learning_review",
+          sessionId: session.session_id,
+          learningId: review.learning.learning_id,
+          createdAt: new Date().toISOString(),
+        }),
+      );
     }
     reviewedLearningCount += sessionReviews.length;
   }

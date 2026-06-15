@@ -112,6 +112,12 @@ ceiling, and the highest-leverage waste cuts (skip-junk-before-LLM, batching).
 - **Tests:** new `test/llm-telemetry.test.mjs` — append N records → read back, assert shape
   + append semantics (no clobber); a non-writable dir is swallowed (pipeline unaffected).
 - **Verification:** `npm test` green; receipt file accumulates across two runs.
+- **Deviation (implemented):** telemetry path is `getLlmTelemetryPath()` (a file under the
+  existing `reports` dir) rather than a new `paths.ts` key — paths.ts keys are directories.
+  The high-volume **learning-review** path is wired in `quality-review-learnings.ts`.
+  **Topic-generation telemetry is deferred** (see Deferred): wiring it means threading an
+  `onUsage` sink through the resummarize executor → `summarize` stack, and `review-learnings`
+  (which U4 calibrates on) already covers the dominant cost path.
 
 ### U3. `quality cost-report` command (cost per session + metrics)
 - **Goal:** one command answers "estimated cost per session" and the supporting metrics.
@@ -180,6 +186,11 @@ ceiling, and the highest-leverage waste cuts (skip-junk-before-LLM, batching).
   after U4/U6 with the measured baseline and the batching/skip savings.)
 
 ## Deferred / out of scope
+- **Topic-generation telemetry wiring** (U2 follow-up): thread an `onUsage` sink from the
+  `quality resummarize --llm-topic` executor through `summarizeSessionWithOptionalLlmTopic`
+  into `generateTopicWithOpenRouter` so topic-gen cost lands in `llm-telemetry.jsonl`. The
+  capture hook (`onUsage` on `generateTopicWithOpenRouter`) already exists from U1; only the
+  call-site threading remains. Low volume + opt-in, so it does not block U3/U4.
 - Fixing the epoch-zero `created_at` on exported learnings (separate data-quality issue from
   the prior session's findings).
 - Restoring/replacing the over-limit *production* OpenRouter key (operator billing action;
