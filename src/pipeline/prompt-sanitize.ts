@@ -419,3 +419,81 @@ function uniqueNonEmpty(values: readonly string[]): string[] {
 
   return unique;
 }
+
+const markdownTableRowPattern = /^\s*\|([^\n]+\|)+[^\n]*$/m;
+const markdownTableSeparatorPattern = /^\s*\|?\s*:?-+:?\s*\|/m;
+const markdownHeadingPattern = /^(#{1,6})\s+([^\n]+)$/gm;
+const markdownHeadingMatchPattern = /^[^#\n]*?(#{1,6}\s+)/d;
+const markdownBlockFencePattern = /^```[\s\S]*?^```/gm;
+
+/**
+ * Remove markdown tables, headings, emphasis, block fences, and list bullets,
+ * then collapse whitespace. Intended for project-learning statements only.
+ */
+export function sanitizeLearningStatement(value: string): string {
+  if (!value) return value;
+
+  let cleaned = value;
+
+  // Strip fenced code blocks first so their content doesn't leak.
+  cleaned = cleaned.replace(markdownBlockFencePattern, " ");
+
+  // Truncate at the start of a markdown table.
+  const tableStart = findMarkdownTableStart(cleaned);
+  if (tableStart !== -1) {
+    cleaned = cleaned.slice(0, tableStart);
+  }
+  cleaned = cleaned.replace(/\s*\|\s*/g, " ");
+
+  // Strip headings.
+  cleaned = cleaned.replace(markdownHeadingPattern, " $2 ");
+
+  // Strip emphasis/italic wrappers while preserving inner content.
+  cleaned = cleaned.replace(/(\*\*|__)([^\n]+?)\1/g, " $2 ");
+  cleaned = cleaned.replace(/(\*|_)([^\n\s][^\n]*?)\1/g, " $2 ");
+
+  // Strip list bullets.
+  cleaned = cleaned.replace(/^[\s]*[-*+]\s+/gm, " ");
+
+  // Strip common assistant framing tokens.
+  cleaned = cleaned
+    .replace(/^\s*(?:Verified:|Done\s*[-—]|Good\s*[-—]|Summary of changes:|Summary of what changed:|\*\*Verdict:\*\*|Verdict:)\s*/i, " ")
+    .trim();
+
+  // Collapse whitespace and trim trailing punctuation.
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+  cleaned = cleaned.replace(/[.!?]+$/g, "").trim();
+
+  return cleaned;
+}
+
+function findMarkdownTableStart(value: string): number {
+  const lines = value.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (markdownTableSeparatorPattern.test(line)) {
+      const headerIndex = i > 0 ? i - 1 : -1;
+      const headingMatch = markdownHeadingMatchPattern.exec(lines[headerIndex] ?? "");
+      const startIndex = headingMatch ? headerIndex : i;
+      let offset = lines.slice(0, startIndex).join("\n").length + (startIndex > 0 ? 1 : 0);
+      if (headingMatch?.indices) {
+        offset += headingMatch.indices[1]?.[0] ?? 0;
+      }
+      return offset;
+    }
+    if (
+      markdownTableRowPattern.test(line) &&
+      i + 1 < lines.length &&
+      markdownTableSeparatorPattern.test(lines[i + 1] ?? "")
+    ) {
+      const headingMatch = markdownHeadingMatchPattern.exec(lines[i - 1] ?? "");
+      const startIndex = headingMatch ? i - 1 : i;
+      let offset = lines.slice(0, startIndex).join("\n").length + (startIndex > 0 ? 1 : 0);
+      if (headingMatch?.indices) {
+        offset += headingMatch.indices[1]?.[0] ?? 0;
+      }
+      return offset;
+    }
+  }
+  return -1;
+}
