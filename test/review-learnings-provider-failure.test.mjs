@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -93,6 +93,120 @@ test("review-learnings does not poison the sidecar or budget when the provider f
       const budgetPath = join(runtimeRoot, "reports", "llm-budget.json");
       assert.equal(await fileExists(budgetPath), false, "budget not consumed on failure");
     } finally {
+      database.close();
+    }
+  });
+});
+
+test("review-learnings records telemetry for successful calls before a later provider failure", async () => {
+  await withRuntimeRoot(async (runtimeRoot) => {
+    const database = await createLedger();
+    const messages = [];
+    const previousFetch = globalThis.fetch;
+    let calls = 0;
+
+    try {
+      globalThis.fetch = async () => {
+        calls += 1;
+        if (calls === 1) {
+          return {
+            ok: true,
+            status: 200,
+            async json() {
+              return {
+                choices: [
+                  {
+                    message: {
+                      content: JSON.stringify({
+                        durability: "durable",
+                        keep: true,
+                        reason: "Useful durable learning.",
+                        statement: "Keep telemetry for successful calls before failures.",
+                        verdict: "rewrite",
+                      }),
+                    },
+                  },
+                ],
+                usage: {
+                  prompt_tokens: 100,
+                  completion_tokens: 20,
+                  total_tokens: 120,
+                  cost: 0.00042,
+                },
+              };
+            },
+            async text() {
+              return "";
+            },
+          };
+        }
+
+        return {
+          ok: false,
+          status: 500,
+          async json() {
+            return {};
+          },
+          async text() {
+            return "temporary upstream failure";
+          },
+        };
+      };
+
+      process.env.OPENROUTER_API_KEY = "test-key";
+      upsertSourceSession(database, sourceSessionFixture);
+
+      const learningPath = getProjectKnowledgeSessionPath(
+        sourceSessionFixture.project_key,
+        sourceSessionFixture.session_id,
+      );
+      await mkdir(dirname(learningPath), { recursive: true });
+      await writeFile(
+        learningPath,
+        `${JSON.stringify({ ...learningFixture, learning_id: "learning-1" })}\n${JSON.stringify({
+          ...learningFixture,
+          learning_id: "learning-2",
+          statement: "Second learning fails after the first succeeds.",
+        })}\n`,
+        "utf8",
+      );
+
+      const exitCode = await executeQualityReviewLearnings(
+        {
+          args: ["--no-cache"],
+          commandPath: ["quality", "review-learnings"],
+          output: {
+            error: (message) => messages.push(message),
+            info: (message) => messages.push(message),
+          },
+        },
+        database,
+      );
+
+      assert.equal(exitCode, 0);
+      assert.equal(calls, 2);
+
+      const payloadLine = messages.find((message) => message.includes('"failed"'));
+      assert.ok(payloadLine, "expected JSON payload on info output");
+      const payload = JSON.parse(payloadLine);
+      assert.equal(payload.count, 1);
+      assert.equal(payload.failed, 1);
+      assert.equal(payload.total_reviewed_learnings, 1);
+      assert.equal(payload.skipped, undefined);
+
+      const sidecarPath = join(runtimeRoot, "reports", "llm-learning-review.jsonl");
+      const sidecarLines = (await readFile(sidecarPath, "utf8")).trim().split("\n");
+      assert.equal(sidecarLines.length, 1);
+      assert.equal(JSON.parse(sidecarLines[0]).learning_id, "learning-1");
+
+      const telemetryPath = join(runtimeRoot, "reports", "llm-telemetry.jsonl");
+      const telemetryLines = (await readFile(telemetryPath, "utf8")).trim().split("\n");
+      assert.equal(telemetryLines.length, 1);
+      const telemetry = JSON.parse(telemetryLines[0]);
+      assert.equal(telemetry["asd.learning_id"], "learning-1");
+      assert.equal(telemetry["gen_ai.usage.cost"], 0.00042);
+    } finally {
+      globalThis.fetch = previousFetch;
       database.close();
     }
   });
