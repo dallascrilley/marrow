@@ -14,7 +14,12 @@ import {
 } from "./llm-budget.js";
 import { runParsePhase } from "./parse.js";
 import { getReducedArtifactPath, type ReducedArtifact, runReducePhase } from "./reduce.js";
-import { isLowSignalTopic, type LlmTopicGenerator, shouldAttemptLlmTopic } from "./summarize.js";
+import {
+  isLowSignalTopic,
+  type LlmTopicGenerator,
+  type LlmUsageSink,
+  shouldAttemptLlmTopic,
+} from "./summarize.js";
 import { runSummarizePhase } from "./summarize-phase.js";
 
 export type ResummarizeSkipReason = "high_signal_topic" | "missing_manifest";
@@ -32,6 +37,7 @@ export type ResummarizeOptions = {
   llmTopic?: boolean;
   lowSignalOnly?: boolean;
   maxPer?: string;
+  onUsage?: LlmUsageSink;
   projectKeys?: readonly string[];
   sessionIds?: readonly string[];
 };
@@ -123,6 +129,7 @@ export async function resummarizeSessions(
         useLlmTopic,
         true,
         options.generateTopic,
+        options.onUsage,
       );
       if (summaryResult.summary.topic_source === "llm") {
         llmTopicCalls += 1;

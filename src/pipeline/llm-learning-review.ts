@@ -78,7 +78,7 @@ export type ReviewedLearning = {
   usage: LlmCallUsage;
 };
 
-export type LlmUsageSink = (usage: LlmCallUsage) => void;
+export type LlmUsageSink = (usage: LlmCallUsage, sessionId?: string) => void | Promise<void>;
 
 /** Usage record for a cache hit: no API call, so it cost nothing. */
 export function cacheHitUsage(model: string): LlmCallUsage {
@@ -131,7 +131,7 @@ export async function reviewLearningWithOpenRouter(input: {
   if (cachePath !== undefined && input.noCache !== true && input.refreshLlm !== true) {
     const cached = await readCachedLearningReview(cachePath);
     if (cached !== undefined) {
-      input.onUsage?.(cacheHitUsage(model));
+      await input.onUsage?.(cacheHitUsage(model));
       return cached;
     }
   }
@@ -161,7 +161,7 @@ export async function reviewLearningWithOpenRouter(input: {
     ],
     model,
   });
-  input.onUsage?.(usage);
+  await input.onUsage?.(usage);
 
   const review = parseLearningReview(content);
   if (cachePath !== undefined && input.noCache !== true) {
@@ -197,7 +197,7 @@ export async function generateTopicWithOpenRouter(input: {
     ],
     model,
   });
-  input.onUsage?.(usage);
+  await input.onUsage?.(usage);
 
   return parseTopicGeneration(content);
 }
@@ -225,9 +225,9 @@ export async function reviewProjectLearningsWithOpenRouter(input: {
       learning,
       model: input.model,
       noCache: input.noCache,
-      onUsage: (usage) => {
+      onUsage: async (usage) => {
         captured = usage;
-        input.onUsage?.(usage);
+        await input.onUsage?.(usage);
       },
       projectKey: input.projectKey,
       refreshLlm: input.refreshLlm,

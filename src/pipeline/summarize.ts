@@ -1,6 +1,10 @@
 import type { Event, Learning, SourceSession, Summary, Turn } from "../models/canonical.js";
 import { summarySchema } from "../models/canonical.js";
-import { generateTopicWithOpenRouter } from "./llm-learning-review.js";
+import {
+  generateTopicWithOpenRouter,
+  type LlmCallUsage,
+  type LlmUsageSink,
+} from "./llm-learning-review.js";
 import {
   extractSubstantivePrompt,
   firstSubstantivePromptFromTurns,
@@ -11,10 +15,13 @@ import {
   sanitizeHarnessLeakText,
 } from "./prompt-sanitize.js";
 
+export type { LlmUsageSink };
+
 type TopicSource = "deterministic" | "llm";
 
 export type LlmTopicGenerator = (input: {
   deterministicTopic: string;
+  onUsage?: LlmUsageSink;
   sourceSession: SourceSession;
   turns: readonly Turn[];
 }) => Promise<string>;
@@ -31,6 +38,7 @@ export type SummarizeSessionInput = {
 export type OptionalLlmTopicOptions = {
   generateTopic?: LlmTopicGenerator | undefined;
   llmTopic?: boolean | undefined;
+  onUsage?: LlmUsageSink | undefined;
 };
 
 export function summarizeSession(input: SummarizeSessionInput): Summary {
@@ -61,10 +69,16 @@ export async function summarizeSessionWithOptionalLlmTopic(
   }
 
   const generateTopic = options.generateTopic ?? generateTopicWithOpenRouter;
+  const userOnUsage = options.onUsage;
+  const onUsage =
+    userOnUsage === undefined
+      ? undefined
+      : (usage: LlmCallUsage) => userOnUsage(usage, input.sourceSession.session_id);
   try {
     const llmTopic = normalizeGeneratedTopic(
       await generateTopic({
         deterministicTopic,
+        ...(onUsage === undefined ? {} : { onUsage }),
         sourceSession: input.sourceSession,
         turns: input.turns,
       }),
