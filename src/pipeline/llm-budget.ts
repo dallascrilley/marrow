@@ -166,15 +166,27 @@ export async function assessUsdBudget(
 
   const records = await readTelemetryRecords(telemetryPath);
   let spent = 0;
+  let unknownCostInWindow = 0;
   for (const record of records) {
-    if (record["gen_ai.usage.cost_is_known"] !== true) {
-      continue;
-    }
     const timestamp = Date.parse(record["asd.created_at"]);
     if (Number.isNaN(timestamp) || timestamp < windowStart) {
       continue;
     }
-    spent += record["gen_ai.usage.cost"] ?? 0;
+    const cost = record["gen_ai.usage.cost"];
+    // A receipt only contributes when it carries a real number. `cost_is_known`
+    // should imply a non-null cost, but guard the amount directly so a malformed
+    // receipt (known-cost flag with a null/NaN cost) is surfaced, not silently
+    // counted as $0 — which would let real spend slip past the gate.
+    if (record["gen_ai.usage.cost_is_known"] === true && typeof cost === "number") {
+      spent += cost;
+    } else {
+      unknownCostInWindow += 1;
+    }
+  }
+  if (unknownCostInWindow > 0) {
+    console.warn(
+      `[asd] usd-budget: ${unknownCostInWindow} in-window receipt(s) had no usable cost and were excluded; spend may be understated.`,
+    );
   }
 
   const remaining = Math.max(0, window.maxUsd - spent);

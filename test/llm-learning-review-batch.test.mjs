@@ -92,6 +92,14 @@ test("batched review issues one call and demultiplexes verdicts by id", async ()
   }
   const totalReasoning = outcome.reviewed.reduce((s, r) => s + (r.usage.total_tokens ?? 0), 0);
   assert.equal(totalReasoning, 330, "split token totals sum back to the original");
+  // Each member's total_tokens stays consistent with its own input + output.
+  for (const r of outcome.reviewed) {
+    assert.equal(
+      r.usage.total_tokens,
+      (r.usage.input_tokens ?? 0) + (r.usage.output_tokens ?? 0),
+      "per-member total equals input + output",
+    );
+  }
 });
 
 test("partial-batch failure attributes full call cost to the returned members", async () => {
