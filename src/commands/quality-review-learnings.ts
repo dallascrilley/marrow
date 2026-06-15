@@ -13,7 +13,7 @@ import {
 } from "../pipeline/llm-budget.js";
 import {
   type ReviewedLearning,
-  reviewProjectLearningsWithOpenRouter,
+  reviewLearningWithOpenRouter,
 } from "../pipeline/llm-learning-review.js";
 import { appendLlmTelemetry, buildLlmTelemetryRecord } from "../pipeline/llm-telemetry.js";
 import { countPendingLlmReview } from "../pipeline/pipeline-gate.js";
@@ -93,40 +93,61 @@ export async function executeQualityReviewLearnings(
         remainingLearningBudget ?? learnings.length,
       ),
     );
-    let sessionReviews: ReviewedLearning[];
-    try {
-      sessionReviews = await reviewProjectLearningsWithOpenRouter({
-        cacheDir:
-          options.noCache === true
-            ? undefined
-            : (options.cacheDir ?? join(getRuntimePath("root"), "cache", "llm-learning-review")),
-        learnings: selectedLearnings,
-        model: options.model,
-        noCache: options.noCache,
-        projectKey: session.project_key,
-        refreshLlm: options.refreshLlm,
-      });
-    } catch (error) {
-      // A provider/transport failure is NOT a review verdict. Record it as a
-      // failure (not a `reject` sidecar entry) and leave the learnings
-      // unreviewed so they remain pending for a later retry. Counting these
-      // toward reviewedLearningCount would falsely consume the LLM budget and
-      // poison the sidecar with permanent rejections (see apply-learning-review).
-      const message = error instanceof Error ? error.message : String(error);
-      for (const learning of selectedLearnings) {
+    const sessionReviews: ReviewedLearning[] = [];
+    const cacheDir =
+      options.noCache === true
+        ? undefined
+        : (options.cacheDir ?? join(getRuntimePath("root"), "cache", "llm-learning-review"));
+
+    for (const learning of selectedLearnings) {
+      try {
+        let usage: ReviewedLearning["usage"] | undefined;
+        const review = await reviewLearningWithOpenRouter({
+          cacheDir,
+          learning,
+          model: options.model,
+          noCache: options.noCache,
+          onUsage: (captured) => {
+            usage = captured;
+          },
+          projectKey: session.project_key,
+          refreshLlm: options.refreshLlm,
+        });
+        sessionReviews.push({
+          learning,
+          review,
+          usage: usage ?? {
+            model: options.model ?? process.env.OPENROUTER_MODEL ?? "openai/gpt-5-nano",
+            input_tokens: null,
+            output_tokens: null,
+            total_tokens: null,
+            reasoning_tokens: null,
+            cached_tokens: null,
+            cost: null,
+            cost_source: "none",
+            cost_is_known: false,
+            missing_reason: "usage_callback_not_invoked",
+            duration_ms: 0,
+            cache_hit: false,
+          },
+        });
+      } catch (error) {
+        // A provider/transport failure is NOT a review verdict. Record it as a
+        // failure (not a `reject` sidecar entry) and leave this learning
+        // unreviewed so it remains pending for a later retry.
+        const message = error instanceof Error ? error.message : String(error);
         failures.push({
           learning_id: learning.learning_id,
           reason: message,
           session_id: session.session_id,
         });
+        // Terminal credential/quota errors fail identically for every call, so
+        // stop early instead of hammering the dead key for every learning/session.
+        if (isTerminalProviderError(message)) {
+          terminalFailureReason = message;
+          break;
+        }
       }
-      // Terminal credential/quota errors fail identically for every call, so
-      // stop early instead of hammering the dead key for every session.
-      if (isTerminalProviderError(message)) {
-        terminalFailureReason = message;
-        break;
-      }
-      continue;
     }
 
     for (const review of sessionReviews) {
@@ -152,6 +173,10 @@ export async function executeQualityReviewLearnings(
       );
     }
     reviewedLearningCount += sessionReviews.length;
+
+    if (terminalFailureReason !== undefined) {
+      break;
+    }
   }
 
   if (reviewedLearningCount > 0) {
