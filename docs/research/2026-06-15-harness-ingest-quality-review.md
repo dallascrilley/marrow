@@ -282,4 +282,85 @@ asd ingest backfill --source cursor --limit 10 --llm-topic
 
 ## U7. Cross-harness findings
 
-(TBD after all harnesses are reviewed.)
+### Ingest failure mode comparison
+
+| Harness | Sync processed | Backfill processed | Backfill failed | Dominant failure |
+|---------|---------------:|-------------------:|----------------:|------------------|
+| claude-code | 17 | 10 | 0 → 9* | Manifest collision during sync |
+| pi | 34 | 2 | 8 | Manifest collision |
+| kimi | 0 | 7 | 3 | Manifest collision |
+| codex-cli | 0 | 7 | 3 | Manifest collision |
+| cursor | 0 | 0 | 10 | Manifest collision |
+
+\* The 9 claude-code `ingest sync` failures were emitted as warnings; the JSON `failed_count` was 0 because the sessions were not selected.
+
+### Quality signal comparison
+
+| Harness | LLM topic rescue observed | Project-learning quality | Notable pattern |
+|---------|--------------------------:|--------------------------|-----------------|
+| claude-code | 0 of 10 | Mixed; some verbatim narrative | Useful commands/files extracted well; decisions promoted too literally. |
+| pi | 1 of 2 | Low; short sessions with no durable signal | Vague user prompts; LLM rescue did not improve topic quality. |
+| kimi | 1 of 7 | Noisy; mostly verbatim narrative/error text | Skill-search sessions produced zero project learnings. |
+| codex-cli | 0 of 7 | Noisy; includes raw JSON blobs | Long wrapper/context-dump topics bypass `isLowSignalTopic()`. |
+| cursor | N/A (blocked) | N/A | No sessions processed for quality review. |
+
+### Audit delta after U2–U6
+
+`quality audit --limit 100` before vs. after the test ingests:
+
+| Metric | Baseline (U1) | After U6 | Delta |
+|--------|--------------:|---------:|------:|
+| `summary_low_signal` | 18 | 18 | 0 |
+| `process_chatter` | 1 | 1 | 0 |
+| `no_project_learnings` | 36 | 34 | -2 |
+| `blocked_deletion` | 48 | 48 | 0 |
+| `sessions_with_project_learnings` | 41 | 45 | +4 |
+| `ready` | 52 | 52 | 0 |
+
+The audit moved slightly in the right direction (`no_project_learnings` down, more sessions with project learnings), but the sample is small and the dominant blocker remains unchanged.
+
+### Ranked findings
+
+1. **Manifest collisions are the primary ingestion blocker across every harness.** Cursor is completely blocked at the first 10 candidates; pi, kimi, and codex-cli lose 30–80% of candidates to the same error. This is a pre-existing state/adapter issue, not a regression from recent extraction changes, but it prevents the test from evaluating cursor quality at all.
+2. **Project learnings are too often raw text, not distilled rules.** Across claude-code, kimi, and codex-cli, project learnings frequently contain full assistant paragraphs, JSON blobs, error snippets, or skill instructions. The durable-decision bypass and event summarization are promoting text verbatim instead of extracting an actionable statement.
+3. **LLM topic rescue is underused.** Only 2 of ~36 reprocessed sessions triggered LLM topic rescue. Long codex-cli wrapper prompts and kimi’s `resolve these:` are obvious low-signal topics that `isLowSignalTopic()` did not flag.
+4. **No-project-learning false negatives persist.** Concrete sessions with clear tasks (git commit, skill search, tether steering reply) produced zero project learnings despite having files, commands, and decisions.
+5. **Pi sessions are mostly very short chatter.** Pi had the lowest signal density; even LLM-rescued topics remained vague.
+6. **User learnings can be higher signal than project learnings.** The codex-cli review user learning about exit-code collision was concise and actionable, suggesting the user-learning path may be less noisy.
+
+### Recommended next actions
+
+1. **Fix or bypass the immutable-manifest collision.** Without this, cursor quality cannot be reviewed and large backlogs across harnesses stay stuck. Likely requires reconciling manifest generation with source hash stability.
+2. **Tune project-learning distillation.** Add a length/structure filter to reject verbatim assistant text, JSON blobs, and error dumps; prefer short imperative statements.
+3. **Expand `isLowSignalTopic()` heuristics.** Add detection for long wrapper phrases (`User initiated a review task...`), skill instruction dumps, and bare context lists.
+4. **Investigate no-project-learning false negatives.** For sessions with files, commands, and concrete decisions but zero learnings, trace why the extraction path returns empty.
+5. **Consider a separate pi low-signal path.** Many pi sessions are 1–2 turns with no durable signal; a fast discard path could reduce noise.
+
+## U8. Reset cap and close test window
+
+```bash
+unset ASD_LLM_MAX_PER
+asd pipeline gate --skip-ingest
+```
+
+### Result
+
+```json
+{
+  "llm_budget": {
+    "allowed": false,
+    "max_per_window": "5/24h",
+    "remaining": 0,
+    "used_in_window": 5,
+    "window_started_at": "2026-06-14T15:22:46.843Z"
+  },
+  "usd_budget": {
+    "allowed": true,
+    "max_usd_per_window": "1/24h",
+    "spent_usd": 0.008526,
+    "remaining_usd": 0.991474
+  }
+}
+```
+
+The per-call cap is back to the default `5/24h`. `remaining: 0` is expected because the test window consumed 5 calls; the sliding window will refresh automatically.
