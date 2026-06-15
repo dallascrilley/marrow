@@ -9,10 +9,6 @@ import { DEFAULT_MAX_PROJECT_LEARNINGS_PER_SESSION } from "../pipeline/extract.j
 import { countProjectLearnings } from "../pipeline/quality-audit.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
 import {
-  getProjectKnowledgeSessionPath,
-  getUserKnowledgeSessionPath,
-} from "../writers/knowledge-writer.js";
-import {
   getSessionSummaryJsonPath,
   getSessionSummaryMarkdownPath,
 } from "../writers/summary-writer.js";
