@@ -185,7 +185,10 @@ test("summary synthesis normalizes absolute workspace paths and payload file arr
       assistant_summary: "Reviewed ingest quality.",
       commands_seen: [],
       ended_at: "2026-06-16T12:05:00Z",
-      files_touched: ["/Users/example/Code/demo/src/pipeline/summarize.ts", "/Users/example/Code/demo"],
+      files_touched: [
+        "/Users/example/Code/demo/src/pipeline/summarize.ts",
+        "/Users/example/Code/demo",
+      ],
       index: 0,
       session_id: sourceSession.session_id,
       started_at: "2026-06-16T12:00:00Z",
@@ -200,7 +203,10 @@ test("summary synthesis normalizes absolute workspace paths and payload file arr
       confidence: "medium",
       event_id: "summary-file-paths:decision:1",
       payload_small: {
-        file_paths: ["/Users/example/Code/demo/src/pipeline/extract.ts", "src/pipeline/quality-audit.ts"],
+        file_paths: [
+          "/Users/example/Code/demo/src/pipeline/extract.ts",
+          "src/pipeline/quality-audit.ts",
+        ],
         matched_rule: "decision",
         paths: ["/Users/example/Code/demo"],
       },

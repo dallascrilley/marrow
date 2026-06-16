@@ -235,6 +235,88 @@ test("quality audit distinguishes pure process chatter from durable signal with 
   });
 });
 
+test("quality audit does not flag ready sessions with directory-level file evidence", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+
+    try {
+      const session = upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "demo",
+        session_id: "directory-file-signal-session",
+        source_hash: "sha256:directory-signal",
+      }).sourceSession;
+
+      transitionPhase(database, {
+        phaseName: "deletion_candidate",
+        phaseState: "completed",
+        sourceHash: session.source_hash,
+        sourceSessionId: session.id,
+      });
+
+      await writeSessionSummary({
+        ...summaryFixture,
+        files_of_interest: ["src"],
+        next_step: "No open next step recorded.",
+        project_learnings: ["Keep the demo's test suite focused on src."],
+        session_id: session.session_id,
+        topic: "Use npm test to verify the demo before shipping.",
+        useful_commands: ["npm test"],
+        what_was_decided: ["Keep the demo's test suite focused on src."],
+      });
+
+      await writeKnowledgeArtifacts({
+        projectLearnings: [
+          {
+            confidence: "medium",
+            evidence: ["Keep the demo's test suite focused on src."],
+            kind: "decision",
+            learning_id: `${session.session_id}:project:decision:1`,
+            promotion_basis: "Test fixture",
+            scope: "project",
+            scope_key: session.project_key,
+            source_refs: [
+              {
+                event_id: null,
+                line: null,
+                session_id: session.session_id,
+                source_hash: session.source_hash,
+                source_path: session.source_path,
+                turn_id: null,
+              },
+            ],
+            statement: "Keep the demo's test suite focused on src.",
+            title: "Directory signal",
+          },
+        ],
+        sessionId: session.session_id,
+        userLearnings: [],
+      });
+
+      upsertDeletionCandidate(database, {
+        candidateState: "ready",
+        currentLifecycleState: "deletion_candidate",
+        projectKey: session.project_key,
+        reason: "All required retention artifacts are present.",
+        safeToDelete: true,
+        sessionId: session.session_id,
+        sourceHash: session.source_hash,
+        sourceSessionId: session.id,
+      });
+
+      const report = await auditQuality(database);
+      const auditedSession = report.sessions.find(
+        (entry) => entry.session_id === session.session_id,
+      );
+
+      assert.ok(auditedSession);
+      assert.ok(!auditedSession.issues.includes("no_files_of_interest"));
+    } finally {
+      database.close();
+    }
+  });
+});
+
 test("quality audit reports project-learning distribution statistics", async () => {
   await withRuntimeRoot(async () => {
     const database = await createLedger();

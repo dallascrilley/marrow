@@ -21,7 +21,9 @@ export function normalizeFilePath(value: string): string | null {
 export function extractPathsFromText(value: string): string[] {
   const paths: string[] = [];
 
-  for (const match of value.matchAll(/(?:\/|[A-Za-z]:\\)[^\s`"'(),;:!?]+(?:\/[^\s`"'(),;:!?]+)*/g)) {
+  for (const match of value.matchAll(
+    /(?:\/|[A-Za-z]:\\)[^\s`"'(),;:!?]+(?:\/[^\s`"'(),;:!?]+)*/g,
+  )) {
     const candidate = match[0]?.trim();
     if (
       candidate &&

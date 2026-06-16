@@ -1,7 +1,7 @@
 import type { Event, Learning, SourceSession, Summary, Turn } from "../models/canonical.js";
 import { summarySchema } from "../models/canonical.js";
-import { generateTopicWithOpenRouter } from "./llm-learning-review.js";
 import { extractPathsFromText, normalizeFilePath } from "./file-paths.js";
+import { generateTopicWithOpenRouter } from "./llm-learning-review.js";
 import {
   extractSubstantivePrompt,
   firstSubstantivePromptFromTurns,
@@ -397,7 +397,6 @@ function readPayloadStringArray(event: Event, key: string): string[] {
   );
 }
 
-
 function looksLikeCompletedOutcome(value: string): boolean {
   return (
     /\b(?:done|completed|implemented|fixed|resolved|merged|pushed)\b/i.test(value) &&
@@ -582,13 +581,15 @@ function isUsefulCommand(command: string): boolean {
 function isUsefulFilePath(filePath: string): boolean {
   const normalized = filePath.trim();
 
-  if (/\/(?:\.codex\/worktrees|Code)\/[^/]+\/?$/.test(normalized)) {
+  if (/\/\.(?:codex)\/worktrees\/|\/Code\/[^/]+\/?$/.test(normalized)) {
     return false;
   }
 
-  return looksLikeSourcePath(normalized);
+  return (
+    looksLikeSourcePath(normalized) ||
+    /^(?:src|app|lib|docs|test|tests|scripts)(?:\/[A-Za-z0-9_.-]+)*$/.test(normalized)
+  );
 }
-
 
 function looksLikeSourcePath(value: string): boolean {
   return /\.(?:[cm]?[jt]sx?|py|go|rs|swift|kt|java|c|cc|cpp|h|hpp|json|ya?ml|toml|md|sql)$/i.test(

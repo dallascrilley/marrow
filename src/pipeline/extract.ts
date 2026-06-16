@@ -8,6 +8,7 @@ import type {
   Turn,
 } from "../models/canonical.js";
 import { learningSchema } from "../models/canonical.js";
+import { normalizeFilePath } from "./file-paths.js";
 import {
   capEvidenceText,
   extractSubstantivePrompt,
@@ -18,7 +19,6 @@ import {
   sanitizeLearningTitle,
   sanitizeUserPrompt,
 } from "./prompt-sanitize.js";
-import { normalizeFilePath } from "./file-paths.js";
 
 export const defaultUserScopeKey = "operator";
 
@@ -801,7 +801,6 @@ function usefulFilesForTurn(turn: Turn, events: readonly Event[]): string[] {
     .map((value) => normalizeFilePath(value))
     .filter((value): value is string => value !== null);
 }
-
 
 function isUsefulCommand(command: string): boolean {
   const normalized = command.trim().toLowerCase();
