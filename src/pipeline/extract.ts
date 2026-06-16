@@ -18,6 +18,7 @@ import {
   sanitizeLearningTitle,
   sanitizeUserPrompt,
 } from "./prompt-sanitize.js";
+import { normalizeFilePath } from "./file-paths.js";
 
 export const defaultUserScopeKey = "operator";
 
@@ -793,38 +794,14 @@ function usefulFilesForTurn(turn: Turn, events: readonly Event[]): string[] {
   return uniqueStrings([
     ...turn.files_touched,
     ...events.flatMap((event) => readPayloadStringArray(event, "command_strings")),
+    ...events.flatMap((event) => readPayloadStringArray(event, "files_touched")),
+    ...events.flatMap((event) => readPayloadStringArray(event, "file_paths")),
+    ...events.flatMap((event) => readPayloadStringArray(event, "paths")),
   ])
     .map((value) => normalizeFilePath(value))
     .filter((value): value is string => value !== null);
 }
 
-function normalizeFilePath(value: string): string | null {
-  const trimmed = value.trim().replace(/^`+|`+$/g, "");
-
-  if (
-    !/\.(?:[cm]?[jt]sx?|py|go|rs|swift|kt|java|c|cc|cpp|h|hpp|json|ya?ml|toml|md|sql)$/i.test(
-      trimmed,
-    )
-  ) {
-    return null;
-  }
-
-  if (/\/(?:\.codex\/worktrees|Code)\/[^/]+\/?$/.test(trimmed)) {
-    return null;
-  }
-
-  const codeIndex = trimmed.indexOf("/Code/");
-  if (codeIndex >= 0) {
-    const afterCode = trimmed.slice(codeIndex + "/Code/".length);
-    const [, ...rest] = afterCode.split("/");
-
-    if (rest.length > 0) {
-      return rest.join("/");
-    }
-  }
-
-  return trimmed;
-}
 
 function isUsefulCommand(command: string): boolean {
   const normalized = command.trim().toLowerCase();
