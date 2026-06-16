@@ -174,6 +174,56 @@ test("summary synthesis turns final completion evidence into operator-ready outc
   assert.equal(summary.next_step, "No open next step recorded.");
 });
 
+test("summary synthesis normalizes absolute workspace paths and payload file arrays", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "summary-file-paths",
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Reviewed ingest quality.",
+      commands_seen: [],
+      ended_at: "2026-06-16T12:05:00Z",
+      files_touched: ["/Users/example/Code/demo/src/pipeline/summarize.ts", "/Users/example/Code/demo"],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-06-16T12:00:00Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: "Fix files of interest extraction.",
+      verification_seen: false,
+    }),
+  ];
+  const events = [
+    eventSchema.parse({
+      confidence: "medium",
+      event_id: "summary-file-paths:decision:1",
+      payload_small: {
+        file_paths: ["/Users/example/Code/demo/src/pipeline/extract.ts", "src/pipeline/quality-audit.ts"],
+        matched_rule: "decision",
+        paths: ["/Users/example/Code/demo"],
+      },
+      source_offsets: {
+        end_line: 20,
+        start_line: 20,
+      },
+      summary:
+        "Keep the fix focused on /Users/example/Code/demo/src/pipeline/summarize.ts and src/pipeline/extract.ts before touching runtime docs.",
+      turn_id: turns[0].turn_id,
+      type: "decision",
+    }),
+  ];
+
+  const summary = summarizeSession({ events, sourceSession, turns });
+
+  assert.deepEqual(summary.files_of_interest, [
+    "src/pipeline/summarize.ts",
+    "src/pipeline/extract.ts",
+    "src/pipeline/quality-audit.ts",
+  ]);
+});
+
 test("summary topic ignores AGENTS harness and uses substantive user task", () => {
   const sourceSession = {
     ...sourceSessionFixture,

@@ -113,8 +113,10 @@ function summarizeSessionWithTopic(
     [
       ...input.turns.flatMap((turn) => turn.files_touched),
       ...input.events.flatMap((event) => collectEventFiles(event)),
+      ...input.events.flatMap((event) => extractPathsFromText(event.summary)),
     ]
-      .filter((filePath) => filePath.trim().length > 0)
+      .map((filePath) => normalizeFilePath(filePath))
+      .filter((filePath): filePath is string => filePath !== null)
       .filter((filePath) => isUsefulFilePath(filePath)),
   ).slice(0, 6);
   const summary = {
@@ -338,9 +340,12 @@ function collectEventCommands(event: Event): string[] {
 }
 
 function collectEventFiles(event: Event): string[] {
-  return readPayloadStringArray(event, "command_strings").filter((value) =>
-    looksLikeSourcePath(value),
-  );
+  return [
+    ...readPayloadStringArray(event, "command_strings"),
+    ...readPayloadStringArray(event, "files_touched"),
+    ...readPayloadStringArray(event, "file_paths"),
+    ...readPayloadStringArray(event, "paths"),
+  ];
 }
 
 function stripEventPrefix(value: string): string {
@@ -389,6 +394,19 @@ function readPayloadStringArray(event: Event, key: string): string[] {
   return value.filter(
     (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
   );
+}
+
+function extractPathsFromText(value: string): string[] {
+  const paths: string[] = [];
+
+  for (const match of value.matchAll(/(?:\/|[A-Za-z]:\\)[^\s`"'(),;:!?]+(?:\/[^\s`"'(),;:!?]+)*/g)) {
+    const candidate = match[0]?.trim();
+    if (candidate && (candidate.startsWith("/Users/") || candidate.startsWith("src/") || candidate.startsWith("./") || /^[A-Za-z]:\\/.test(candidate))) {
+      paths.push(candidate);
+    }
+  }
+
+  return paths;
 }
 
 function looksLikeCompletedOutcome(value: string): boolean {
@@ -580,6 +598,26 @@ function isUsefulFilePath(filePath: string): boolean {
   }
 
   return looksLikeSourcePath(normalized);
+}
+
+function normalizeFilePath(value: string): string | null {
+  const trimmed = value.trim().replace(/^`+|`+$/g, "");
+
+  if (!trimmed) {
+    return null;
+  }
+
+  const codeIndex = trimmed.indexOf("/Code/");
+  if (codeIndex >= 0) {
+    const afterCode = trimmed.slice(codeIndex + "/Code/".length);
+    const [, ...rest] = afterCode.split("/");
+
+    if (rest.length > 0) {
+      return rest.join("/");
+    }
+  }
+
+  return trimmed;
 }
 
 function looksLikeSourcePath(value: string): boolean {
