@@ -105,3 +105,43 @@ test("learning evidence excludes AGENTS harness text from raw user prompt", () =
   assert.match(evidence, /review-pr\.md/);
   assert.doesNotMatch(evidence, /AGENTS\.md instructions/i);
 });
+
+test("does not harvest embedded foreign-agent prompt directives as user learnings", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "open-design",
+    session_id: "extract-embedded-agent",
+  };
+  const embeddedPrompt = [
+    "# Instructions (read first)",
+    "",
+    "# OD core directives (read first — these override anything later in this prompt)",
+    "",
+    "You are an expert designer working with the user as your manager.",
+    "Your role is to produce polished design artifacts in HTML.",
+    "Never guess colors from memory.",
+    "Always prefer the active design system's palette.",
+    "No filler. Never pad with placeholder text.",
+  ].join("\n");
+  const turn = turnSchema.parse({
+    assistant_summary: "Generated design concepts.",
+    commands_seen: [],
+    ended_at: "2026-05-16T12:05:00Z",
+    files_touched: [],
+    index: 0,
+    session_id: sourceSession.session_id,
+    started_at: "2026-05-16T12:00:00Z",
+    tool_stub_count: 0,
+    turn_id: `${sourceSession.session_id}:turn-0000`,
+    user_prompt: embeddedPrompt,
+    verification_seen: false,
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession,
+    turns: [turn],
+  });
+
+  assert.deepEqual(learnings.user, []);
+});

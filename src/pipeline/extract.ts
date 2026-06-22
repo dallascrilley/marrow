@@ -13,6 +13,7 @@ import {
   extractSubstantivePrompt,
   isNoSignalPrompt,
   learningEvidenceFromPrompt,
+  looksLikeEmbeddedAgentPrompt,
   looksLikeSkillHarnessLeak,
   sanitizeHarnessLeakText,
   sanitizeLearningStatement,
@@ -63,27 +64,34 @@ export function extractLearnings(input: ExtractLearningsInput): ExtractedLearnin
     ),
   );
   const user = dedupeLearnings(
-    input.turns.flatMap((turn) =>
-      extractUserPreferenceCandidates(extractSubstantivePrompt(turn.user_prompt) ?? "").map(
-        (candidate, index) =>
-          createLearning({
-            confidence: candidate.confidence,
-            evidence: [candidate.evidence],
-            kind: candidate.kind,
-            learningId: `${input.sourceSession.session_id}:user:${turn.index}:${index}`,
-            promotionBasis: "Explicit user instruction captured in the source prompt.",
-            scope: "user",
-            scopeKey: input.userScopeKey ?? defaultUserScopeKey,
-            sourceRefs: [
-              createSourceRef(input.sourceSession, {
-                turnId: turn.turn_id,
-              }),
-            ],
-            statement: candidate.statement,
-            title: candidate.title,
-          }),
-      ),
-    ),
+    input.turns.flatMap((turn) => {
+      const substantivePrompt = extractSubstantivePrompt(turn.user_prompt) ?? "";
+      // Foreign agent system prompts (e.g. embedded design/coding agents logged
+      // into this transcript source) contain prefer/always/never directives that
+      // are NOT the operator's preferences. Skip them so they never become user
+      // learnings.
+      if (looksLikeEmbeddedAgentPrompt(turn.user_prompt)) {
+        return [];
+      }
+      return extractUserPreferenceCandidates(substantivePrompt).map((candidate, index) =>
+        createLearning({
+          confidence: candidate.confidence,
+          evidence: [candidate.evidence],
+          kind: candidate.kind,
+          learningId: `${input.sourceSession.session_id}:user:${turn.index}:${index}`,
+          promotionBasis: "Explicit user instruction captured in the source prompt.",
+          scope: "user",
+          scopeKey: input.userScopeKey ?? defaultUserScopeKey,
+          sourceRefs: [
+            createSourceRef(input.sourceSession, {
+              turnId: turn.turn_id,
+            }),
+          ],
+          statement: candidate.statement,
+          title: candidate.title,
+        }),
+      );
+    }),
   );
 
   return {
@@ -1266,6 +1274,9 @@ function looksLikeChatSummary(value: string): boolean {
   const normalized = value.trim().toLowerCase();
 
   return (
+    /^(got it|sure thing|sure[,!.]|absolutely[,!.]|of course[,!.]|great question|happy to help|no problem)\b/.test(
+      normalized,
+    ) ||
     normalized.startsWith("now i have the full picture") ||
     normalized.startsWith("clean.") ||
     normalized.startsWith("created to-dos") ||

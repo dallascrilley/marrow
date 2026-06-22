@@ -70,6 +70,8 @@ const noisyWrapperPatterns = [
   /<attached_files>/i,
   /<code_selection\b/i,
   /<plugin_info\b/i,
+  /<question-form\b/i,
+  /<answer-form\b/i,
 ] as const;
 
 export function tagTurnEvents(turns: GroupedTurn[]): Event[] {
