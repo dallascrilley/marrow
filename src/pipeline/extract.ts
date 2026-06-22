@@ -7,6 +7,7 @@ import type {
   SourceSession,
   Turn,
 } from "../models/canonical.js";
+import { isAtomicStatement, isProcessChatterText } from "./artifact-heuristics.js";
 import {
   capEvidenceText,
   extractSubstantivePrompt,
@@ -18,7 +19,6 @@ import {
   sanitizeLearningTitle,
   sanitizeUserPrompt,
 } from "./prompt-sanitize.js";
-import { isAtomicStatement, isProcessChatterText } from "./artifact-heuristics.js";
 export const defaultUserScopeKey = "operator";
 
 export type ExtractLearningsInput = {
@@ -156,7 +156,6 @@ function getProjectLearningCap(): number {
   const parsed = Number.parseInt(raw, 10);
   return Number.isNaN(parsed) || parsed < 1 ? defaultProjectLearningCap : parsed;
 }
-
 
 function hasSameTurnVerifiedFix(events: readonly Event[], turnId: string): boolean {
   const turnEvents = events.filter(

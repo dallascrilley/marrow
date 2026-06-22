@@ -34,8 +34,16 @@ test("looksLikeProcessChatterLine flags short process-only phrases", () => {
 });
 
 test("looksLikeProcessChatterLine permits durable signal wrapped in process wording", () => {
-  assert.ok(!looksLikeProcessChatterLine("Let me check what toast infrastructure is available: fixed the desktop-polish wiring and verified with `npm test`."));
-  assert.ok(!looksLikeProcessChatterLine("Checking whether we can quickly stabilize the two previous tests."));
+  assert.ok(
+    !looksLikeProcessChatterLine(
+      "Let me check what toast infrastructure is available: fixed the desktop-polish wiring and verified with `npm test`.",
+    ),
+  );
+  assert.ok(
+    !looksLikeProcessChatterLine(
+      "Checking whether we can quickly stabilize the two previous tests.",
+    ),
+  );
   assert.ok(!looksLikeProcessChatterLine("I'll fix the failing test in desktop/vitest.config.ts."));
 });
 
@@ -56,7 +64,7 @@ test("hasProcessChatter aliases isProcessChatterText", () => {
 
 test("hasWrapperTags detects harness tags", () => {
   assert.ok(hasWrapperTags("<attached_files>foo</attached_files>"));
-  assert.ok(hasWrapperTags("Use <skill id=\"foo\"> for task."));
+  assert.ok(hasWrapperTags('Use <skill id="foo"> for task.'));
   assert.ok(!hasWrapperTags("Use the skill for task."));
 });
 

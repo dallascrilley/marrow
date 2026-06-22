@@ -6,17 +6,17 @@ import type { DeletionCandidateRow, SourceSessionRow } from "../db/queries.js";
 import type { Summary } from "../models/canonical.js";
 import { summarySchema } from "../models/canonical.js";
 import {
+  getProjectKnowledgeSessionPath,
+  getUserKnowledgeSessionPath,
+} from "../writers/knowledge-writer.js";
+import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
+import {
   hasProcessChatter,
   hasUsefulSummarySignal,
   hasWrapperTags,
   isLowSignalSummary,
   looksLikeCompletedOutcome,
 } from "./artifact-heuristics.js";
-import {
-  getProjectKnowledgeSessionPath,
-  getUserKnowledgeSessionPath,
-} from "../writers/knowledge-writer.js";
-import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
 import { defaultUserScopeKey } from "./extract.js";
 
 export type QualityIssueCode =
@@ -358,7 +358,6 @@ async function readKnowledgeArtifactState(sourceSession: SourceSessionRow): Prom
 
   return { project, user };
 }
-
 
 function createIssueCountMap(): Record<QualityIssueCode, number> {
   return {

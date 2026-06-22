@@ -1459,9 +1459,14 @@ test("rejects multi-sentence decision candidates", () => {
   const source = sourceSession();
   const firstTurn = turn();
   const events = [
-    event(firstTurn.turn_id, "decision", "First, I reviewed the options. Then I chose the adapter pattern. Finally, I updated the docs.", {
-      event_id: `${firstTurn.turn_id}:decision:000001`,
-    }),
+    event(
+      firstTurn.turn_id,
+      "decision",
+      "First, I reviewed the options. Then I chose the adapter pattern. Finally, I updated the docs.",
+      {
+        event_id: `${firstTurn.turn_id}:decision:000001`,
+      },
+    ),
   ];
 
   const result = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
@@ -1472,9 +1477,14 @@ test("rejects multi-sentence failure-mode candidates", () => {
   const source = sourceSession();
   const firstTurn = turn();
   const events = [
-    event(firstTurn.turn_id, "failure", "The build failed. It could not find the module. The path was wrong.", {
-      event_id: `${firstTurn.turn_id}:failure:000001`,
-    }),
+    event(
+      firstTurn.turn_id,
+      "failure",
+      "The build failed. It could not find the module. The path was wrong.",
+      {
+        event_id: `${firstTurn.turn_id}:failure:000001`,
+      },
+    ),
   ];
 
   const result = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
@@ -1488,9 +1498,14 @@ test("keeps single-sentence verified-fix workflow with semicolon", () => {
     verification_seen: true,
   });
   const events = [
-    event(firstTurn.turn_id, "fix", "Use worker threads instead of forks in desktop/vitest.config.ts.", {
-      event_id: `${firstTurn.turn_id}:fix:000001`,
-    }),
+    event(
+      firstTurn.turn_id,
+      "fix",
+      "Use worker threads instead of forks in desktop/vitest.config.ts.",
+      {
+        event_id: `${firstTurn.turn_id}:fix:000001`,
+      },
+    ),
     event(firstTurn.turn_id, "verification", "Tests pass.", {
       event_id: `${firstTurn.turn_id}:verification:000001`,
       payload_small: { matched_rule: "verification", verification_command: "./scripts/qa" },

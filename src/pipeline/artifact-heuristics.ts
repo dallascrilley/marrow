@@ -80,7 +80,9 @@ export function hasWrapperTags(text: string): boolean {
  * True when the summary has no useful durable signal and no explicit next step.
  */
 export function isLowSignalSummary(summary: SummarySignalFields): boolean {
-  return !hasUsefulSummarySignal(summary) && summary.next_step === "No explicit next step recorded.";
+  return (
+    !hasUsefulSummarySignal(summary) && summary.next_step === "No explicit next step recorded."
+  );
 }
 
 /**
