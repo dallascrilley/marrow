@@ -302,10 +302,7 @@ test("low-signal topic heuristic catches wrapper/harness topic leaks", () => {
     true,
   );
   // Backtick-only config/workflow fragment.
-  assert.equal(
-    isLowSignalTopic("`medium effort → 3 angles × 6 candidates → 1-vote verify`"),
-    true,
-  );
+  assert.equal(isLowSignalTopic("`medium effort → 3 angles × 6 candidates → 1-vote verify`"), true);
   // A descriptive instruction in backticks-free prose stays high-signal.
   assert.equal(
     isLowSignalTopic("Scan recent commits for likely bugs and propose minimal fixes."),
