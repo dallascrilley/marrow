@@ -204,6 +204,10 @@ export function isLowSignalTopic(topic: string): boolean {
     return true;
   }
 
+  if (looksLikeBacktickFragmentTopic(normalized)) {
+    return true;
+  }
+
   return (
     looksLikeWrapperPromptTopic(topic) ||
     looksLikeContextDumpTopic(topic) ||
@@ -223,6 +227,7 @@ export function isWrapperLeakTopic(topic: string): boolean {
     looksLikeSkillHarnessLeak(normalized) ||
     looksLikeMarkdownSkillHeaderTopic(normalized) ||
     looksLikeSlashCommandTopic(normalized) ||
+    looksLikeBacktickFragmentTopic(normalized) ||
     looksLikeWrapperPromptTopic(topic) ||
     looksLikeContextDumpTopic(topic) ||
     /^Session summary for\b/i.test(normalized) ||
@@ -289,6 +294,11 @@ function looksLikeTypoOnlyFixTopic(topic: string): boolean {
 
 function looksLikeMarkdownSkillHeaderTopic(topic: string): boolean {
   return /^#\s+[A-Za-z][^\n`]{0,120}$/.test(topic.trim());
+}
+
+function looksLikeBacktickFragmentTopic(topic: string): boolean {
+  const trimmed = topic.trim();
+  return /^`[^`]+`$/.test(trimmed);
 }
 
 function looksLikeSlashCommandTopic(topic: string): boolean {
@@ -530,6 +540,9 @@ function isHarnessTopicLine(line: string): boolean {
       line,
     ) ||
     /^turn_aborted$/i.test(line) ||
+    /^<!--/i.test(line) ||
+    /^A session-scoped \w+ hook is now active\b/i.test(line) ||
+    /^Base directory for this skill\b/i.test(line) ||
     /^Caveat:/i.test(line) ||
     /^\[Request interrupted by user\b/i.test(line) ||
     /^\[Image:[^\]]+\]$/i.test(line) ||
