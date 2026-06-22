@@ -20,6 +20,13 @@ entrypoints, and `just <recipe>` is a thin alias for each.
 
 `script/cibuild` is the single source of truth for CI — if it passes locally, CI passes.
 
+> **CI only runs on pull requests and pushes to `main`.** A feature branch that
+> is committed but never pushed (or has no open PR) gets **zero CI**. Local
+> `npm test` builds + runs the suite but does **not** lint; only `script/cibuild`
+> lints. A `pre-push` hook (`script/hooks/pre-push`, installed by `script/setup`
+> via `core.hooksPath`) runs lint + test before every push so broken work cannot
+> reach `origin`. Escape hatch: `ASD_SKIP_PREPUSH=1 git push` / `--no-verify`.
+
 ## Stack
 
 Node.js / TypeScript (npm)
@@ -31,6 +38,10 @@ Node.js / TypeScript (npm)
   `type(scope): summary`. Types: `feat, fix, refactor, docs, test, chore, perf, ci`.
 - **PRs:** fill `.github/PULL_REQUEST_TEMPLATE.md`; keep them small and focused;
   `script/cibuild` must pass before requesting review.
+- **Definition of done:** a task is not reviewable until its commits are pushed
+  to `origin` **and** CI is green on the PR. "Passes on my machine" is not done —
+  unpushed work has never touched CI. Verify with `git log origin/<branch>..HEAD`
+  (must be empty) and check the PR's CI status.
 - **Secrets:** never commit secrets. Use env vars / a secret manager. `.env` is gitignored. For OpenRouter, use the 1Password item **OpenRouter API Credentials - agent-session-distillery** (`op read 'op://Private/OpenRouter API Credentials - agent-session-distillery/credential'`).
 
 ## Working agreement
