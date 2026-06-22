@@ -27,6 +27,15 @@ type RetentionArtifactPaths = {
   user_knowledge_jsonl: string;
 };
 
+// Two distinct status axes are intentionally reported side by side:
+//   - candidate_state: the persisted ledger lifecycle value
+//     (ready | discardable_no_signal | pending_artifacts | stale | applied),
+//     set in src/pipeline/retention.ts and stored in the DB.
+//   - status: the derived binary deletion gate for this CLI report,
+//     "ready" only when safe_to_delete AND candidate_state is a ready state,
+//     otherwise "blocked".
+// Note the overlap: candidate_state "ready" and status "ready" share a word
+// but are not the same field — always check which axis a value came from.
 type RetentionDecision = {
   artifact_paths: RetentionArtifactPaths;
   artifact_presence: Record<keyof RetentionArtifactPaths, boolean>;
