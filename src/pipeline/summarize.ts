@@ -7,6 +7,7 @@ import {
   isHarnessOrBootLine,
   isNoSignalPrompt,
   isSkillWrapperOnlyPrompt,
+  looksLikeEmbeddedAgentPrompt,
   looksLikeSkillHarnessLeak,
   sanitizeHarnessLeakText,
   sanitizeLearningStatement,
@@ -159,6 +160,10 @@ export function isLowSignalTopic(topic: string): boolean {
     return true;
   }
 
+  if (looksLikeEmbeddedAgentPrompt(normalized)) {
+    return true;
+  }
+
   if (/^Session summary for\b/i.test(normalized)) {
     return true;
   }
@@ -213,6 +218,7 @@ export function isWrapperLeakTopic(topic: string): boolean {
   }
 
   return (
+    looksLikeEmbeddedAgentPrompt(normalized) ||
     looksLikeBareSkillSlugTopic(normalized) ||
     looksLikeSkillHarnessLeak(normalized) ||
     looksLikeMarkdownSkillHeaderTopic(normalized) ||

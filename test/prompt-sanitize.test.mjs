@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { sanitizeLearningStatement } from "../dist/pipeline/prompt-sanitize.js";
+import {
+  isNoSignalPrompt,
+  looksLikeEmbeddedAgentPrompt,
+  sanitizeLearningStatement,
+} from "../dist/pipeline/prompt-sanitize.js";
 
 test("sanitizeLearningStatement strips bold emphasis", () => {
   assert.equal(
@@ -76,4 +80,30 @@ test("sanitizeLearningStatement preserves underscores inside file paths", () => 
     sanitizeLearningStatement("Call `_rewrite_clip_delivery_dedup` before the generic strip."),
     "Call `_rewrite_clip_delivery_dedup` before the generic strip.",
   );
+});
+
+test("looksLikeEmbeddedAgentPrompt detects foreign system/developer prompts", () => {
+  assert.equal(
+    looksLikeEmbeddedAgentPrompt("You are a memory extractor for a personal AI design assistant."),
+    true,
+  );
+  assert.equal(
+    looksLikeEmbeddedAgentPrompt("Given the user's most recent message, decide what to store."),
+    true,
+  );
+  assert.equal(
+    looksLikeEmbeddedAgentPrompt("Respond only with valid JSON containing the entries."),
+    true,
+  );
+  // Interactive turns must not be misclassified.
+  assert.equal(looksLikeEmbeddedAgentPrompt("You broke the build, please fix it."), false);
+  assert.equal(looksLikeEmbeddedAgentPrompt("add a json export command to the cli"), false);
+});
+
+test("isNoSignalPrompt treats embedded agent prompts as no-signal", () => {
+  assert.equal(
+    isNoSignalPrompt("You are a memory extractor for a personal AI design assistant."),
+    true,
+  );
+  assert.equal(isNoSignalPrompt("i want autocompletions for my git branches"), false);
 });

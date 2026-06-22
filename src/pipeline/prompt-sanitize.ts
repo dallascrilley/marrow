@@ -32,6 +32,42 @@ const noSignalPatterns: readonly RegExp[] = [
 ];
 
 /**
+ * Markers that identify a transcript turn that is actually an *embedded* LLM
+ * call made by another application (e.g. an app that logs its own model
+ * requests into `~/.claude/projects`) rather than an interactive coding turn.
+ * These leak a system/developer prompt as the first "user" message, which then
+ * masquerades as the session topic. Treating them as no-signal keeps the corpus
+ * free of foreign system prompts.
+ */
+const embeddedAgentPromptPatterns: readonly RegExp[] = [
+  /^you are an? [\w'\u2019-]+(?:[\s,][\w'\u2019-]+){0,8}\b/i,
+  /^you are the [\w'\u2019-]+(?:[\s,][\w'\u2019-]+){0,8}\b/i,
+  /\byour (?:task|role|job) is to\b/i,
+  /\bgiven the user'?s most recent message\b/i,
+  /\byou (?:must|should) (?:respond|reply|output|return) (?:only )?(?:with|in|using) (?:valid )?json\b/i,
+  /^(?:respond|reply|output|return|answer)\b[^.]{0,40}?\b(?:only )?(?:with|in|using|as) (?:valid |raw )?json\b/i,
+];
+
+/**
+ * True when a prompt is an embedded system/developer prompt from another
+ * application rather than an interactive user turn. See
+ * `embeddedAgentPromptPatterns`.
+ */
+export function looksLikeEmbeddedAgentPrompt(raw: string): boolean {
+  const substantive = extractSubstantivePrompt(raw);
+  if (substantive === null) {
+    return false;
+  }
+
+  const normalized = substantive.replace(/\s+/g, " ").trim();
+  if (normalized.length === 0) {
+    return false;
+  }
+
+  return embeddedAgentPromptPatterns.some((pattern) => pattern.test(normalized));
+}
+
+/**
  * Strip harness/boot context from a raw user prompt. Does not truncate.
  */
 export function sanitizeUserPrompt(raw: string): string {
@@ -241,6 +277,10 @@ export function isNoSignalPrompt(raw: string): boolean {
   }
 
   if (isShortConversationalNoSignal(singleLine)) {
+    return true;
+  }
+
+  if (looksLikeEmbeddedAgentPrompt(substantive)) {
     return true;
   }
 

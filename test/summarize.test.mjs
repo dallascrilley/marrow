@@ -290,6 +290,25 @@ test("low-signal topic heuristic is conservative but catches harness paths and c
   assert.equal(isLowSignalTopic("Automation: macOS stability scan"), false);
 });
 
+test("low-signal topic heuristic rejects embedded foreign system prompts", () => {
+  assert.equal(
+    isLowSignalTopic("You are a memory extractor for a personal AI design assistant."),
+    true,
+  );
+  assert.equal(
+    isLowSignalTopic("Given the user's most recent message, decide what to remember."),
+    true,
+  );
+  assert.equal(isLowSignalTopic("Your task is to classify the following diff."), true);
+  assert.equal(
+    isLowSignalTopic("You must respond only with valid JSON describing the entries."),
+    true,
+  );
+  // Real interactive prompts that merely start with "you" must not be caught.
+  assert.equal(isLowSignalTopic("You broke the build, can you fix the failing test?"), false);
+  assert.equal(isLowSignalTopic("Add a memory extractor command to the CLI"), false);
+});
+
 test("summarizeSession skips skill-wrapper-only prompts for topic selection", () => {
   const sourceSession = {
     ...sourceSessionFixture,
