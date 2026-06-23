@@ -221,6 +221,38 @@ test("does not promote a dead_end when an approach was reverted then verified-fi
   );
 });
 
+test("uses a normalized error-signature as the trigger for failure learnings", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(firstTurn.turn_id, "failure", "Build failed with ENOENT: no such file or directory.", {
+      event_id: `${firstTurn.turn_id}:failure:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  const failure = learnings.project.find((learning) => learning.kind === "failure_mode");
+
+  assert.ok(failure, "expected a failure_mode learning");
+  assert.equal(failure.trigger, `When ENOENT recurs in ${source.project_key}.`);
+});
+
+test("falls back to the default failure trigger when no signature is present", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(firstTurn.turn_id, "failure", "The deployment failed for an unknown reason.", {
+      event_id: `${firstTurn.turn_id}:failure:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  const failure = learnings.project.find((learning) => learning.kind === "failure_mode");
+
+  assert.ok(failure, "expected a failure_mode learning");
+  assert.equal(failure.trigger, `When the same failure recurs in ${source.project_key}.`);
+});
+
 test("promotes error resolution when failure is followed by a fix", () => {
   const source = sourceSession();
   const firstTurn = turn();
