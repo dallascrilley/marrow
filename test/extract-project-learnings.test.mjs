@@ -89,6 +89,94 @@ test("promotes same-turn fix and verification into project learning", () => {
   );
 });
 
+test("tags verified-fix project learnings with evidence_type and a derived trigger", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    files_touched: ["desktop/vitest.config.ts"],
+    verification_seen: true,
+  });
+  const events = [
+    event(firstTurn.turn_id, "fix", "Updated Vitest config to use worker threads and happy-dom.", {
+      event_id: `${firstTurn.turn_id}:fix:000001`,
+      payload_small: {
+        command_strings: ["desktop/vitest.config.ts", "happy-dom"],
+        matched_rule: "updated",
+      },
+    }),
+    event(firstTurn.turn_id, "verification", "Verification noted: All 92 tests pass.", {
+      event_id: `${firstTurn.turn_id}:verification:000002`,
+      payload_small: { command_strings: ["npm test"], matched_rule: "tests pass" },
+    }),
+  ];
+
+  const learnings = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  const verifiedFix = learnings.project.find((learning) =>
+    learning.statement.includes("Vitest config"),
+  );
+
+  assert.ok(verifiedFix, "expected a verified-fix project learning");
+  assert.equal(verifiedFix.evidence_type, "verified");
+  assert.match(verifiedFix.trigger, /^When .+\.$/);
+  assert.ok(verifiedFix.trigger.includes(source.project_key));
+});
+
+test("tags user-preference learnings as user_stated with a precondition trigger", () => {
+  const source = sourceSession();
+  const prefTurn = turn({
+    user_prompt: "Always run the full test suite before committing.",
+  });
+
+  const learnings = extractLearnings({ events: [], sourceSession: source, turns: [prefTurn] });
+
+  assert.ok(learnings.user.length > 0, "expected a user-preference learning");
+  for (const learning of learnings.user) {
+    assert.equal(learning.evidence_type, "user_stated");
+    assert.match(learning.trigger, /^When .+\.$/);
+  }
+});
+
+test("derives session technologies and skill_ref onto project learnings", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: ["npm run build", "git commit -m 'wip'", "bun test"],
+    files_touched: ["src/models/canonical.ts", "scripts/run.py"],
+    verification_seen: true,
+  });
+  const events = [
+    event(firstTurn.turn_id, "fix", "Updated the canonical schema module.", {
+      event_id: `${firstTurn.turn_id}:fix:000001`,
+      payload_small: { command_strings: ["src/models/canonical.ts"], matched_rule: "updated" },
+    }),
+    event(firstTurn.turn_id, "verification", "Verification noted: All tests pass.", {
+      event_id: `${firstTurn.turn_id}:verification:000002`,
+      payload_small: { command_strings: ["npm test"], matched_rule: "tests pass" },
+    }),
+  ];
+
+  const learnings = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+
+  assert.ok(learnings.project.length > 0, "expected a project learning");
+  for (const learning of learnings.project) {
+    assert.deepEqual(learning.technologies, ["bun", "git", "npm", "python", "typescript"]);
+    assert.deepEqual(learning.skill_ref, ["git", "tdd-guide"]);
+  }
+});
+
+test("leaves technologies and skill_ref empty when nothing is detected", () => {
+  const source = sourceSession();
+  const prefTurn = turn({
+    user_prompt: "Always run the full test suite before committing.",
+  });
+
+  const learnings = extractLearnings({ events: [], sourceSession: source, turns: [prefTurn] });
+
+  assert.ok(learnings.user.length > 0, "expected a user-preference learning");
+  for (const learning of learnings.user) {
+    assert.deepEqual(learning.technologies, []);
+    assert.deepEqual(learning.skill_ref, []);
+  }
+});
+
 test("promotes error resolution when failure is followed by a fix", () => {
   const source = sourceSession();
   const firstTurn = turn();
