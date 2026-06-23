@@ -47,6 +47,10 @@ type ProjectLearningCandidate = {
 };
 
 export function extractLearnings(input: ExtractLearningsInput): ExtractedLearnings {
+  // Subject/capability axes are session-level: the stack and skills the whole
+  // session touched apply to every project learning it produced.
+  const technologies = extractTechnologies(input.turns);
+  const skillRefs = deriveSkillRefs(input.turns);
   const project = dedupeLearnings(
     extractProjectLearningCandidates(input).map((candidate) =>
       createLearning({
@@ -58,8 +62,10 @@ export function extractLearnings(input: ExtractLearningsInput): ExtractedLearnin
         promotionBasis: candidate.promotionBasis,
         scope: "project",
         scopeKey: input.sourceSession.project_key,
+        skillRefs,
         sourceRefs: candidate.sourceRefs,
         statement: candidate.statement,
+        technologies,
         title: candidate.title,
         trigger: deriveProjectTrigger(candidate.kind, input.sourceSession.project_key),
       }),
@@ -1344,6 +1350,108 @@ function deriveProjectTrigger(kind: LearningKind, scopeKey: string): string {
   }
 }
 
+// First whitespace-delimited token of a command, lowercased ("git push" -> "git").
+function commandHead(command: string): string {
+  return command.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+}
+
+// Tier-2 subject detection: deterministic command-tool and file-extension maps.
+const commandToolTechnology: Record<string, string> = {
+  git: "git",
+  gh: "git",
+  npm: "npm",
+  pnpm: "pnpm",
+  yarn: "yarn",
+  bun: "bun",
+  node: "node",
+  uv: "uv",
+  python: "python",
+  python3: "python",
+  cargo: "rust",
+  go: "go",
+  docker: "docker",
+  sqlite3: "sqlite",
+  just: "just",
+  make: "make",
+  tsc: "typescript",
+  biome: "biome",
+  vitest: "vitest",
+  pytest: "pytest",
+};
+
+const fileExtensionTechnology: Record<string, string> = {
+  ts: "typescript",
+  tsx: "typescript",
+  mts: "typescript",
+  cts: "typescript",
+  js: "javascript",
+  jsx: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  py: "python",
+  go: "go",
+  rs: "rust",
+  swift: "swift",
+  kt: "kotlin",
+  java: "java",
+  c: "c",
+  cc: "cpp",
+  cpp: "cpp",
+  h: "c",
+  hpp: "cpp",
+  sql: "sql",
+  json: "json",
+  yaml: "yaml",
+  yml: "yaml",
+  toml: "toml",
+  md: "markdown",
+};
+
+function extractTechnologies(turns: readonly Turn[]): string[] {
+  const technologies = new Set<string>();
+  for (const turn of turns) {
+    for (const command of turn.commands_seen) {
+      const tech = commandToolTechnology[commandHead(command)];
+      if (tech !== undefined) {
+        technologies.add(tech);
+      }
+    }
+    for (const file of turn.files_touched) {
+      const ext = file.split(".").pop()?.toLowerCase() ?? "";
+      const tech = fileExtensionTechnology[ext];
+      if (tech !== undefined) {
+        technologies.add(tech);
+      }
+    }
+  }
+  return [...technologies].sort();
+}
+
+// Capability detection: deterministic command -> harness-skill lookup. First
+// matching rule wins per command; results are unioned across the session.
+const skillRefRules: Array<{ pattern: RegExp; skill: string }> = [
+  { pattern: /\bgit\s+worktree\b/, skill: "using-git-worktrees" },
+  { pattern: /^wt\b/, skill: "using-git-worktrees" },
+  { pattern: /^td\b/, skill: "td-task-management" },
+  { pattern: /^gh\b[\s\S]*\bpr\b/, skill: "git" },
+  { pattern: /^git\s+(?:commit|push|merge|rebase)\b/, skill: "git" },
+  { pattern: /\b(?:bun test|vitest|pytest|npm test|uv run pytest)\b/, skill: "tdd-guide" },
+];
+
+function deriveSkillRefs(turns: readonly Turn[]): string[] {
+  const skills = new Set<string>();
+  for (const turn of turns) {
+    for (const command of turn.commands_seen) {
+      const normalized = command.trim().toLowerCase();
+      const match = skillRefRules.find((rule) => rule.pattern.test(normalized));
+      if (match !== undefined) {
+        skills.add(match.skill);
+      }
+    }
+  }
+  return [...skills].sort();
+}
+
 function createLearning(input: {
   confidence: ConfidenceLevel;
   evidence: string[];
@@ -1353,8 +1461,10 @@ function createLearning(input: {
   promotionBasis: string;
   scope: Learning["scope"];
   scopeKey: string;
+  skillRefs?: string[];
   sourceRefs: SourceRef[];
   statement: string;
+  technologies?: string[];
   title: string;
   trigger: string;
 }): Learning {
@@ -1367,8 +1477,10 @@ function createLearning(input: {
     promotion_basis: input.promotionBasis,
     scope: input.scope,
     scope_key: input.scopeKey,
+    skill_ref: input.skillRefs ?? [],
     source_refs: input.sourceRefs,
     statement: input.statement,
+    technologies: input.technologies ?? [],
     title: input.title,
     trigger: input.trigger,
   } satisfies Learning);
