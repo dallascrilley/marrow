@@ -4,7 +4,10 @@ import type { DatabaseSync } from "node:sqlite";
 import { listSourceSessions } from "../db/ledger.js";
 import type { SourceSessionRow } from "../db/queries.js";
 import { summarySchema } from "../models/canonical.js";
-import { getSessionManifestPath } from "../writers/manifest-writer.js";
+import {
+  getSessionManifestPath,
+  getSessionManifestPathForRevision,
+} from "../writers/manifest-writer.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
 import {
   assessLlmBudget,
@@ -94,7 +97,7 @@ export async function resummarizeSessions(
       }
     }
 
-    if (!(await manifestExists(sourceSession.session_id))) {
+    if (!(await manifestExists(sourceSession.session_id, sourceSession.source_hash))) {
       skipped.push({
         reason: "missing_manifest",
         session_id: sourceSession.session_id,
@@ -233,8 +236,11 @@ async function readExistingTopic(sessionId: string): Promise<string | null> {
   const summary = summarySchema.parse(JSON.parse(await readFile(summaryPath, "utf8")));
   return summary.topic;
 }
+async function manifestExists(sessionId: string, sourceHash: string): Promise<boolean> {
+  if (await fileExists(getSessionManifestPathForRevision(sessionId, sourceHash))) {
+    return true;
+  }
 
-async function manifestExists(sessionId: string): Promise<boolean> {
   return fileExists(getSessionManifestPath(sessionId));
 }
 

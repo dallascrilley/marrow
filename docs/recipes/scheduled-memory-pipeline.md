@@ -58,7 +58,7 @@ Run this on a weekly or monthly cadence — not on the same 6-hour ingest cron.
 | --- | --- |
 | `AGENT_SESSION_DISTILLERY_ROOT` | Runtime dir (default `~/.agent-session-distillery`) |
 | `ASD_VAULT_ROOT` | Vault root for `memory push-wiki` (default `~/vault`) |
-| `OPENROUTER_API_KEY` | Required only when running `quality review-learnings` |
+| `OPENROUTER_API_KEY` | Required only when running `quality review-learnings`; source from 1Password **OpenRouter API Credentials - agent-session-distillery** |
 | `ASD_LLM_MAX_PER` | Sliding-window LLM budget shared by review-learnings and corpus resummarize (default `5/24h`) |
 
 Build the CLI once after checkout updates:

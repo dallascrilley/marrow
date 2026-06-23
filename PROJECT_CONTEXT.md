@@ -22,7 +22,7 @@ Launch proof and criteria: [`LAUNCH_CRITERIA.md`](LAUNCH_CRITERIA.md), [`docs/la
 
 | Env | Where | Notes |
 |-----|-------|-------|
-| local | `script/setup`, `node dist/cli.js` | Build with `npm run build`; optional `OPENROUTER_API_KEY` for LLM learning review |
+| local | `script/setup`, `node dist/cli.js` | Build with `npm run build`; optional `OPENROUTER_API_KEY` for LLM learning review (see secrets table below) |
 | ci | `script/cibuild` | `npm ci`, biome lint, node test, tsc build |
 | prod | operator machine | Scheduled ingest / vault push via launchd or cron; no hosted service |
 
@@ -48,5 +48,5 @@ Launch proof and criteria: [`LAUNCH_CRITERIA.md`](LAUNCH_CRITERIA.md), [`docs/la
 |--------------|---------|
 | `AGENT_SESSION_DISTILLERY_ROOT` | Isolated runtime root for tests or sandboxes |
 | `ASD_VAULT_ROOT` | Vault root override for `memory push-wiki` |
-| `OPENROUTER_API_KEY` | Optional LLM-gated learning review commands |
+| `OPENROUTER_API_KEY` | Optional LLM-gated learning review commands; value lives in 1Password as **OpenRouter API Credentials - agent-session-distillery** |
 | Local harness data | `~/.cursor`, `~/.claude`, `~/.codex`, `~/.kimi`, `~/.pi` — read-only ingestion sources |

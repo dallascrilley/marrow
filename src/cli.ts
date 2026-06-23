@@ -10,6 +10,7 @@ import { executeExportIndex } from "./commands/export-index.js";
 import { executeHooksInstall } from "./commands/hooks-install.js";
 import { executeIngestBackfill } from "./commands/ingest-backfill.js";
 import { executeIngestSync } from "./commands/ingest-sync.js";
+import { executeMcp } from "./commands/mcp.js";
 import { executeMemoryExportWiki } from "./commands/memory-export-wiki.js";
 import { executeMemoryPushWiki } from "./commands/memory-push-wiki.js";
 import { executeMigrateProjectIds } from "./commands/migrate-project-ids.js";
@@ -200,6 +201,10 @@ const commandTree: Record<string, CommandDefinition> = {
         execute: async (context) => withLedger(context, executePipelineGate),
       },
     },
+  },
+  mcp: {
+    description: "Query distilled instincts through the capped ADR-0005 MCP surface.",
+    execute: async (context) => executeMcp(context),
   },
 };
 

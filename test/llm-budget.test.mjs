@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   assessLlmBudget,
   assessUsdBudget,
+  getDefaultMaxPerWindow,
   parseMaxPerWindow,
   parseMaxUsdWindow,
   recordLlmBudgetUse,
@@ -90,6 +91,26 @@ test("parseMaxPerWindow accepts hour and minute windows", () => {
 test("parseMaxPerWindow rejects invalid specs", () => {
   assert.throws(() => parseMaxPerWindow("five/24h"), /Invalid max-per window/);
   assert.throws(() => parseMaxPerWindow("5/24"), /Invalid max-per window/);
+});
+
+test("getDefaultMaxPerWindow reads ASD_LLM_MAX_PER and falls back to 5/24h", {
+  concurrency: false,
+}, () => {
+  const previous = process.env.ASD_LLM_MAX_PER;
+
+  try {
+    delete process.env.ASD_LLM_MAX_PER;
+    assert.equal(getDefaultMaxPerWindow(), "5/24h");
+
+    process.env.ASD_LLM_MAX_PER = "12/24h";
+    assert.equal(getDefaultMaxPerWindow(), "12/24h");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.ASD_LLM_MAX_PER;
+    } else {
+      process.env.ASD_LLM_MAX_PER = previous;
+    }
+  }
 });
 
 test("parseMaxUsdWindow accepts fractional USD amounts", () => {

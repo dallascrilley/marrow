@@ -1,3 +1,24 @@
+---
+ijfw_version: 1.3.2
+ijfw_schema: 1
+type: software
+primary_type: software
+secondary_types: []
+confidence: 0.907
+detected_at: 2026-06-15T01:03:13.259Z
+signals:
+  - kind: manifest
+    weight: 0.9
+    manifests: [package.json]
+  - kind: dir_business
+    weight: 0.4
+    name: ops
+  - kind: file_extension_ratio
+    weight: 0.7
+    domain: software
+    ratio: 1
+    count: 159
+---
 # AGENTS.md — agent-session-distillery
 
 Agent-facing contract for this repo. Human docs live in `README.md`; project
@@ -20,6 +41,13 @@ entrypoints, and `just <recipe>` is a thin alias for each.
 
 `script/cibuild` is the single source of truth for CI — if it passes locally, CI passes.
 
+> **CI only runs on pull requests and pushes to `main`.** A feature branch that
+> is committed but never pushed (or has no open PR) gets **zero CI**. Local
+> `npm test` builds + runs the suite but does **not** lint; only `script/cibuild`
+> lints. A `pre-push` hook (`script/hooks/pre-push`, installed by `script/setup`
+> via `core.hooksPath`) runs lint + test before every push so broken work cannot
+> reach `origin`. Escape hatch: `ASD_SKIP_PREPUSH=1 git push` / `--no-verify`.
+
 ## Stack
 
 Node.js / TypeScript (npm)
@@ -31,7 +59,11 @@ Node.js / TypeScript (npm)
   `type(scope): summary`. Types: `feat, fix, refactor, docs, test, chore, perf, ci`.
 - **PRs:** fill `.github/PULL_REQUEST_TEMPLATE.md`; keep them small and focused;
   `script/cibuild` must pass before requesting review.
-- **Secrets:** never commit secrets. Use env vars / a secret manager. `.env` is gitignored.
+- **Definition of done:** a task is not reviewable until its commits are pushed
+  to `origin` **and** CI is green on the PR. "Passes on my machine" is not done —
+  unpushed work has never touched CI. Verify with `git log origin/<branch>..HEAD`
+  (must be empty) and check the PR's CI status.
+- **Secrets:** never commit secrets. Use env vars / a secret manager. `.env` is gitignored. For OpenRouter, use the 1Password item **OpenRouter API Credentials - agent-session-distillery** (`op read 'op://Private/OpenRouter API Credentials - agent-session-distillery/credential'`).
 
 ## Working agreement
 
@@ -106,3 +138,11 @@ discovered during bootstrap are appended below this baseline as a
   - **Why this project:** `memory push-wiki` and v2 renderers touch vault project pages; agents must respect carve-out vs vault-owned paths.
   - **Path:** `~/.claude/skills/vault/SKILL.md`
   - **Load:** `/library load vault`
+
+<!-- IJFW-MEMORY-START -->
+Project memory at .ijfw/memory/. Call `ijfw_memory_prelude` for full context.
+<!-- IJFW-MEMORY-END -->
+
+<!-- IJFW-AGENTS-START -->
+No project agents yet. Run `ijfw team` to set them up.
+<!-- IJFW-AGENTS-END -->

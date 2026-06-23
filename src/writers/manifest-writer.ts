@@ -35,6 +35,15 @@ export function getSessionManifestPath(sessionId: string): string {
   return join(getRuntimePath("manifests"), `${sessionId}.json`);
 }
 
+export function getSessionManifestPathForRevision(sessionId: string, sourceHash: string): string {
+  const revision =
+    sourceHash
+      .replace(/^sha256:/, "")
+      .replace(/[^a-z0-9_-]/gi, "")
+      .slice(0, 12) || "unknown";
+  return join(getRuntimePath("manifests"), `${sessionId}.${revision}.json`);
+}
+
 export async function writeSessionManifest(input: {
   artifactPaths: SessionProvenanceManifest["artifact_paths"];
   events: readonly Event[];
@@ -43,7 +52,10 @@ export async function writeSessionManifest(input: {
   turns: readonly Turn[];
 }): Promise<ManifestWriteResult> {
   const manifest = buildManifest(input);
-  const path = getSessionManifestPath(input.sourceSession.session_id);
+  const path = getSessionManifestPathForRevision(
+    input.sourceSession.session_id,
+    input.sourceSession.source_hash,
+  );
   const serialized = `${JSON.stringify(manifest, null, 2)}\n`;
 
   await mkdir(dirname(path), { recursive: true });

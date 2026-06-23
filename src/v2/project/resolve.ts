@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import { getRuntimePath } from "../../config/paths.js";
+import { vaultProjectDir } from "../../config/vault-paths.js";
 import type { SourceSession } from "../../models/canonical.js";
 
 const execFileAsync = promisify(execFile);
@@ -127,9 +128,7 @@ export function projectSessionsDir(projectId: string): string {
   return join(projectInstinctsRoot(projectId), "sessions");
 }
 
-export function projectVaultDir(vaultRoot: string, projectId: string): string {
-  return join(vaultRoot, "wiki", "projects", projectId);
-}
+export { vaultProjectDir };
 
 function normaliseWorkspacePath(workspacePath: string | null): string | null {
   if (!workspacePath || workspacePath.trim().length === 0) {
