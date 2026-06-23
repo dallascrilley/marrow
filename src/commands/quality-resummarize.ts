@@ -30,6 +30,7 @@ function parseResummarizeOptions(args: readonly string[]): {
   llmTopic?: boolean;
   lowSignalOnly?: boolean;
   maxPer?: string;
+  overExtractedOnly?: boolean;
   projectKeys?: string[];
   sessionIds?: string[];
 } {
@@ -37,6 +38,7 @@ function parseResummarizeOptions(args: readonly string[]): {
   let exportIndex = false;
   let llmTopic = false;
   let lowSignalOnly = false;
+  let overExtractedOnly = false;
   let limit: number | undefined;
   let maxPer: string | undefined;
   const projectKeys: string[] = [];
@@ -71,6 +73,11 @@ function parseResummarizeOptions(args: readonly string[]): {
       continue;
     }
 
+    if (arg === "--over-extracted-only") {
+      overExtractedOnly = true;
+      continue;
+    }
+
     if (arg === "--session-id") {
       sessionIds.push(requireOptionValue("--session-id", args[index + 1]));
       index += 1;
@@ -101,6 +108,7 @@ function parseResummarizeOptions(args: readonly string[]): {
     ...(exportIndex ? { exportIndex: true } : {}),
     ...(llmTopic ? { llmTopic: true } : {}),
     ...(lowSignalOnly ? { lowSignalOnly: true } : {}),
+    ...(overExtractedOnly ? { overExtractedOnly: true } : {}),
     ...(maxPer === undefined ? {} : { maxPer }),
     ...(limit === undefined ? {} : { limit }),
     ...(projectKeys.length > 0 ? { projectKeys } : {}),
