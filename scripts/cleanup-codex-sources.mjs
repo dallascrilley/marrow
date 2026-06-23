@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { readdir, unlink, stat } from "node:fs/promises";
+import { readdir, stat, unlink } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { createLedger } from "../dist/db/ledger.js";
-import { homedir } from "node:os";
 
 const CODEX_SESSIONS_ROOT = join(homedir(), ".codex", "sessions", "2026");
 const CODEX_ARCHIVED_ROOT = join(homedir(), ".codex", "archived_sessions");
@@ -20,10 +20,12 @@ async function findSourceFile(sessionId) {
     try {
       await stat(p);
       return p;
-    } catch { /* not found */ }
+    } catch {
+      /* not found */
+    }
   }
   const archivedFiles = await readdir(CODEX_ARCHIVED_ROOT).catch(() => []);
-  const match = archivedFiles.find(f => f.includes(sessionId));
+  const match = archivedFiles.find((f) => f.includes(sessionId));
   if (match) return join(CODEX_ARCHIVED_ROOT, match);
   return null;
 }
@@ -39,7 +41,7 @@ async function main() {
        JOIN source_sessions ss ON dc.source_session_id = ss.id
        WHERE (dc.candidate_state = 'ready' OR dc.candidate_state = 'discardable_no_signal')
          AND dc.safe_to_delete = 1
-         AND ss.source_tool = 'codex-cli'`
+         AND ss.source_tool = 'codex-cli'`,
     )
     .all();
 
