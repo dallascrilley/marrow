@@ -177,6 +177,50 @@ test("leaves technologies and skill_ref empty when nothing is detected", () => {
   }
 });
 
+test("promotes a dead_end learning from a strong abandoned-approach signal", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "fix",
+      "Tried memoizing the parser, but it turned out not to work and was abandoned.",
+      { event_id: `${firstTurn.turn_id}:fix:000001` },
+    ),
+  ];
+
+  const learnings = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  const deadEnd = learnings.project.find((learning) => learning.kind === "dead_end");
+
+  assert.ok(deadEnd, "expected a dead_end learning");
+  assert.match(deadEnd.statement, /^Avoid memoizing the parser in /);
+  assert.match(deadEnd.trigger, /^When tempted to try the same approach in /);
+  assert.equal(deadEnd.evidence_type, "inferred");
+});
+
+test("does not promote a dead_end when an approach was reverted then verified-fixed", () => {
+  const source = sourceSession();
+  const firstTurn = turn({ verification_seen: true });
+  const events = [
+    event(firstTurn.turn_id, "fix", "Reverted the regex approach and rolled back the change.", {
+      event_id: `${firstTurn.turn_id}:fix:000001`,
+      payload_small: { command_strings: ["npm test"], matched_rule: "updated" },
+    }),
+    event(firstTurn.turn_id, "verification", "Verification noted: All tests pass.", {
+      event_id: `${firstTurn.turn_id}:verification:000002`,
+      payload_small: { command_strings: ["npm test"], matched_rule: "tests pass" },
+    }),
+  ];
+
+  const learnings = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+
+  assert.equal(
+    learnings.project.filter((learning) => learning.kind === "dead_end").length,
+    0,
+    "reverted-then-fixed is not a dead end",
+  );
+});
+
 test("promotes error resolution when failure is followed by a fix", () => {
   const source = sourceSession();
   const firstTurn = turn();
