@@ -148,8 +148,16 @@ function extractProjectLearningCandidates(
     input.events,
     eventsInVerifiedFixTurns,
   );
-  const fallbackCandidates =
-    input.events.length === 0 ? extractNoEventTurnFallbackCandidates(input) : [];
+  // Derive a concrete-signal fallback when no workflow candidate emerged from
+  // events or turns — even when unrelated (e.g. process) events are present. A
+  // real command/file signal in the turn should not be lost just because the
+  // turn also produced an unrelated event.
+  const hasWorkflowCandidate = [...eventCandidates, ...turnCandidates, ...deadEndCandidates].some(
+    (candidate) => candidate.kind === "workflow",
+  );
+  const fallbackCandidates = hasWorkflowCandidate
+    ? []
+    : extractConcreteTurnFallbackCandidates(input);
   return applyProjectLearningCap(
     dedupeProjectCandidates(
       [...eventCandidates, ...turnCandidates, ...deadEndCandidates, ...fallbackCandidates]
@@ -617,13 +625,9 @@ function toProjectTurnCandidates(input: {
   return candidates;
 }
 
-function extractNoEventTurnFallbackCandidates(
+function extractConcreteTurnFallbackCandidates(
   input: ExtractLearningsInput,
 ): ProjectLearningCandidate[] {
-  if (input.events.length > 0) {
-    return [];
-  }
-
   const candidates: ProjectLearningCandidate[] = [];
 
   for (const [index, turn] of input.turns.entries()) {
