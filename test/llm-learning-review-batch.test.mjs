@@ -13,11 +13,13 @@ function learning(overrides = {}) {
   return {
     confidence: "medium",
     evidence: ["evidence"],
+    evidence_type: "inferred",
     kind: "decision",
     learning_id: `learning-${counter}`,
     promotion_basis: "fixture",
     scope: "project",
     scope_key: "studio-tools",
+    trigger: "When revisiting related design decisions in studio-tools.",
     source_refs: [
       {
         event_id: null,
