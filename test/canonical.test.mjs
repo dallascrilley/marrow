@@ -77,6 +77,25 @@ test("learning schema rejects invalid confidence labels", () => {
   }, /Invalid option/);
 });
 
+test("learning schema fills tier-1 defaults for legacy records missing trigger/evidence_type", () => {
+  const { trigger, evidence_type, ...legacy } = JSON.parse(JSON.stringify(learningFixture));
+
+  const parsed = learningSchema.parse(legacy);
+
+  assert.equal(
+    parsed.trigger,
+    "When a similar situation recurs (legacy learning; original trigger not recorded).",
+  );
+  assert.equal(parsed.evidence_type, "inferred");
+});
+
+test("learning schema preserves a real trigger/evidence_type when present", () => {
+  const parsed = learningSchema.parse(JSON.parse(JSON.stringify(learningFixture)));
+
+  assert.equal(parsed.trigger, learningFixture.trigger);
+  assert.equal(parsed.evidence_type, learningFixture.evidence_type);
+});
+
 test("summary schema rejects blank titles", () => {
   const malformed = {
     ...summaryFixture,
