@@ -46,10 +46,11 @@ export const retentionStatuses = ["kept", "archived", "eligible_for_delete", "de
 export const confidenceLevels = ["high", "medium", "low"] as const;
 
 // Trust tier of a learning, ordered most- to least-trusted. `verified` = backed
-// by same-turn fix+verification; `user_stated` = a direct operator instruction;
-// `inferred` = a deterministic/heuristic extraction claim; `model_inferred` is
-// reserved for the future LLM extraction path (kept distinct so a model guess
-// never shares a tier with a deterministic claim).
+// by observed fix and/or verification evidence in the transcript (not a guess);
+// `user_stated` = a direct operator instruction; `inferred` = a
+// deterministic/heuristic extraction claim; `model_inferred` is reserved for the
+// future LLM extraction path (kept distinct so a model guess never shares a tier
+// with a deterministic claim).
 export const evidenceTypes = ["verified", "user_stated", "inferred", "model_inferred"] as const;
 
 export type EventType = (typeof eventTypes)[number];
