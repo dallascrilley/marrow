@@ -8,9 +8,8 @@ import type {
   SourceSession,
   Turn,
 } from "../models/canonical.js";
-import { learningSchema } from "../models/canonical.js";
-import { normalizeFilePath } from "./file-paths.js";
 import { isAtomicStatement, isProcessChatterText } from "./artifact-heuristics.js";
+import { normalizeFilePath } from "./file-paths.js";
 import {
   capEvidenceText,
   extractSubstantivePrompt,

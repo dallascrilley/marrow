@@ -1,7 +1,7 @@
 import type { Event, Learning, SourceSession, Summary, Turn } from "../models/canonical.js";
 import { summarySchema } from "../models/canonical.js";
-import { extractPathsFromText, normalizeFilePath } from "./file-paths.js";
 import { hasProcessChatter, hasWrapperTags } from "./artifact-heuristics.js";
+import { extractPathsFromText, normalizeFilePath } from "./file-paths.js";
 import {
   generateTopicWithOpenRouter,
   type LlmCallUsage,
