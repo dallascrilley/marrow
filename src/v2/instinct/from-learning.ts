@@ -29,7 +29,9 @@ export function domainFromLearning(learning: Learning): Domain {
 }
 
 export function createDeltaFromLearning(learning: Learning): CreateDelta {
-  const trigger = learning.title.trim();
+  // Use the extracted precondition; fall back to the title only if a legacy
+  // learning predates trigger extraction (tier-1 classification contract).
+  const trigger = learning.trigger.trim() || learning.title.trim();
   const finding = learning.statement.trim();
   return {
     op: "create",

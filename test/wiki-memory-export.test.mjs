@@ -39,10 +39,12 @@ test("memory export-wiki writes stable reviewed-memory JSONL from project learni
         scope_key: "agent-session-distillery",
         kind: "decision",
         title: "Keep the wiki import boundary narrow",
+        trigger: "When revisiting related design decisions in agent-session-distillery.",
         statement:
           "Use a versioned JSONL export contract between distillery and the wiki importer.",
         evidence: ["The integration design selected a hybrid export/import boundary."],
         confidence: "high",
+        evidence_type: "inferred",
         promotion_basis: "Explicit implementation decision captured during integration planning.",
         source_refs: [
           {
@@ -124,9 +126,11 @@ test("memory export-wiki prefers reviewed project learnings when present", async
       scope_key: "agent-session-distillery",
       kind: "decision",
       title: "Keep the wiki import boundary narrow",
+      trigger: "When revisiting related design decisions in agent-session-distillery.",
       statement: "Use deterministic project learning only as fallback.",
       evidence: ["The integration design selected a hybrid export/import boundary."],
       confidence: "high",
+      evidence_type: "inferred",
       promotion_basis: "Explicit implementation decision captured during integration planning.",
       source_refs: [
         {
