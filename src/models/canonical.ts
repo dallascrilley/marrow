@@ -153,6 +153,12 @@ export const learningSchema = z.object({
   confidence: confidenceLevelSchema,
   // Trust tier of the evidence behind this learning (see evidenceTypes).
   evidence_type: evidenceTypeSchema,
+  // Subject — technologies/entities the source session touched (languages, package
+  // managers, CLIs). Always present; `[]` when nothing is detected. Deterministic.
+  technologies: z.array(nonEmptyStringSchema).default([]),
+  // Capability — harness skill(s) this learning informs, for contextual injection.
+  // Always present; `[]` when no skill maps. Deterministic command->skill lookup.
+  skill_ref: z.array(nonEmptyStringSchema).default([]),
   promotion_basis: nonEmptyStringSchema,
   source_refs: z.array(sourceRefSchema),
 });
@@ -262,6 +268,8 @@ export const learningFixture: Readonly<Learning> = deepFreeze({
   evidence: ["Task 2 implementation grouped all model contracts under src/models/canonical.ts."],
   confidence: "high",
   evidence_type: "inferred",
+  technologies: ["typescript"],
+  skill_ref: [],
   promotion_basis: "Explicit implementation decision captured during scaffolding.",
   source_refs: [
     {
