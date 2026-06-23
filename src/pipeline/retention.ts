@@ -7,7 +7,10 @@ import {
   getProjectKnowledgeSessionPath,
   getUserKnowledgeSessionPath,
 } from "../writers/knowledge-writer.js";
-import { getSessionManifestPath } from "../writers/manifest-writer.js";
+import {
+  getSessionManifestPath,
+  getSessionManifestPathForRevision,
+} from "../writers/manifest-writer.js";
 import { getRetentionReceiptPath } from "../writers/report-writer.js";
 import {
   getSessionSummaryJsonPath,
@@ -54,7 +57,7 @@ export async function evaluateRetentionReadiness(input: {
   const userLearningsWritten = await fileExists(
     getUserKnowledgeSessionPath(userScopeKey, sessionId),
   );
-  const manifestWritten = await fileExists(getSessionManifestPath(sessionId));
+  const manifestWritten = await manifestExists(sessionId, input.sourceSession.source_hash);
   const receiptPath = getRetentionReceiptPath(sessionId);
   const receiptWritten = await fileExists(receiptPath);
   const hasLearnings = projectLearningsWritten || userLearningsWritten;
@@ -226,6 +229,14 @@ async function fileExists(path: string): Promise<boolean> {
 
     throw error;
   }
+}
+
+async function manifestExists(sessionId: string, sourceHash: string): Promise<boolean> {
+  if (await fileExists(getSessionManifestPathForRevision(sessionId, sourceHash))) {
+    return true;
+  }
+
+  return fileExists(getSessionManifestPath(sessionId));
 }
 
 function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {

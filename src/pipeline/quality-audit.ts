@@ -10,6 +10,13 @@ import {
   getUserKnowledgeSessionPath,
 } from "../writers/knowledge-writer.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
+import {
+  hasProcessChatter,
+  hasUsefulSummarySignal,
+  hasWrapperTags,
+  isLowSignalSummary,
+  looksLikeCompletedOutcome,
+} from "./artifact-heuristics.js";
 import { defaultUserScopeKey } from "./extract.js";
 
 export type QualityIssueCode =
@@ -316,7 +323,7 @@ function collectSessionIssues(
     issues.push("process_chatter");
   }
 
-  if (/<(?:attached_files|code_selection|plugin_info|skill)\b/i.test(summaryText)) {
+  if (hasWrapperTags(summaryText)) {
     issues.push("wrapper_tags");
   }
 
@@ -349,73 +356,7 @@ async function readKnowledgeArtifactState(sourceSession: SourceSessionRow): Prom
     fileExists(getUserKnowledgeSessionPath(defaultUserScopeKey, sourceSession.session_id)),
   ]);
 
-  return {
-    project,
-    user,
-  };
-}
-
-function isLowSignalSummary(summary: Summary): boolean {
-  return (
-    !hasUsefulSummarySignal(summary) && summary.next_step === "No explicit next step recorded."
-  );
-}
-
-function hasUsefulSummarySignal(summary: Summary): boolean {
-  return (
-    summary.what_worked.length > 0 ||
-    summary.what_failed.length > 0 ||
-    summary.what_was_decided.length > 0 ||
-    summary.useful_commands.length > 0 ||
-    summary.files_of_interest.length > 0 ||
-    summary.project_learnings.length > 0 ||
-    summary.user_learnings.length > 0
-  );
-}
-
-function looksLikeCompletedOutcome(value: string): boolean {
-  return (
-    /\b(?:done|completed|implemented|fixed|resolved|merged|pushed)\b/i.test(value) &&
-    /\b(?:verified|tests? pass(?:ed)?|all checks passed|0 failures)\b/i.test(value)
-  );
-}
-
-function hasProcessChatter(summaryText: string): boolean {
-  const lines = summaryText.split(/\r?\n/);
-
-  for (const line of lines) {
-    if (looksLikeProcessChatterLine(line)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function looksLikeProcessChatterLine(line: string): boolean {
-  const normalized = line.trim().toLowerCase();
-
-  if (normalized.length === 0) {
-    return false;
-  }
-
-  // Process-only prefixes/phrases that strongly signal assistant narration.
-  const processPhrasePattern =
-    /^(?:let me|i(?:'|’)ll|i will|i need to|i(?:'|’)m|checking|exploring|now let me|now i(?:'|’)ll|now i(?:'|’)m|first, let me|first, i(?:'|’)ll|first, i(?:'|’)m)\b/i;
-
-  if (!processPhrasePattern.test(normalized)) {
-    return false;
-  }
-
-  // If the same line also contains concrete outcome signal or is long enough
-  // to convey substance, it is durable content wrapped in process wording,
-  // not pure chatter.
-  const concreteSignalPattern =
-    /\b(?:fix|fixed|implement|implemented|resolve|resolved|verify|verified|test|tests?|pass|passed|fail|failed|error|add|added|update|updated|remove|removed|create|created|commit|committed|push|pushed|merge|merged|build|built|run|ran|command|file|path|change|changes|outcome|result|results|output|done|completed|deployed|released|refactored|migrated|upgraded|downgraded|configured|installed)\b/i;
-  const hasConcreteSignal = concreteSignalPattern.test(normalized);
-  const isSubstantiveLength = normalized.length >= 60;
-
-  return !(hasConcreteSignal || isSubstantiveLength);
+  return { project, user };
 }
 
 function createIssueCountMap(): Record<QualityIssueCode, number> {

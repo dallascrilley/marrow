@@ -32,6 +32,42 @@ const noSignalPatterns: readonly RegExp[] = [
 ];
 
 /**
+ * Markers that identify a transcript turn that is actually an *embedded* LLM
+ * call made by another application (e.g. an app that logs its own model
+ * requests into `~/.claude/projects`) rather than an interactive coding turn.
+ * These leak a system/developer prompt as the first "user" message, which then
+ * masquerades as the session topic. Treating them as no-signal keeps the corpus
+ * free of foreign system prompts.
+ */
+const embeddedAgentPromptPatterns: readonly RegExp[] = [
+  /^you are an? [\w'\u2019-]+(?:[\s,][\w'\u2019-]+){0,8}\b/i,
+  /^you are the [\w'\u2019-]+(?:[\s,][\w'\u2019-]+){0,8}\b/i,
+  /\byour (?:task|role|job) is to\b/i,
+  /\bgiven the user'?s most recent message\b/i,
+  /\byou (?:must|should) (?:respond|reply|output|return) (?:only )?(?:with|in|using) (?:valid )?json\b/i,
+  /^(?:respond|reply|output|return|answer)\b[^.]{0,40}?\b(?:only )?(?:with|in|using|as) (?:valid |raw )?json\b/i,
+];
+
+/**
+ * True when a prompt is an embedded system/developer prompt from another
+ * application rather than an interactive user turn. See
+ * `embeddedAgentPromptPatterns`.
+ */
+export function looksLikeEmbeddedAgentPrompt(raw: string): boolean {
+  const substantive = extractSubstantivePrompt(raw);
+  if (substantive === null) {
+    return false;
+  }
+
+  const normalized = substantive.replace(/\s+/g, " ").trim();
+  if (normalized.length === 0) {
+    return false;
+  }
+
+  return embeddedAgentPromptPatterns.some((pattern) => pattern.test(normalized));
+}
+
+/**
  * Strip harness/boot context from a raw user prompt. Does not truncate.
  */
 export function sanitizeUserPrompt(raw: string): string {
@@ -217,9 +253,14 @@ export function sanitizeLearningTitle(
     return `${prefix}: ${truncateInline(cleanStatement, maxBodyLength)}`;
   }
 
-  const body = sanitizeHarnessLeakText(title.slice(colonIndex + 1));
+  const body = sanitizeLearningStatement(sanitizeHarnessLeakText(title.slice(colonIndex + 1)));
   const bodyIsClean =
-    body.length > 0 && !looksLikeSkillHarnessLeak(body) && !/<\/?skill\b/i.test(body);
+    body.length > 0 &&
+    !looksLikeSkillHarnessLeak(body) &&
+    !/<\/?skill\b/i.test(body) &&
+    !/\*\*/g.test(body) &&
+    !/\|/g.test(body) &&
+    !/#\s+/g.test(body);
 
   return `${prefix}: ${truncateInline(bodyIsClean ? body : cleanStatement, maxBodyLength)}`;
 }
@@ -236,6 +277,10 @@ export function isNoSignalPrompt(raw: string): boolean {
   }
 
   if (isShortConversationalNoSignal(singleLine)) {
+    return true;
+  }
+
+  if (looksLikeEmbeddedAgentPrompt(substantive)) {
     return true;
   }
 
@@ -418,4 +463,101 @@ function uniqueNonEmpty(values: readonly string[]): string[] {
   }
 
   return unique;
+}
+
+const markdownTableRowPattern = /^\s*\|([^\n]+\|)+[^\n]*$/m;
+const markdownTableSeparatorPattern = /^\s*\|?\s*:?-+:?\s*\|/m;
+const markdownHeadingPattern = /^(#{1,6})\s+([^\n]+)$/gm;
+const markdownBlockFencePattern = /^```[\s\S]*?^```/gm;
+const markdownUnclosedFencePattern = /^```[\s\S]*$/gm;
+const markdownLinkPattern = /\[([^\]]+)\]\([^)]+\)/g;
+
+/**
+ * Remove markdown tables, headings, emphasis, block fences, and list bullets,
+ * then collapse whitespace. Intended for project-learning statements only.
+ */
+export function sanitizeLearningStatement(
+  value: string,
+  options: { preserveNewlines?: boolean } = {},
+): string {
+  if (!value) return value;
+  let cleaned = value;
+
+  // Strip fenced code blocks first so their content doesn't leak.
+  cleaned = cleaned.replace(markdownBlockFencePattern, " ");
+  cleaned = cleaned.replace(markdownUnclosedFencePattern, " ");
+
+  // Truncate at the start of a markdown table.
+  const tableStart = findMarkdownTableStart(cleaned);
+  if (tableStart !== -1) {
+    cleaned = cleaned.slice(0, tableStart);
+  }
+  cleaned = cleaned.replace(/\s*\|\s*/g, " ");
+
+  // Strip headings.
+  cleaned = cleaned.replace(markdownHeadingPattern, " $2 ");
+
+  // Strip emphasis/italic wrappers while preserving inner content.
+  cleaned = cleaned.replace(/(\*\*|__)([^\n]+?)\1/g, " $2 ");
+  cleaned = cleaned.replace(/(?<![\w*])\*([^\n\s][^\n]*?)\*(?![\w*])/g, " $1 ");
+  cleaned = cleaned.replace(/(?<![\w_])_([^\n\s][^\n]*?)_(?![\w_])/g, " $1 ");
+
+  // Strip markdown links, keeping only the link text.
+  cleaned = cleaned.replace(markdownLinkPattern, "$1");
+
+  // Strip list bullets.
+  cleaned = cleaned.replace(/^[\s]*[-*+]\s+/gm, " ");
+
+  // Strip common assistant framing tokens.
+  cleaned = cleaned
+    .replace(
+      /^\s*(?:Verified:|Done\s*[-—]|Good\s*[-—]|Summary of changes:|Summary of what changed:|\*\*Verdict:\*\*|Verdict:)\s*/i,
+      " ",
+    )
+    .trim();
+
+  // Collapse whitespace unless asked to keep newlines for downstream dump detection.
+  if (options.preserveNewlines) {
+    cleaned = cleaned.replace(/[ \t]+/g, " ").trim();
+  } else {
+    cleaned = cleaned.replace(/\s+/g, " ").trim();
+  }
+
+  return cleaned;
+}
+
+function findMarkdownTableStart(value: string): number {
+  const lines = value.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (markdownTableSeparatorPattern.test(line)) {
+      const headingIndex = findPrecedingHeadingIndex(lines, i);
+      const startIndex = headingIndex !== -1 ? headingIndex : i;
+      return lines.slice(0, startIndex).join("\n").length + (startIndex > 0 ? 1 : 0);
+    }
+    if (
+      markdownTableRowPattern.test(line) &&
+      i + 1 < lines.length &&
+      markdownTableSeparatorPattern.test(lines[i + 1] ?? "")
+    ) {
+      const headingIndex = findPrecedingHeadingIndex(lines, i);
+      const startIndex = headingIndex !== -1 ? headingIndex : i;
+      return lines.slice(0, startIndex).join("\n").length + (startIndex > 0 ? 1 : 0);
+    }
+  }
+  return -1;
+}
+
+function findPrecedingHeadingIndex(lines: readonly string[], fromIndex: number): number {
+  for (let j = fromIndex - 1; j >= 0 && j >= fromIndex - 4; j--) {
+    const line = lines[j] ?? "";
+    if (/^\s*$/.test(line)) {
+      continue;
+    }
+    if (/^#{1,6}\s+/.test(line)) {
+      return j;
+    }
+    break;
+  }
+  return -1;
 }

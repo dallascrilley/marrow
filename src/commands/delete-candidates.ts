@@ -8,7 +8,10 @@ import {
   getProjectKnowledgeSessionPath,
   getUserKnowledgeSessionPath,
 } from "../writers/knowledge-writer.js";
-import { getSessionManifestPath } from "../writers/manifest-writer.js";
+import {
+  getSessionManifestPath,
+  getSessionManifestPathForRevision,
+} from "../writers/manifest-writer.js";
 import { getRetentionReceiptPath } from "../writers/report-writer.js";
 import {
   getSessionSummaryJsonPath,
@@ -24,6 +27,15 @@ type RetentionArtifactPaths = {
   user_knowledge_jsonl: string;
 };
 
+// Two distinct status axes are intentionally reported side by side:
+//   - candidate_state: the persisted ledger lifecycle value
+//     (ready | discardable_no_signal | pending_artifacts | stale | applied),
+//     set in src/pipeline/retention.ts and stored in the DB.
+//   - status: the derived binary deletion gate for this CLI report,
+//     "ready" only when safe_to_delete AND candidate_state is a ready state,
+//     otherwise "blocked".
+// Note the overlap: candidate_state "ready" and status "ready" share a word
+// but are not the same field — always check which axis a value came from.
 type RetentionDecision = {
   artifact_paths: RetentionArtifactPaths;
   artifact_presence: Record<keyof RetentionArtifactPaths, boolean>;
@@ -53,8 +65,12 @@ export async function executeDeleteCandidates(
 }
 
 async function buildRetentionDecision(candidate: DeletionCandidateRow): Promise<RetentionDecision> {
+  const manifestPath = getSessionManifestPathForRevision(
+    candidate.session_id,
+    candidate.source_hash,
+  );
   const artifactPaths = {
-    manifest_json: getSessionManifestPath(candidate.session_id),
+    manifest_json: manifestPath,
     project_knowledge_jsonl: getProjectKnowledgeSessionPath(
       candidate.project_key,
       candidate.session_id,
@@ -69,9 +85,16 @@ async function buildRetentionDecision(candidate: DeletionCandidateRow): Promise<
       async ([name, path]) => [name, await pathExists(path)] as const,
     ),
   );
-  const artifactPresence = Object.fromEntries(
+  const artifactPresenceBeforeManifestFallback = Object.fromEntries(
     artifactPresenceEntries,
   ) as RetentionDecision["artifact_presence"];
+  const manifestPresent =
+    artifactPresenceBeforeManifestFallback.manifest_json ||
+    (await pathExists(getSessionManifestPath(candidate.session_id)));
+  const artifactPresence = {
+    ...artifactPresenceBeforeManifestFallback,
+    manifest_json: manifestPresent,
+  };
   const missingArtifacts = missingRequiredArtifacts(artifactPresence, candidate.candidate_state);
   const safeToDelete = candidate.safe_to_delete === 1;
 
