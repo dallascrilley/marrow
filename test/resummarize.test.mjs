@@ -8,6 +8,7 @@ import { createLedger, listSourceSessions, upsertSourceSession } from "../dist/d
 import { sourceSessionFixture, turnSchema } from "../dist/models/canonical.js";
 import { resummarizeSessions } from "../dist/pipeline/resummarize.js";
 import { isLowSignalTopic, summarizeSession } from "../dist/pipeline/summarize.js";
+import { getProjectKnowledgeSessionPath } from "../dist/writers/knowledge-writer.js";
 import { writeSessionManifest } from "../dist/writers/manifest-writer.js";
 import { writeSessionSummary } from "../dist/writers/summary-writer.js";
 
@@ -319,6 +320,74 @@ test("resummarizeSessions --low-signal-only skips high-signal topics", async () 
   }
 });
 
+async function writeProjectKnowledge({ projectKey, sessionId, learningCount }) {
+  const path = getProjectKnowledgeSessionPath(projectKey, sessionId);
+  await mkdir(join(path, ".."), { recursive: true });
+  const lines = Array.from({ length: learningCount }, (_, index) =>
+    JSON.stringify({ statement: `learning ${index}` }),
+  );
+  await writeFile(path, lines.length === 0 ? "" : `${lines.join("\n")}\n`, "utf8");
+}
+
+test("resummarizeSessions --over-extracted-only selects only sessions above the cap", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-over-"));
+  const runtimeRoot = join(sandbox, "runtime");
+  process.env[runtimeOverrideEnvVar] = runtimeRoot;
+  const previousCap = process.env.ASD_MAX_PROJECT_LEARNINGS;
+  process.env.ASD_MAX_PROJECT_LEARNINGS = "3";
+
+  try {
+    const database = await createLedger();
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId: "over-extracted-session",
+      topic: "Fix export-index contract topic provenance",
+      userPrompt: "Fix export-index contract topic provenance",
+    });
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId: "within-cap-session",
+      topic: "Fix export-index contract topic provenance",
+      userPrompt: "Fix export-index contract topic provenance",
+    });
+
+    // Cap is 3: 5 learnings is over, 2 is within.
+    await writeProjectKnowledge({
+      projectKey: "demo",
+      sessionId: "over-extracted-session",
+      learningCount: 5,
+    });
+    await writeProjectKnowledge({
+      projectKey: "demo",
+      sessionId: "within-cap-session",
+      learningCount: 2,
+    });
+
+    const result = await resummarizeSessions(database, {
+      dryRun: true,
+      overExtractedOnly: true,
+    });
+
+    assert.equal(result.would_process_count, 1);
+    assert.equal(result.skipped_count, 1);
+    const skipped = result.skipped.find((entry) => entry.reason === "not_over_extracted");
+    assert.ok(skipped, "within-cap session should be skipped as not_over_extracted");
+    assert.equal(skipped.session_id, "within-cap-session");
+  } finally {
+    if (previousCap === undefined) {
+      delete process.env.ASD_MAX_PROJECT_LEARNINGS;
+    } else {
+      process.env.ASD_MAX_PROJECT_LEARNINGS = previousCap;
+    }
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
 test("resummarizeSessions --low-signal-only + llmTopic uses mocked generator", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-llm-"));
   const runtimeRoot = join(sandbox, "runtime");
@@ -351,6 +420,61 @@ test("resummarizeSessions --low-signal-only + llmTopic uses mocked generator", a
     assert.equal(calls.length, 1);
     assert.equal(result.sessions[0]?.topic, "handoff spec implementation");
     assert.equal(result.sessions[0]?.topic_source, "llm");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("resummarizeSessions threads onUsage and tags topic_generation telemetry", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-topic-telemetry-"));
+  const runtimeRoot = join(sandbox, "runtime");
+  process.env[runtimeOverrideEnvVar] = runtimeRoot;
+
+  try {
+    const database = await createLedger();
+    const sessionId = "topic-telemetry-session";
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId,
+      topic: "brainstorming",
+      userPrompt: "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.",
+    });
+
+    const usageEvents = [];
+    const result = await resummarizeSessions(database, {
+      generateTopic: async (input) => {
+        input.onUsage?.({
+          model: "openai/gpt-5.4-nano",
+          input_tokens: 10,
+          output_tokens: 5,
+          total_tokens: 15,
+          reasoning_tokens: 1,
+          cached_tokens: 0,
+          cost: 0.0001,
+          cost_source: "upstream",
+          cost_is_known: true,
+          missing_reason: null,
+          duration_ms: 100,
+          cache_hit: false,
+        });
+        return "telemetry topic";
+      },
+      llmTopic: true,
+      lowSignalOnly: true,
+      sessionIds: [sessionId],
+      onUsage: (usage, sessionId) => {
+        usageEvents.push({ usage, sessionId });
+      },
+    });
+
+    assert.equal(result.processed_count, 1);
+    assert.equal(result.sessions[0]?.topic_source, "llm");
+    assert.equal(usageEvents.length, 1);
+    assert.equal(usageEvents[0].sessionId, sessionId);
+    assert.equal(usageEvents[0].usage.cost, 0.0001);
   } finally {
     delete process.env[runtimeOverrideEnvVar];
     await rm(sandbox, { force: true, recursive: true });

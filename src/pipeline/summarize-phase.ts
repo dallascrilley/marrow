@@ -17,7 +17,11 @@ import {
   writeSessionSummary,
 } from "../writers/summary-writer.js";
 import { extractLearnings } from "./extract.js";
-import { type LlmTopicGenerator, summarizeSessionWithOptionalLlmTopic } from "./summarize.js";
+import {
+  type LlmTopicGenerator,
+  type LlmUsageSink,
+  summarizeSessionWithOptionalLlmTopic,
+} from "./summarize.js";
 
 export async function runSummarizePhase(
   database: DatabaseSync,
@@ -28,6 +32,7 @@ export async function runSummarizePhase(
   llmTopic = false,
   force = false,
   generateTopic?: LlmTopicGenerator,
+  onUsage?: LlmUsageSink,
 ) {
   const checkpoint = getPhaseCheckpoint(database, sourceSession.id, "summarized");
 
@@ -61,7 +66,9 @@ export async function runSummarizePhase(
       userLearnings: reducedLearnings.user,
     },
     {
-      ...(generateTopic === undefined ? { llmTopic } : { generateTopic, llmTopic }),
+      ...(generateTopic === undefined
+        ? { llmTopic, onUsage }
+        : { generateTopic, llmTopic, onUsage }),
     },
   );
   const summaryResult = await writeSessionSummary(summary);

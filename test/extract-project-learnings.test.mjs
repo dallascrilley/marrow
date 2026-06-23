@@ -253,6 +253,43 @@ test("falls back to the default failure trigger when no signature is present", (
   assert.equal(failure.trigger, `When the same failure recurs in ${source.project_key}.`);
 });
 
+test("does not treat ordinary all-caps E-words as an error signature", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "failure",
+      "The EXPECTED EXPORTS were ENABLED but the build still failed.",
+      {
+        event_id: `${firstTurn.turn_id}:failure:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  const failure = learnings.project.find((learning) => learning.kind === "failure_mode");
+
+  assert.ok(failure, "expected a failure_mode learning");
+  assert.equal(failure.trigger, `When the same failure recurs in ${source.project_key}.`);
+});
+
+test("recovers a real errno even when a non-errno E-word appears first", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(firstTurn.turn_id, "failure", "EXPECTED the open to succeed but it failed with ENOENT.", {
+      event_id: `${firstTurn.turn_id}:failure:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  const failure = learnings.project.find((learning) => learning.kind === "failure_mode");
+
+  assert.ok(failure, "expected a failure_mode learning");
+  assert.equal(failure.trigger, `When ENOENT recurs in ${source.project_key}.`);
+});
+
 test("promotes error resolution when failure is followed by a fix", () => {
   const source = sourceSession();
   const firstTurn = turn();

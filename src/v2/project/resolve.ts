@@ -142,13 +142,29 @@ async function readGitOriginRemote(workspacePath: string): Promise<string | null
     const { stdout } = await execFileAsync(
       "git",
       ["-C", workspacePath, "remote", "get-url", "origin"],
-      { encoding: "utf8", timeout: 5_000 },
+      { encoding: "utf8", timeout: 5_000, env: gitProbeEnv() },
     );
     const trimmed = stdout.trim();
     return trimmed.length > 0 ? normaliseGitRemote(trimmed) : null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Strip inherited git env vars so `-C <workspacePath>` repository discovery is
+ * honored. Without this, running under a git hook (which exports `GIT_DIR`,
+ * `GIT_WORK_TREE`, etc.) makes git ignore `-C` and probe the ambient repo,
+ * misresolving the project id to the host repo's origin remote.
+ */
+function gitProbeEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  delete env.GIT_INDEX_FILE;
+  delete env.GIT_PREFIX;
+  delete env.GIT_COMMON_DIR;
+  return env;
 }
 
 async function readDeclaredProjectKey(root: string | null | undefined): Promise<string | null> {

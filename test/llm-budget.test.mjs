@@ -93,14 +93,14 @@ test("parseMaxPerWindow rejects invalid specs", () => {
   assert.throws(() => parseMaxPerWindow("5/24"), /Invalid max-per window/);
 });
 
-test("getDefaultMaxPerWindow reads ASD_LLM_MAX_PER and falls back to 5/24h", {
+test("getDefaultMaxPerWindow reads ASD_LLM_MAX_PER and falls back to 50/24h", {
   concurrency: false,
 }, () => {
   const previous = process.env.ASD_LLM_MAX_PER;
 
   try {
     delete process.env.ASD_LLM_MAX_PER;
-    assert.equal(getDefaultMaxPerWindow(), "5/24h");
+    assert.equal(getDefaultMaxPerWindow(), "50/24h");
 
     process.env.ASD_LLM_MAX_PER = "12/24h";
     assert.equal(getDefaultMaxPerWindow(), "12/24h");

@@ -150,8 +150,16 @@ function extractProjectLearningCandidates(
     input.events,
     eventsInVerifiedFixTurns,
   );
-  const fallbackCandidates =
-    input.events.length === 0 ? extractNoEventTurnFallbackCandidates(input) : [];
+  // Derive a concrete-signal fallback when no workflow candidate emerged from
+  // events or turns — even when unrelated (e.g. process) events are present. A
+  // real command/file signal in the turn should not be lost just because the
+  // turn also produced an unrelated event.
+  const hasWorkflowCandidate = [...eventCandidates, ...turnCandidates, ...deadEndCandidates].some(
+    (candidate) => candidate.kind === "workflow",
+  );
+  const fallbackCandidates = hasWorkflowCandidate
+    ? []
+    : extractConcreteTurnFallbackCandidates(input);
   return applyProjectLearningCap(
     dedupeProjectCandidates(
       [...eventCandidates, ...turnCandidates, ...deadEndCandidates, ...fallbackCandidates]
@@ -162,7 +170,7 @@ function extractProjectLearningCandidates(
 }
 const defaultProjectLearningCap = 12;
 
-function getProjectLearningCap(): number {
+export function getProjectLearningCap(): number {
   const raw = process.env.ASD_MAX_PROJECT_LEARNINGS;
   if (raw === undefined || raw.length === 0) return defaultProjectLearningCap;
   const parsed = Number.parseInt(raw, 10);
@@ -619,13 +627,9 @@ function toProjectTurnCandidates(input: {
   return candidates;
 }
 
-function extractNoEventTurnFallbackCandidates(
+function extractConcreteTurnFallbackCandidates(
   input: ExtractLearningsInput,
 ): ProjectLearningCandidate[] {
-  if (input.events.length > 0) {
-    return [];
-  }
-
   const candidates: ProjectLearningCandidate[] = [];
 
   for (const [index, turn] of input.turns.entries()) {
@@ -1616,15 +1620,75 @@ function deriveProjectEvidenceType(candidate: ProjectLearningCandidate): Evidenc
     : "inferred";
 }
 
+// Known Node/libuv/POSIX errno codes. An allowlist (not a denylist) so that
+// ordinary all-caps E-words in failure text — EXPECTED, EXAMPLE, EXTERNAL,
+// ENABLED, EXPORTS — are never mistaken for an errno signature.
+const KNOWN_ERRNO_CODES: ReadonlySet<string> = new Set([
+  "EACCES",
+  "EADDRINUSE",
+  "EADDRNOTAVAIL",
+  "EAGAIN",
+  "EBADF",
+  "EBUSY",
+  "ECANCELED",
+  "ECONNABORTED",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EEXIST",
+  "EFAULT",
+  "EFBIG",
+  "EHOSTUNREACH",
+  "EINTR",
+  "EINVAL",
+  "EIO",
+  "EISDIR",
+  "ELOOP",
+  "EMFILE",
+  "EMLINK",
+  "ENAMETOOLONG",
+  "ENETDOWN",
+  "ENETUNREACH",
+  "ENFILE",
+  "ENOBUFS",
+  "ENODEV",
+  "ENOENT",
+  "ENOMEM",
+  "ENOSPC",
+  "ENOSYS",
+  "ENOTCONN",
+  "ENOTDIR",
+  "ENOTEMPTY",
+  "ENOTFOUND",
+  "ENOTSOCK",
+  "ENOTSUP",
+  "ENXIO",
+  "EOPNOTSUPP",
+  "EOVERFLOW",
+  "EPERM",
+  "EPIPE",
+  "EPROTO",
+  "EPROTONOSUPPORT",
+  "EPROTOTYPE",
+  "ERANGE",
+  "EROFS",
+  "ESHUTDOWN",
+  "ESPIPE",
+  "ESRCH",
+  "ETIMEDOUT",
+  "EXDEV",
+]);
+
 // Tier-1 MVP precondition: deterministic, kind-derived. No LLM. The future
 // LLM-recall pass (per the classification contract) refines these in place.
 // Tier-3b: normalize a failure summary to a canonical symptom signature so the
 // same error keys to the same trigger — and thus the same durable Instinct id —
 // across sessions. Returns null when no recognizable signature is present.
 function normalizeErrorSignature(text: string): string | null {
-  const errno = text.match(/\b(E[A-Z]{3,})\b/)?.[1];
-  if (errno !== undefined && errno !== "ERROR" && errno !== "EXCEPTION") {
-    return errno;
+  for (const match of text.matchAll(/\b(E[A-Z]{2,})\b/g)) {
+    const code = match[1];
+    if (code !== undefined && KNOWN_ERRNO_CODES.has(code)) {
+      return code;
+    }
   }
   const exception = text.match(/\b([A-Z][A-Za-z0-9]*(?:Error|Exception))\b/)?.[1];
   if (exception !== undefined) {

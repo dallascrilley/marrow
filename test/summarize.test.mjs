@@ -406,6 +406,8 @@ test("low-signal topic heuristic is conservative but catches harness paths and c
   assert.equal(isLowSignalTopic("whats-next"), true);
   assert.equal(isLowSignalTopic("# Writing Plans"), true);
   assert.equal(isLowSignalTopic("# PATH Doctor"), true);
+  assert.equal(isLowSignalTopic("## Catalog facets"), true);
+  assert.equal(isLowSignalTopic("### Operating model"), true);
   assert.equal(isLowSignalTopic("$brainstorming given the following pieces of"), true);
   assert.equal(isLowSignalTopic("Fix export-index contract topic provenance"), false);
   assert.equal(isLowSignalTopic("Automation: macOS stability scan"), false);
@@ -429,6 +431,32 @@ test("low-signal topic heuristic catches wrapper/harness topic leaks", () => {
     isLowSignalTopic("Scan recent commits for likely bugs and propose minimal fixes."),
     false,
   );
+});
+
+test("low-signal topic heuristic catches operator control-loop and launcher prompts", () => {
+  // Recurring chief-of-staff / agent-driver prompts that carry no session signal.
+  assert.equal(
+    isLowSignalTopic(
+      "Heartbeat. Run one bounded operating loop now. This is a recurring control loop",
+    ),
+    true,
+  );
+  assert.equal(
+    isLowSignalTopic(
+      "Continue with the next best set of actions, using your best judgement to resolve",
+    ),
+    true,
+  );
+  assert.equal(isLowSignalTopic("Role: Lead Systems Architect & ~/.hub Specialist"), true);
+  // Bare agent-CLI launch with flags is the harness starting an agent, not a topic.
+  assert.equal(
+    isLowSignalTopic("pi --no-extensions --no-skills --no-prompt-templates --no-themes"),
+    true,
+  );
+  // False-positive guards: real topics that merely mention these words stay high-signal.
+  assert.equal(isLowSignalTopic("claude code hooks not firing on SessionEnd"), false);
+  assert.equal(isLowSignalTopic("Fix the heartbeat endpoint returning 500"), false);
+  assert.equal(isLowSignalTopic("Role-based access control for the admin dashboard"), false);
 });
 
 test("low-signal topic heuristic rejects embedded foreign system prompts", () => {
@@ -572,6 +600,61 @@ test("optional LLM topic calls mocked generator only for weak deterministic topi
   );
   assert.equal(summary.topic, "gated LLM topic support");
   assert.equal(summary.topic_source, "llm");
+});
+
+test("optional LLM topic threads onUsage with session id to the generator", async () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "agent-session-distillery",
+    session_id: "llm-topic-usage",
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Implemented gated LLM topic generation.",
+      commands_seen: ["npm run build"],
+      ended_at: "2026-05-22T20:10:00.000Z",
+      files_touched: ["src/pipeline/summarize.ts"],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-22T20:09:00.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.",
+      verification_seen: false,
+    }),
+  ];
+  const usageEvents = [];
+
+  await summarizeSessionWithOptionalLlmTopic(
+    { events: [], sourceSession, turns },
+    {
+      generateTopic: async (input) => {
+        input.onUsage?.({
+          model: "openai/gpt-5.4-nano",
+          input_tokens: 10,
+          output_tokens: 5,
+          total_tokens: 15,
+          reasoning_tokens: 1,
+          cached_tokens: 0,
+          cost: 0.0001,
+          cost_source: "upstream",
+          cost_is_known: true,
+          missing_reason: null,
+          duration_ms: 100,
+          cache_hit: false,
+        });
+        return "usage-aware topic";
+      },
+      llmTopic: true,
+      onUsage: (usage, sessionId) => {
+        usageEvents.push({ usage, sessionId });
+      },
+    },
+  );
+
+  assert.equal(usageEvents.length, 1);
+  assert.equal(usageEvents[0].sessionId, sourceSession.session_id);
+  assert.equal(usageEvents[0].usage.cost, 0.0001);
 });
 
 test("optional LLM topic falls back to the deterministic topic when generation fails", async () => {
