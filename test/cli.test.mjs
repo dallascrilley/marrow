@@ -374,6 +374,140 @@ test("export-index writes a consolidated v1 JSONL from manifests and summaries",
   }
 });
 
+test("export-index dedupes legacy and revision manifests by identity keeping newest", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-session-index-dedupe-"));
+  const runtimeRoot = join(sandbox, "runtime-root");
+
+  try {
+    const manifestDir = join(runtimeRoot, "sources", "manifests");
+    const summaryDir = join(runtimeRoot, "summaries", "by-session", "dup-session");
+    await mkdir(manifestDir, { recursive: true });
+    await mkdir(summaryDir, { recursive: true });
+
+    const sourcePath = join(sandbox, "source", "dup-session.jsonl");
+    const olderSummaryPath = join(summaryDir, "older-summary.json");
+    const newerSummaryPath = join(summaryDir, "newer-summary.json");
+    const sourceSession = {
+      source_tool: "cursor",
+      source_format: "jsonl",
+      source_path: sourcePath,
+      source_hash: "sha256:older",
+      workspace_path: "/Users/example/Code/demo",
+      project_key: "demo",
+      session_id: "dup-session",
+      conversation_id: "demo:dup-session",
+      started_at: "2026-05-22T19:00:00.000Z",
+      updated_at: "2026-05-22T19:00:00.000Z",
+      ingest_status: "summarized",
+      retention_status: "kept",
+    };
+
+    await writeFile(
+      olderSummaryPath,
+      `${JSON.stringify({
+        session_id: "dup-session",
+        topic: "Older summary topic.",
+        what_worked: [],
+        what_failed: [],
+        what_was_decided: [],
+        useful_commands: [],
+        files_of_interest: [],
+        next_step: "No open next step recorded.",
+        project_learnings: [],
+        user_learnings: [],
+        deletion_readiness: "ready",
+      })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      newerSummaryPath,
+      `${JSON.stringify({
+        session_id: "dup-session",
+        topic: "Newer summary topic.",
+        topic_source: "deterministic",
+        what_worked: [],
+        what_failed: [],
+        what_was_decided: [],
+        useful_commands: [],
+        files_of_interest: [],
+        next_step: "No open next step recorded.",
+        project_learnings: [],
+        user_learnings: [],
+        deletion_readiness: "ready",
+      })}\n`,
+      "utf8",
+    );
+
+    await writeFile(
+      join(manifestDir, "dup-session.json"),
+      `${JSON.stringify({
+        artifact_paths: {
+          project_knowledge_jsonl_path: null,
+          retention_receipt_path: join(runtimeRoot, "reports", "dup-receipt.json"),
+          summary_json_path: olderSummaryPath,
+          summary_markdown_path: join(summaryDir, "older-summary.md"),
+          user_knowledge_jsonl_path: null,
+        },
+        generated_at: "2026-05-22T20:00:00.000Z",
+        session: sourceSession,
+        source_span: {
+          event_count: 0,
+          first_turn_id: null,
+          last_turn_id: null,
+          line_end: null,
+          line_start: null,
+          turn_count: 1,
+        },
+        version: 1,
+      })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      join(manifestDir, "dup-session.older.json"),
+      `${JSON.stringify({
+        artifact_paths: {
+          project_knowledge_jsonl_path: null,
+          retention_receipt_path: join(runtimeRoot, "reports", "dup-receipt.json"),
+          summary_json_path: newerSummaryPath,
+          summary_markdown_path: join(summaryDir, "newer-summary.md"),
+          user_knowledge_jsonl_path: null,
+        },
+        generated_at: "2026-05-22T21:00:00.000Z",
+        session: { ...sourceSession, source_hash: "sha256:newer" },
+        source_span: {
+          event_count: 0,
+          first_turn_id: null,
+          last_turn_id: null,
+          line_end: null,
+          line_start: null,
+          turn_count: 1,
+        },
+        version: 1,
+      })}\n`,
+      "utf8",
+    );
+
+    const result = runCli(["export-index"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Exported 1 session index record/);
+
+    const exportPath = join(runtimeRoot, "index", "session-index.jsonl");
+    const records = (await readFile(exportPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    assert.equal(records.length, 1);
+    assert.equal(records[0].asd_session_id, "dup-session");
+    assert.equal(records[0].topic, "Newer summary topic.");
+    assert.equal(records[0].topic_source, "deterministic");
+  } finally {
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
 test("quality resummarize upgrades a low-signal topic via CLI", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-cli-"));
   const runtimeRoot = join(sandbox, "runtime-root");

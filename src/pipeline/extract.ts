@@ -8,18 +8,19 @@ import type {
   SourceSession,
   Turn,
 } from "../models/canonical.js";
-import { learningSchema } from "../models/canonical.js";
+import { isAtomicStatement, isProcessChatterText } from "./artifact-heuristics.js";
 import {
   capEvidenceText,
   extractSubstantivePrompt,
   isNoSignalPrompt,
   learningEvidenceFromPrompt,
+  looksLikeEmbeddedAgentPrompt,
   looksLikeSkillHarnessLeak,
   sanitizeHarnessLeakText,
+  sanitizeLearningStatement,
   sanitizeLearningTitle,
   sanitizeUserPrompt,
 } from "./prompt-sanitize.js";
-
 export const defaultUserScopeKey = "operator";
 
 export type ExtractLearningsInput = {
@@ -78,30 +79,37 @@ export function extractLearnings(input: ExtractLearningsInput): ExtractedLearnin
     ),
   );
   const user = dedupeLearnings(
-    input.turns.flatMap((turn) =>
-      extractUserPreferenceCandidates(extractSubstantivePrompt(turn.user_prompt) ?? "").map(
-        (candidate, index) =>
-          createLearning({
-            confidence: candidate.confidence,
-            evidence: [candidate.evidence],
-            // Direct operator instructions captured from the user's own prompt.
-            evidenceType: "user_stated",
-            kind: candidate.kind,
-            learningId: `${input.sourceSession.session_id}:user:${turn.index}:${index}`,
-            promotionBasis: "Explicit user instruction captured in the source prompt.",
-            scope: "user",
-            scopeKey: input.userScopeKey ?? defaultUserScopeKey,
-            sourceRefs: [
-              createSourceRef(input.sourceSession, {
-                turnId: turn.turn_id,
-              }),
-            ],
-            statement: candidate.statement,
-            title: candidate.title,
-            trigger: "When applying the operator's stated working preferences.",
-          }),
-      ),
-    ),
+    input.turns.flatMap((turn) => {
+      const substantivePrompt = extractSubstantivePrompt(turn.user_prompt) ?? "";
+      // Foreign agent system prompts (e.g. embedded design/coding agents logged
+      // into this transcript source) contain prefer/always/never directives that
+      // are NOT the operator's preferences. Skip them so they never become user
+      // learnings.
+      if (looksLikeEmbeddedAgentPrompt(turn.user_prompt)) {
+        return [];
+      }
+      return extractUserPreferenceCandidates(substantivePrompt).map((candidate, index) =>
+        createLearning({
+          confidence: candidate.confidence,
+          evidence: [candidate.evidence],
+          // Direct operator instructions captured from the user's own prompt.
+          evidenceType: "user_stated",
+          kind: candidate.kind,
+          learningId: `${input.sourceSession.session_id}:user:${turn.index}:${index}`,
+          promotionBasis: "Explicit user instruction captured in the source prompt.",
+          scope: "user",
+          scopeKey: input.userScopeKey ?? defaultUserScopeKey,
+          sourceRefs: [
+            createSourceRef(input.sourceSession, {
+              turnId: turn.turn_id,
+            }),
+          ],
+          statement: candidate.statement,
+          title: candidate.title,
+          trigger: "When applying the operator's stated working preferences.",
+        }),
+      );
+    }),
   );
 
   return {
@@ -142,11 +150,32 @@ function extractProjectLearningCandidates(
   );
   const fallbackCandidates =
     input.events.length === 0 ? extractNoEventTurnFallbackCandidates(input) : [];
-  return dedupeProjectCandidates(
-    [...eventCandidates, ...turnCandidates, ...deadEndCandidates, ...fallbackCandidates]
-      .map(finalizeProjectLearningCandidate)
-      .filter((candidate): candidate is ProjectLearningCandidate => candidate !== null),
+  return applyProjectLearningCap(
+    dedupeProjectCandidates(
+      [...eventCandidates, ...turnCandidates, ...deadEndCandidates, ...fallbackCandidates]
+        .map(finalizeProjectLearningCandidate)
+        .filter((candidate): candidate is ProjectLearningCandidate => candidate !== null),
+    ),
   );
+}
+const defaultProjectLearningCap = 12;
+
+function getProjectLearningCap(): number {
+  const raw = process.env.ASD_MAX_PROJECT_LEARNINGS;
+  if (raw === undefined || raw.length === 0) return defaultProjectLearningCap;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isNaN(parsed) || parsed < 1 ? defaultProjectLearningCap : parsed;
+}
+
+function applyProjectLearningCap(
+  candidates: readonly ProjectLearningCandidate[],
+): ProjectLearningCandidate[] {
+  const cap = getProjectLearningCap();
+  if (candidates.length <= cap) return candidates.slice();
+  console.warn(
+    `[asd] project learning cap reached: ${candidates.length} candidates truncated to ${cap} (set ASD_MAX_PROJECT_LEARNINGS to override)`,
+  );
+  return candidates.slice(0, cap);
 }
 
 // Strong abandonment signals only — high precision. "reverted"/"rolled back"
@@ -385,9 +414,18 @@ function toProjectTurnCandidates(input: {
     const verification = verificationEvents.at(0);
     if (fix && verification) {
       const command = commands[0] ?? commandFromEvent(verification);
-      const normalizedFix = normalizeWorkflowStatement(fix.summary);
-      const fixPrefix = startsWithPastTenseVerb(normalizedFix) ? "" : "Fixed ";
-      const statement = `${fixPrefix}${lowercaseFirst(normalizedFix)}; verified${command === undefined ? "" : ` with ${formatCommand(command)}`}.`;
+      const compressedFix = compressMarkdownHeavySummary(fix.summary);
+      let statement: string;
+      if (compressedFix !== null) {
+        statement =
+          command === undefined
+            ? `In ${compressedFix.file}, ${compressedFix.action}; verified.`
+            : `In ${compressedFix.file}, ${compressedFix.action}; verified with ${formatCommand(command)}.`;
+      } else {
+        const normalizedFix = normalizeWorkflowStatement(fix.summary);
+        const fixPrefix = startsWithPastTenseVerb(normalizedFix) ? "" : "Fixed ";
+        statement = `${fixPrefix}${lowercaseFirst(normalizedFix)}; verified${command === undefined ? "" : ` with ${formatCommand(command)}`}.`;
+      }
       candidates.push({
         confidence: command === undefined ? "medium" : "high",
         dedupeKey: `verified-fix:${statement.toLowerCase()}`,
@@ -460,22 +498,41 @@ function toProjectTurnCandidates(input: {
   ) {
     const fix = fixEvents.at(0);
     const file = files.at(0);
-    if (!fix || !file) {
-      // guarded by length checks above
-    } else {
-      const fixSummary = normalizeFixSummary(fix.summary);
-      const statement = `In ${file}, ${lowercaseFirst(fixSummary)}.`;
-      candidates.push({
-        confidence: "medium",
-        dedupeKey: `file-scoped:${statement.toLowerCase()}`,
-        evidence: [fix.summary, file],
-        kind: "pattern",
-        learningId: `${input.sourceSession.session_id}:project:file-scoped:${input.index}`,
-        promotionBasis: "Derived from a concrete file path and fix outcome in the same turn.",
-        sourceRefs: sourceRefsForEvents(input.sourceSession, [fix]),
-        statement,
-        title: `File update: ${truncateInline(statement, 60)}`,
-      });
+    if (fix && file) {
+      const compressedFix = compressMarkdownHeavySummary(fix.summary);
+      const fileForStatement = compressedFix?.file.trim() ? compressedFix.file : file.trim();
+
+      if (fileForStatement.length > 0) {
+        let statement: string | null;
+
+        if (compressedFix !== null) {
+          const normalizedFix = lowercaseFirst(normalizeFixSummary(fix.summary));
+          if (!compressedFix.file.trim() && looksLikeProcessNarration(normalizedFix)) {
+            statement = null;
+          } else {
+            statement = `In ${fileForStatement}, ${compressedFix.action}.`;
+          }
+        } else {
+          const normalizedFix = lowercaseFirst(normalizeFixSummary(fix.summary));
+          statement = looksLikeProcessNarration(normalizedFix)
+            ? null
+            : `In ${fileForStatement}, ${normalizedFix}.`;
+        }
+
+        if (statement !== null) {
+          candidates.push({
+            confidence: "medium",
+            dedupeKey: `file-scoped:${statement.toLowerCase()}`,
+            evidence: [fix.summary, file],
+            kind: "pattern",
+            learningId: `${input.sourceSession.session_id}:project:file-scoped:${input.index}`,
+            promotionBasis: "Derived from a concrete file path and fix outcome in the same turn.",
+            sourceRefs: sourceRefsForEvents(input.sourceSession, [fix]),
+            statement,
+            title: `File update: ${truncateInline(statement, 60)}`,
+          });
+        }
+      }
     }
   }
 
@@ -575,7 +632,8 @@ function extractNoEventTurnFallbackCandidates(
     if (
       looksLikeSkillHarnessLeak(promptForClassification) ||
       isNoSignalPrompt(promptForClassification) ||
-      looksLikeProcessNarration(promptForClassification)
+      looksLikeProcessNarration(promptForClassification) ||
+      looksLikePromptInstruction(promptForClassification)
     ) {
       continue;
     }
@@ -673,6 +731,12 @@ function toVerifiedCompletionStatement(event: Event): string | null {
 
   return `${startsWithPastTenseVerb(doneText) ? "" : "Completed "}${lowercaseFirst(stripTrailingPunctuation(doneText))}; ${verifiedClause}.`;
 }
+function looksLikePromptInstruction(prompt: string): boolean {
+  return (
+    /\b(?:re-read|review|update|edit|change)\b.*\bONLY\b/i.test(prompt) ||
+    /^\s*When working on\b/i.test(prompt)
+  );
+}
 
 function extractUserPreferenceCandidates(prompt: string): Array<{
   confidence: ConfidenceLevel;
@@ -690,6 +754,10 @@ function extractUserPreferenceCandidates(prompt: string): Array<{
   }> = [];
 
   for (const line of splitPromptLines(prompt)) {
+    if (looksLikePastedDocumentLine(line)) {
+      continue;
+    }
+
     if (/final response format/i.test(line)) {
       candidates.push({
         confidence: "high",
@@ -736,6 +804,10 @@ function extractUserPreferenceCandidates(prompt: string): Array<{
   }
 
   return candidates;
+}
+
+function looksLikePastedDocumentLine(line: string): boolean {
+  return /^\d+\t/.test(line) || /^\d+\s*\|/.test(line) || /^\d+\s*#/.test(line);
 }
 
 function splitPromptLines(prompt: string): string[] {
@@ -940,6 +1012,12 @@ function isConcreteFailure(value: string): boolean {
   );
 }
 
+function isWorkflowPrompt(prompt: string): boolean {
+  return /\b(?:worktree|setup|prune|test|tests|performance|example|fixture|script|plan|strategy)\b/i.test(
+    prompt,
+  );
+}
+
 function selectWorkflowCommand(commands: readonly string[], prompt: string): string | null {
   const projectSpecific = commands.find(
     (command) => command.startsWith("./") || command.includes("worktree"),
@@ -952,13 +1030,16 @@ function selectWorkflowCommand(commands: readonly string[], prompt: string): str
   const setupCommand = commands.find((command) =>
     /(?:uv sync|pnpm install|npm install|git worktree)/i.test(command),
   );
-  return setupCommand !== undefined && isWorkflowPrompt(prompt) ? setupCommand : null;
-}
+  if (setupCommand !== undefined && isWorkflowPrompt(prompt)) {
+    return setupCommand;
+  }
 
-function isWorkflowPrompt(prompt: string): boolean {
-  return /\b(?:worktree|setup|prune|test|tests|performance|example|fixture|script|plan|strategy)\b/i.test(
-    prompt,
-  );
+  const commitCommand = commands.find((command) => /^git commit\b/i.test(command));
+  if (commitCommand !== undefined && /\bcommit\b/i.test(prompt)) {
+    return commitCommand;
+  }
+
+  return null;
 }
 
 function classifyWorkflowTarget(prompt: string): string {
@@ -1158,6 +1239,7 @@ function looksLikeProcessNarration(value: string): boolean {
   const normalized = value.trim().toLowerCase();
 
   return (
+    isProcessChatterText(value) ||
     /\b(?:let me|i(?:'|’)m checking|i(?:'|’)ll check|i need to check|checking whether|now let me|clarifying)\b/i.test(
       value,
     ) ||
@@ -1170,17 +1252,13 @@ function looksLikeProcessNarration(value: string): boolean {
 }
 
 function isProcessText(summary: string): boolean {
+  if (isProcessChatterText(summary)) {
+    return true;
+  }
+
   const normalized = summary.trim().toLowerCase();
 
   const processPrefixes = [
-    "let me ",
-    "i'll ",
-    "i will ",
-    "i'm ",
-    "i'll ",
-    "i'm ",
-    "exploring ",
-    "checking ",
     "reading ",
     "loading ",
     "creating a ",
@@ -1191,9 +1269,6 @@ function isProcessText(summary: string): boolean {
     "now i understand",
     "now i see",
     "first, the ",
-    "first, i'll ",
-    "first, i'm ",
-    "first, let me ",
     "i see - there's",
     "i see - the",
     "i need to add",
@@ -1302,6 +1377,9 @@ function looksLikeChatSummary(value: string): boolean {
   const normalized = value.trim().toLowerCase();
 
   return (
+    /^(got it|sure thing|sure[,!.]|absolutely[,!.]|of course[,!.]|great question|happy to help|no problem)\b/.test(
+      normalized,
+    ) ||
     normalized.startsWith("now i have the full picture") ||
     normalized.startsWith("clean.") ||
     normalized.startsWith("created to-dos") ||
@@ -1333,6 +1411,164 @@ function hasExcessiveMarkdownStructure(value: string): boolean {
   const markerMatches = value.match(/(?:^|\s)(?:#{1,6}\s+|[-*]\s+|\d+\.\s+|\*\*[^*]+:\*\*)/g);
 
   return (markerMatches?.length ?? 0) >= 3;
+}
+
+function cleanActionSegment(value: string): string {
+  return value
+    .replace(/^[\w.]+:\s*['"][^'"]+['"]\s*[-–—]\s*/, "")
+    .replace(/^['"][^'"]+['"]\s*[-–—]\s*/, "")
+    .trim();
+}
+
+function extractActionFromMarkdownSegment(segment: string): string {
+  const separators = [
+    ...segment.matchAll(/(?<=\S)\s+[-–—]\s+(?=\S)/g),
+    ...segment.matchAll(/:\s+/g),
+  ].sort((left, right) => (left.index ?? 0) - (right.index ?? 0));
+
+  const changeVerbPattern =
+    /\b(?:use|add|remove|replace|switch|configure|implement|migrate|upgrade|fix|set|change|move|prefer|avoid|keep|run|pre-?bundle|pre-?load|enable|disable)\b/i;
+
+  for (const separator of separators) {
+    const after = segment.slice((separator.index ?? 0) + separator[0].length).trim();
+    if (changeVerbPattern.test(after)) {
+      return cleanActionSegment(after);
+    }
+  }
+
+  return cleanActionSegment(segment);
+}
+
+function compressMarkdownHeavySummary(value: string): { action: string; file: string } | null {
+  const trimmed = value.trim();
+  if (!hasExcessiveMarkdownStructure(trimmed)) {
+    return null;
+  }
+
+  const normalized = trimmed
+    .replace(/\[(.*?)\]\(.*?\)/g, "$1")
+    .replace(/`/g, "")
+    .replace(/\*\*/g, "")
+    .replace(/#{1,6}\s+/g, "")
+    .replace(
+      /\b(?:Summary of changes|Summary of what changed|Implemented|Verification noted)\s*:?\s*/gi,
+      "",
+    )
+    .trim();
+
+  type FileMatch = { file: string; index: number };
+  const fileMatches: FileMatch[] = [];
+  const words = normalized.split(/\s+/);
+  let charIndex = 0;
+  for (const word of words) {
+    const cleaned = word.replace(/^[("']+/, "").replace(/[.,;:!?()]+$/, "");
+    const path = normalizeFilePath(cleaned);
+    if (path !== null && /[\\/]/.test(path)) {
+      fileMatches.push({ file: path, index: charIndex });
+    }
+    charIndex += word.length + 1;
+  }
+
+  if (fileMatches.length === 0) {
+    return null;
+  }
+
+  const firstFile = fileMatches[0];
+  if (firstFile === undefined || firstFile.file.trim().length === 0) {
+    return null;
+  }
+  const regionEnd =
+    fileMatches.length > 1 ? (fileMatches[1]?.index ?? normalized.length) : normalized.length;
+  const region = normalized.slice(firstFile.index + firstFile.file.length, regionEnd).trim();
+
+  const clauses = region
+    .split(/\s+(?:[-•*]|–|—)\s+/)
+    .map((clause) => clause.replace(/^\s*[:\-–—]\s*/, "").trim())
+    .filter((clause) => clause.length > 0);
+
+  const changeVerbPattern =
+    /\b(?:use|add|remove|replace|switch|configure|implement|migrate|upgrade|fix|set|change|move|prefer|avoid|keep|run|pre-?bundle|pre-?load|enable|disable)\b/i;
+
+  const actions: string[] = [];
+  for (const clause of clauses) {
+    const action = extractActionFromMarkdownSegment(clause);
+    const cleanedAction = action
+      .replace(
+        new RegExp(`\\b${firstFile.file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"),
+        "",
+      )
+      .trim();
+    if (cleanedAction.length >= 5 && changeVerbPattern.test(cleanedAction)) {
+      actions.push(cleanedAction);
+    }
+  }
+
+  if (actions.length === 0) {
+    return null;
+  }
+
+  const action = actions.join("; ").replace(/\s+/g, " ").trim();
+  if (action.length < 10 || action.length > 160) {
+    return null;
+  }
+
+  return { action: lowercaseFirst(action), file: firstFile.file };
+}
+function looksLikeRawKnowledgeDump(value: string): boolean {
+  const trimmed = value.trim();
+
+  if (trimmed.length === 0) {
+    return false;
+  }
+
+  if (
+    (trimmed.startsWith("{") || trimmed.startsWith("[")) &&
+    /"(?:findings|severity|verdict|file|line)"/.test(trimmed)
+  ) {
+    return true;
+  }
+
+  if (
+    trimmed.includes("Traceback (most recent call last)") ||
+    trimmed.includes("\n    at ") ||
+    (/Error: /.test(trimmed) && trimmed.includes("\n")) ||
+    trimmed.includes("npm ERR!") ||
+    trimmed.includes("pnpm ERR!") ||
+    ((trimmed.includes("ECONNRESET") || trimmed.includes("ENOENT") || trimmed.includes("EACCES")) &&
+      trimmed.includes("\n"))
+  ) {
+    return true;
+  }
+
+  if (
+    trimmed.includes("Base directory for this skill") ||
+    trimmed.includes("/SKILL.md") ||
+    trimmed.includes("<skill") ||
+    trimmed.includes("Use when:") ||
+    trimmed.includes("Triggers:") ||
+    trimmed.includes("Description:")
+  ) {
+    return true;
+  }
+
+  if (hasExcessiveMarkdownStructure(trimmed)) {
+    return true;
+  }
+
+  const normalized = trimmed.replace(/\s+/g, " ").trim();
+  if (normalized.length > 420) {
+    const leadingWindow = normalized.slice(0, 180);
+    const hasProjectLocalPath =
+      /\b(?:src|lib|app|server|scripts|tools|docs|tests?|api|core|shared|desktop|mobile)\/[^\s]+/i.test(
+        leadingWindow,
+      );
+    const hasImperativePhrase = /\b(?:use|keep|avoid|run|configure|prefer|move|add|remove)\b/i.test(
+      leadingWindow,
+    );
+    return !(hasProjectLocalPath && hasImperativePhrase);
+  }
+
+  return false;
 }
 
 function looksLikeRawWorkflowSummary(value: string): boolean {
@@ -1564,7 +1800,7 @@ function createLearning(input: {
   title: string;
   trigger: string;
 }): Learning {
-  return learningSchema.parse({
+  return {
     confidence: input.confidence,
     evidence: input.evidence,
     evidence_type: input.evidenceType,
@@ -1579,7 +1815,7 @@ function createLearning(input: {
     technologies: input.technologies ?? [],
     title: input.title,
     trigger: input.trigger,
-  } satisfies Learning);
+  } satisfies Learning;
 }
 
 function createSourceRef(
@@ -1620,10 +1856,36 @@ function dedupeLearnings(learnings: readonly Learning[]): Learning[] {
 function finalizeProjectLearningCandidate(
   candidate: ProjectLearningCandidate,
 ): ProjectLearningCandidate | null {
-  const statement = sanitizeHarnessLeakText(candidate.statement);
-  if (statement.length === 0 || looksLikeSkillHarnessLeak(statement)) {
+  const rawStatement = sanitizeHarnessLeakText(candidate.statement);
+  const cleanedForDumpCheck = sanitizeLearningStatement(rawStatement, { preserveNewlines: true });
+  if (
+    cleanedForDumpCheck.length === 0 ||
+    looksLikeSkillHarnessLeak(cleanedForDumpCheck) ||
+    looksLikeRawKnowledgeDump(cleanedForDumpCheck)
+  ) {
     return null;
   }
+
+  const statement = cleanedForDumpCheck.replace(/\s+/g, " ").trim();
+
+  if (/^In\s*,/i.test(statement)) {
+    return null;
+  }
+
+  // Reject multi-sentence assistant narratives unless they are verified-fix
+  // workflow patterns, which legitimately join action and verification clauses.
+  const isVerifiedFixWorkflow =
+    candidate.kind === "workflow" && candidate.dedupeKey.startsWith("verified-fix:");
+  if (!isVerifiedFixWorkflow && !isAtomicStatement(statement)) {
+    return null;
+  }
+
+  // Apply a hard statement-length ceiling.
+  const maxStatementLength = 240;
+  const finalStatement =
+    statement.length > maxStatementLength
+      ? `${statement.slice(0, maxStatementLength - 3).trimEnd()}...`
+      : statement;
 
   const evidence = uniqueStrings(
     candidate.evidence
@@ -1633,15 +1895,15 @@ function finalizeProjectLearningCandidate(
 
   const titleBodyMax =
     candidate.kind === "decision" || candidate.title.startsWith("Decision:") ? 72 : 60;
-  const title = sanitizeLearningTitle(candidate.title, statement, titleBodyMax);
+  const title = sanitizeLearningTitle(candidate.title, finalStatement, titleBodyMax);
   if (title.length === 0 || looksLikeSkillHarnessLeak(title)) {
     return null;
   }
 
   return {
     ...candidate,
-    evidence: evidence.length > 0 ? evidence : [capEvidenceText(statement)],
-    statement,
+    evidence: evidence.length > 0 ? evidence : [capEvidenceText(finalStatement)],
+    statement: finalStatement,
     title,
   };
 }
@@ -1756,7 +2018,7 @@ function semanticCandidateKey(value: string): string {
 function isDurableCandidate(candidate: ProjectLearningCandidate): boolean {
   const statement = candidate.statement;
 
-  if (looksLikeProcessNarration(statement)) {
+  if (looksLikeProcessNarration(statement) || looksLikeRawKnowledgeDump(statement)) {
     return false;
   }
 
