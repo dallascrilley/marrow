@@ -518,6 +518,61 @@ test("optional LLM topic calls mocked generator only for weak deterministic topi
   assert.equal(summary.topic_source, "llm");
 });
 
+test("optional LLM topic threads onUsage with session id to the generator", async () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "agent-session-distillery",
+    session_id: "llm-topic-usage",
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Implemented gated LLM topic generation.",
+      commands_seen: ["npm run build"],
+      ended_at: "2026-05-22T20:10:00.000Z",
+      files_touched: ["src/pipeline/summarize.ts"],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-22T20:09:00.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.",
+      verification_seen: false,
+    }),
+  ];
+  const usageEvents = [];
+
+  await summarizeSessionWithOptionalLlmTopic(
+    { events: [], sourceSession, turns },
+    {
+      generateTopic: async (input) => {
+        input.onUsage?.({
+          model: "openai/gpt-5.4-nano",
+          input_tokens: 10,
+          output_tokens: 5,
+          total_tokens: 15,
+          reasoning_tokens: 1,
+          cached_tokens: 0,
+          cost: 0.0001,
+          cost_source: "upstream",
+          cost_is_known: true,
+          missing_reason: null,
+          duration_ms: 100,
+          cache_hit: false,
+        });
+        return "usage-aware topic";
+      },
+      llmTopic: true,
+      onUsage: (usage, sessionId) => {
+        usageEvents.push({ usage, sessionId });
+      },
+    },
+  );
+
+  assert.equal(usageEvents.length, 1);
+  assert.equal(usageEvents[0].sessionId, sourceSession.session_id);
+  assert.equal(usageEvents[0].usage.cost, 0.0001);
+});
+
 test("optional LLM topic falls back to the deterministic topic when generation fails", async () => {
   const sourceSession = {
     ...sourceSessionFixture,
