@@ -1643,11 +1643,6 @@ function deriveProjectEvidenceType(candidate: ProjectLearningCandidate): Evidenc
     : "inferred";
 }
 
-// Tier-1 MVP precondition: deterministic, kind-derived. No LLM. The future
-// LLM-recall pass (per the classification contract) refines these in place.
-// Tier-3b: normalize a failure summary to a canonical symptom signature so the
-// same error keys to the same trigger — and thus the same durable Instinct id —
-// across sessions. Returns null when no recognizable signature is present.
 // Known Node/libuv/POSIX errno codes. An allowlist (not a denylist) so that
 // ordinary all-caps E-words in failure text — EXPECTED, EXAMPLE, EXTERNAL,
 // ENABLED, EXPORTS — are never mistaken for an errno signature.
@@ -1706,6 +1701,11 @@ const KNOWN_ERRNO_CODES: ReadonlySet<string> = new Set([
   "EXDEV",
 ]);
 
+// Tier-1 MVP precondition: deterministic, kind-derived. No LLM. The future
+// LLM-recall pass (per the classification contract) refines these in place.
+// Tier-3b: normalize a failure summary to a canonical symptom signature so the
+// same error keys to the same trigger — and thus the same durable Instinct id —
+// across sessions. Returns null when no recognizable signature is present.
 function normalizeErrorSignature(text: string): string | null {
   for (const match of text.matchAll(/\b(E[A-Z]{2,})\b/g)) {
     const code = match[1];
