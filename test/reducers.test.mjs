@@ -448,3 +448,22 @@ test("tags comparison and verdict language as decision events", () => {
   assert.equal(decisions.length, 1);
   assert.ok(decisions[0].summary.includes("go with"));
 });
+
+test("does not promote embedded question-form wrapper markup into decisions", () => {
+  const records = [
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 40,
+      messageText:
+        'Got it — a logo identity exploration for Throughline.\n\n<question-form id="discovery" title="Brief">\n{ "options": ["Recommended default"] }\n</question-form>',
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-question-form",
+  });
+  const taggedEvents = tagTurnEvents(turns);
+
+  assert.deepEqual(taggedEvents, []);
+});

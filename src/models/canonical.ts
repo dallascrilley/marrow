@@ -27,6 +27,9 @@ export const learningKinds = [
   "workflow",
   "failure_mode",
   "verification_rule",
+  // An approach that was tried and abandoned — a negative-polarity learning that
+  // steers future work away from a known dead end (see classification contract).
+  "dead_end",
 ] as const;
 
 export const ingestStatuses = [
@@ -45,12 +48,21 @@ export const retentionStatuses = ["kept", "archived", "eligible_for_delete", "de
 
 export const confidenceLevels = ["high", "medium", "low"] as const;
 
+// Trust tier of a learning, ordered most- to least-trusted. `verified` = backed
+// by observed fix and/or verification evidence in the transcript (not a guess);
+// `user_stated` = a direct operator instruction; `inferred` = a
+// deterministic/heuristic extraction claim; `model_inferred` is reserved for the
+// future LLM extraction path (kept distinct so a model guess never shares a tier
+// with a deterministic claim).
+export const evidenceTypes = ["verified", "user_stated", "inferred", "model_inferred"] as const;
+
 export type EventType = (typeof eventTypes)[number];
 export type LearningScope = (typeof learningScopes)[number];
 export type LearningKind = (typeof learningKinds)[number];
 export type IngestStatus = (typeof ingestStatuses)[number];
 export type RetentionStatus = (typeof retentionStatuses)[number];
 export type ConfidenceLevel = (typeof confidenceLevels)[number];
+export type EvidenceType = (typeof evidenceTypes)[number];
 
 export type JsonValue =
   | boolean
@@ -77,6 +89,7 @@ export const learningKindSchema = z.enum(learningKinds);
 export const ingestStatusSchema = z.enum(ingestStatuses);
 export const retentionStatusSchema = z.enum(retentionStatuses);
 export const confidenceLevelSchema = z.enum(confidenceLevels);
+export const evidenceTypeSchema = z.enum(evidenceTypes);
 
 export const sourceRefSchema = z.object({
   source_path: nonEmptyStringSchema,
@@ -135,9 +148,20 @@ export const learningSchema = z.object({
   scope_key: nonEmptyStringSchema,
   kind: learningKindSchema,
   title: nonEmptyStringSchema,
+  // Precondition — "when this matters". Gates contextual recall and is the
+  // identity input on the durable Instinct (see learning-classification-contract).
+  trigger: nonEmptyStringSchema,
   statement: nonEmptyStringSchema,
   evidence: z.array(nonEmptyStringSchema),
   confidence: confidenceLevelSchema,
+  // Trust tier of the evidence behind this learning (see evidenceTypes).
+  evidence_type: evidenceTypeSchema,
+  // Subject — technologies/entities the source session touched (languages, package
+  // managers, CLIs). Always present; `[]` when nothing is detected. Deterministic.
+  technologies: z.array(nonEmptyStringSchema).default([]),
+  // Capability — harness skill(s) this learning informs, for contextual injection.
+  // Always present; `[]` when no skill maps. Deterministic command->skill lookup.
+  skill_ref: z.array(nonEmptyStringSchema).default([]),
   promotion_basis: nonEmptyStringSchema,
   source_refs: z.array(sourceRefSchema),
 });
@@ -241,10 +265,14 @@ export const learningFixture: Readonly<Learning> = deepFreeze({
   scope_key: "agent-session-distillery",
   kind: "decision",
   title: "Canonical model lives in one file during early slices",
+  trigger: "When revisiting related design decisions in agent-session-distillery.",
   statement:
     "Keep the canonical contract in one focused module until adapters and pipeline code justify splitting it.",
   evidence: ["Task 2 implementation grouped all model contracts under src/models/canonical.ts."],
   confidence: "high",
+  evidence_type: "inferred",
+  technologies: ["typescript"],
+  skill_ref: [],
   promotion_basis: "Explicit implementation decision captured during scaffolding.",
   source_refs: [
     {

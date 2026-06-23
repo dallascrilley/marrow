@@ -14,7 +14,12 @@ run_bootstrap() {
   [[ "$major" == "22" ]] || die "Node 22.x required (package.json engines); got $(node -v)"
 }
 
-run_setup()  { run_bootstrap; npm install; }
+run_install_hooks() {
+  # Point git at our tracked hooks dir so the pre-push CI guard is active.
+  git config core.hooksPath script/hooks
+}
+
+run_setup()  { run_bootstrap; npm install; run_install_hooks; }
 run_update() { npm install; }
 
 run_server() {

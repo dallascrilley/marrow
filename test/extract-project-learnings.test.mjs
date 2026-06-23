@@ -89,6 +89,170 @@ test("promotes same-turn fix and verification into project learning", () => {
   );
 });
 
+test("tags verified-fix project learnings with evidence_type and a derived trigger", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    files_touched: ["desktop/vitest.config.ts"],
+    verification_seen: true,
+  });
+  const events = [
+    event(firstTurn.turn_id, "fix", "Updated Vitest config to use worker threads and happy-dom.", {
+      event_id: `${firstTurn.turn_id}:fix:000001`,
+      payload_small: {
+        command_strings: ["desktop/vitest.config.ts", "happy-dom"],
+        matched_rule: "updated",
+      },
+    }),
+    event(firstTurn.turn_id, "verification", "Verification noted: All 92 tests pass.", {
+      event_id: `${firstTurn.turn_id}:verification:000002`,
+      payload_small: { command_strings: ["npm test"], matched_rule: "tests pass" },
+    }),
+  ];
+
+  const learnings = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  const verifiedFix = learnings.project.find((learning) =>
+    learning.statement.includes("Vitest config"),
+  );
+
+  assert.ok(verifiedFix, "expected a verified-fix project learning");
+  assert.equal(verifiedFix.evidence_type, "verified");
+  assert.match(verifiedFix.trigger, /^When .+\.$/);
+  assert.ok(verifiedFix.trigger.includes(source.project_key));
+});
+
+test("tags user-preference learnings as user_stated with a precondition trigger", () => {
+  const source = sourceSession();
+  const prefTurn = turn({
+    user_prompt: "Always run the full test suite before committing.",
+  });
+
+  const learnings = extractLearnings({ events: [], sourceSession: source, turns: [prefTurn] });
+
+  assert.ok(learnings.user.length > 0, "expected a user-preference learning");
+  for (const learning of learnings.user) {
+    assert.equal(learning.evidence_type, "user_stated");
+    assert.match(learning.trigger, /^When .+\.$/);
+  }
+});
+
+test("derives session technologies and skill_ref onto project learnings", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: ["npm run build", "git commit -m 'wip'", "bun test"],
+    files_touched: ["src/models/canonical.ts", "scripts/run.py"],
+    verification_seen: true,
+  });
+  const events = [
+    event(firstTurn.turn_id, "fix", "Updated the canonical schema module.", {
+      event_id: `${firstTurn.turn_id}:fix:000001`,
+      payload_small: { command_strings: ["src/models/canonical.ts"], matched_rule: "updated" },
+    }),
+    event(firstTurn.turn_id, "verification", "Verification noted: All tests pass.", {
+      event_id: `${firstTurn.turn_id}:verification:000002`,
+      payload_small: { command_strings: ["npm test"], matched_rule: "tests pass" },
+    }),
+  ];
+
+  const learnings = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+
+  assert.ok(learnings.project.length > 0, "expected a project learning");
+  for (const learning of learnings.project) {
+    assert.deepEqual(learning.technologies, ["bun", "git", "npm", "python", "typescript"]);
+    assert.deepEqual(learning.skill_ref, ["git", "tdd-guide"]);
+  }
+});
+
+test("leaves technologies and skill_ref empty when nothing is detected", () => {
+  const source = sourceSession();
+  const prefTurn = turn({
+    user_prompt: "Always run the full test suite before committing.",
+  });
+
+  const learnings = extractLearnings({ events: [], sourceSession: source, turns: [prefTurn] });
+
+  assert.ok(learnings.user.length > 0, "expected a user-preference learning");
+  for (const learning of learnings.user) {
+    assert.deepEqual(learning.technologies, []);
+    assert.deepEqual(learning.skill_ref, []);
+  }
+});
+
+test("promotes a dead_end learning from a strong abandoned-approach signal", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "fix",
+      "Tried memoizing the parser, but it turned out not to work and was abandoned.",
+      { event_id: `${firstTurn.turn_id}:fix:000001` },
+    ),
+  ];
+
+  const learnings = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  const deadEnd = learnings.project.find((learning) => learning.kind === "dead_end");
+
+  assert.ok(deadEnd, "expected a dead_end learning");
+  assert.match(deadEnd.statement, /^Avoid memoizing the parser in /);
+  assert.match(deadEnd.trigger, /^When tempted to try the same approach in /);
+  assert.equal(deadEnd.evidence_type, "inferred");
+});
+
+test("does not promote a dead_end when an approach was reverted then verified-fixed", () => {
+  const source = sourceSession();
+  const firstTurn = turn({ verification_seen: true });
+  const events = [
+    event(firstTurn.turn_id, "fix", "Reverted the regex approach and rolled back the change.", {
+      event_id: `${firstTurn.turn_id}:fix:000001`,
+      payload_small: { command_strings: ["npm test"], matched_rule: "updated" },
+    }),
+    event(firstTurn.turn_id, "verification", "Verification noted: All tests pass.", {
+      event_id: `${firstTurn.turn_id}:verification:000002`,
+      payload_small: { command_strings: ["npm test"], matched_rule: "tests pass" },
+    }),
+  ];
+
+  const learnings = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+
+  assert.equal(
+    learnings.project.filter((learning) => learning.kind === "dead_end").length,
+    0,
+    "reverted-then-fixed is not a dead end",
+  );
+});
+
+test("uses a normalized error-signature as the trigger for failure learnings", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(firstTurn.turn_id, "failure", "Build failed with ENOENT: no such file or directory.", {
+      event_id: `${firstTurn.turn_id}:failure:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  const failure = learnings.project.find((learning) => learning.kind === "failure_mode");
+
+  assert.ok(failure, "expected a failure_mode learning");
+  assert.equal(failure.trigger, `When ENOENT recurs in ${source.project_key}.`);
+});
+
+test("falls back to the default failure trigger when no signature is present", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(firstTurn.turn_id, "failure", "The deployment failed for an unknown reason.", {
+      event_id: `${firstTurn.turn_id}:failure:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  const failure = learnings.project.find((learning) => learning.kind === "failure_mode");
+
+  assert.ok(failure, "expected a failure_mode learning");
+  assert.equal(failure.trigger, `When the same failure recurs in ${source.project_key}.`);
+});
+
 test("promotes error resolution when failure is followed by a fix", () => {
   const source = sourceSession();
   const firstTurn = turn();
@@ -147,6 +311,40 @@ test("promotes workflow learning from project-specific commands", () => {
   );
 });
 
+test("rejects pasted document lines as user learnings", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    user_prompt: [
+      "370\t  - wildcard_probe       # always present",
+      "124\tFor each run, produce one **Top user-critical gap**.",
+      "138\t**Always run the rollforward preprocessor first.**",
+    ].join("\n"),
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.user, []);
+});
+
+test("keeps explicit user preference lines that are not pasted document fragments", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    user_prompt: "Always run the focused regression before finalizing.",
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.user.length, 1);
+  assert.equal(learnings.user[0].statement, "Always run the focused regression before finalizing.");
+});
 test("promotes file-scoped implementation learning from concrete fix evidence", () => {
   const source = sourceSession();
   const firstTurn = turn({
@@ -209,6 +407,31 @@ test("promotes file-scoped implementation learning from payload file arrays", ()
         "In src/pipeline/summarize.ts, resolved by tightening path extraction in /Users/example/Code/demo/src/pipeline/summarize.ts.",
     ),
   );
+});
+
+test("does not promote process-only file-scoped fix events", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    files_touched: [
+      "/Users/dallascrilley/.hub/artifacts/skills/ce-ideate/source/original/SKILL.md",
+    ],
+    user_prompt: "Please take a look.",
+  });
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "fix",
+      "Now regenerate the registry summary + projections from the corrected description, then check whether the provenance edit survived the update.",
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
 });
 
 test("does not promote process-only future verification text", () => {
@@ -1024,4 +1247,590 @@ test("does not derive file-only workflow from non-concrete prompt", () => {
   });
 
   assert.deepEqual(learnings.project, []);
+});
+
+test("rejects raw JSON reviewer findings as project learning", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "decision",
+      '{"findings":[{"severity":"high","file":"src/a.ts","line":12}]}',
+      {
+        event_id: `${firstTurn.turn_id}:decision:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});
+
+test("rejects stack-trace and multi-line error dumps as project learning", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "failure",
+      "Error: connect ECONNRESET\n    at TCPConnectWrap.afterConnect [as oncomplete] (net.js:1141:16)",
+      {
+        event_id: `${firstTurn.turn_id}:failure:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});
+
+test("rejects skill wrapper and skill doc text as project learning", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "fix",
+      [
+        "Base directory for this skill: /Users/dev/.claude/skills/example",
+        "Reference: /SKILL.md",
+        "Use when: debugging skill installation",
+      ].join("\n"),
+      {
+        event_id: `${firstTurn.turn_id}:fix:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});
+
+test("rejects long assistant narrative dumps without a concise imperative rule", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "decision",
+      [
+        "Here's what we decided: after reviewing the available options we concluded that the current approach is reasonable for the immediate term.",
+        "There are several factors to consider, including compatibility with existing callers, migration cost, and the long-term maintainability of the codebase.",
+        "We will keep an eye on the metrics and revisit if the situation changes significantly in the next development cycle.",
+      ].join(" "),
+      {
+        event_id: `${firstTurn.turn_id}:decision:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});
+
+test("derives workflow learning from concrete turn when only low-signal events exist", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: ["git commit -m 'fix: bindings'"],
+    user_prompt: "commit atomically changed files",
+  });
+  const events = [
+    event(firstTurn.turn_id, "next_step", "Next, commit the changes.", {
+      event_id: `${firstTurn.turn_id}:next_step:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "workflow");
+  assert.ok(learnings.project[0].statement.includes("git commit"));
+});
+
+test("derives workflow learning from concrete turn alongside unrelated process events", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: ["./scripts/qa"],
+    files_touched: ["src/lib/auth.ts"],
+    user_prompt: "Apply code-review follow-ups for the admin auth gate",
+  });
+  const events = [
+    event(firstTurn.turn_id, "next_step", "Next, reviewed auth setup.", {
+      event_id: `${firstTurn.turn_id}:next_step:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "workflow");
+  assert.ok(learnings.project[0].statement.includes("src/lib/auth.ts"));
+  assert.ok(learnings.project[0].statement.includes("./scripts/qa"));
+});
+
+test("does not derive workflow from skill-search wrapper prompt even when events exist", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: [],
+    files_touched: [],
+    user_prompt: [
+      "Find the skill for CI debugging.",
+      "Base directory for this skill: /Users/dev/.claude/skills/ci-debug",
+      "Reference: /SKILL.md",
+      "Use when: CI failures need triage",
+    ].join("\n"),
+  });
+  const events = [
+    event(firstTurn.turn_id, "next_step", "Reviewed skill index.", {
+      event_id: `${firstTurn.turn_id}:next_step:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});
+
+test("compresses markdown-heavy same-turn fix and verification into workflow learning", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    files_touched: ["desktop/vitest.config.ts"],
+    user_prompt: "Implement the Vitest performance optimization plan",
+  });
+  const markdownFixSummary =
+    "Summary of changes: ## Implemented **Vitest config** ([`desktop/vitest.config.ts`](desktop/vitest.config.ts)) - " +
+    "`pool: 'threads'` – use worker threads instead of forks - `environment: 'happy-dom'` – lighter DOM env than jsdom";
+  const events = [
+    event(firstTurn.turn_id, "fix", markdownFixSummary, {
+      event_id: `${firstTurn.turn_id}:fix:000001`,
+    }),
+    event(firstTurn.turn_id, "verification", "Verification noted: all tests pass", {
+      event_id: `${firstTurn.turn_id}:verification:000002`,
+      payload_small: {
+        verification_command: "npm test",
+      },
+    }),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "workflow");
+  assert.ok(learnings.project[0].statement.includes("desktop/vitest.config.ts"));
+  assert.ok(learnings.project[0].statement.includes("use worker threads"));
+});
+
+test("compresses markdown-heavy fix into file-scoped pattern learning", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    files_touched: ["desktop/vitest.config.ts"],
+    user_prompt: "Speed up the Vitest suite",
+  });
+  const markdownFixSummary =
+    "Summary of changes: ## Implemented **Vitest config** ([`desktop/vitest.config.ts`](desktop/vitest.config.ts)) - " +
+    "`pool: 'threads'` – use worker threads instead of forks - `environment: 'happy-dom'` – lighter DOM env than jsdom";
+  const events = [
+    event(firstTurn.turn_id, "fix", markdownFixSummary, {
+      event_id: `${firstTurn.turn_id}:fix:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "pattern");
+  assert.ok(learnings.project[0].statement.includes("desktop/vitest.config.ts"));
+  assert.ok(learnings.project[0].statement.includes("use worker threads"));
+});
+
+test("never emits empty file-scoped learning prefixes", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    files_touched: ["desktop/vitest.config.ts"],
+    user_prompt: "Speed up the Vitest suite",
+  });
+  const markdownFixSummary =
+    "Summary of changes: ## Implemented **Vitest config** ([`desktop/vitest.config.ts`](desktop/vitest.config.ts)) - " +
+    "`pool: 'threads'` – use worker threads instead of forks - `environment: 'happy-dom'` – lighter DOM env than jsdom";
+  const events = [
+    event(firstTurn.turn_id, "fix", markdownFixSummary, {
+      event_id: `${firstTurn.turn_id}:fix:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.ok(learnings.project.every((learning) => !learning.statement.startsWith("In ,")));
+});
+
+test("still rejects markdown-heavy summary without recoverable file and action", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "fix",
+      "## Changes\n- first unrelated item\n- second unrelated item\n- third unrelated item",
+      {
+        event_id: `${firstTurn.turn_id}:fix:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});
+
+test("sanitizes markdown table from decision learning statement", () => {
+  const source = sourceSession({ project_key: "studio-tools" });
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "decision",
+      "Given how far behind main the branches are, **cherry-picking onto fresh branches from main** is usually better than rebasing. ## Rebase vs cherry-pick vs fresh start\n| Approach | Effort | Risk | Best when |\n|----------|--------|------|-----------|\n| rebase   | high   | high | short-lived branch |",
+      {
+        event_id: `${firstTurn.turn_id}:decision:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "decision");
+  assert.ok(!learnings.project[0].statement.includes("|"), "table pipes should be removed");
+  assert.ok(!learnings.project[0].statement.includes("Approach"), "table header should be removed");
+  assert.match(learnings.project[0].statement, /cherry-picking onto fresh branches from main/);
+});
+
+test("sanitizes bold emphasis and framing from decision learning statement", () => {
+  const source = sourceSession({ project_key: "cohost-ai-studio" });
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "decision",
+      "**Verdict: Approved** The spec is internally consistent: storage abstraction, `blob_ref` vs `file_path` precedence, worker materialize/write-back contract.",
+      {
+        event_id: `${firstTurn.turn_id}:decision:000001`,
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.project.length, 1);
+  assert.equal(learnings.project[0].kind, "decision");
+  assert.ok(!learnings.project[0].statement.includes("**"), "bold markers should be removed");
+  assert.ok(
+    learnings.project[0].statement.startsWith("Approved "),
+    "framing token should be removed",
+  );
+});
+
+test("does not derive workflow from prompt-instruction turn", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: [],
+    files_touched: [
+      "cohost-ai-studio/trigger-real-video-validation/docs/specs/2026-03-30-cloud-mode-design.md",
+    ],
+    user_prompt: "Re-read and review ONLY this file (updated after first review):",
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
+});
+test("caps project learnings per session at default 12", () => {
+  const source = sourceSession();
+  const turns = [];
+  for (let i = 0; i < 20; i++) {
+    turns.push(
+      turn({
+        commands_seen: ["./scripts/qa"],
+        files_touched: [`desktop/src/feature-${i}.ts`],
+        index: i,
+        session_id: source.session_id,
+        turn_id: `${source.session_id}:turn-${String(i).padStart(4, "0")}`,
+        user_prompt: "Fix the project issue.",
+        verification_seen: true,
+      }),
+    );
+  }
+
+  const events = [];
+  for (let i = 0; i < 20; i++) {
+    const turnId = `${source.session_id}:turn-${String(i).padStart(4, "0")}`;
+    events.push(
+      event(turnId, "fix", `Fixed issue ${i} in desktop/src/feature-${i}.ts; verified.`, {
+        event_id: `${turnId}:fix:001`,
+      }),
+    );
+    events.push(
+      event(turnId, "verification", `Verification ${i}: tests pass.`, {
+        event_id: `${turnId}:verification:001`,
+        payload_small: { matched_rule: "verification", verification_command: "./scripts/qa" },
+      }),
+    );
+  }
+
+  const result = extractLearnings({ events, sourceSession: source, turns });
+  assert.equal(result.project.length, 12);
+  assert.equal(result.project[0].kind, "workflow");
+  assert.equal(result.project[11].kind, "workflow");
+});
+
+test("respects ASD_MAX_PROJECT_LEARNINGS override", () => {
+  const original = process.env.ASD_MAX_PROJECT_LEARNINGS;
+  process.env.ASD_MAX_PROJECT_LEARNINGS = "5";
+  try {
+    const source = sourceSession();
+    const turns = [];
+    for (let i = 0; i < 10; i++) {
+      turns.push(
+        turn({
+          commands_seen: ["./scripts/qa"],
+          files_touched: [`desktop/src/feature-${i}.ts`],
+          index: i,
+          session_id: source.session_id,
+          turn_id: `${source.session_id}:turn-${String(i).padStart(4, "0")}`,
+          user_prompt: "Fix the project issue.",
+          verification_seen: true,
+        }),
+      );
+    }
+
+    const events = [];
+    for (let i = 0; i < 10; i++) {
+      const turnId = `${source.session_id}:turn-${String(i).padStart(4, "0")}`;
+      events.push(
+        event(turnId, "fix", `Fixed issue ${i} in desktop/src/feature-${i}.ts; verified.`, {
+          event_id: `${turnId}:fix:001`,
+        }),
+      );
+      events.push(
+        event(turnId, "verification", `Verification ${i}: tests pass.`, {
+          event_id: `${turnId}:verification:001`,
+          payload_small: { matched_rule: "verification", verification_command: "./scripts/qa" },
+        }),
+      );
+    }
+
+    const result = extractLearnings({ events, sourceSession: source, turns });
+    assert.equal(result.project.length, 5);
+  } finally {
+    if (original === undefined) {
+      delete process.env.ASD_MAX_PROJECT_LEARNINGS;
+    } else {
+      process.env.ASD_MAX_PROJECT_LEARNINGS = original;
+    }
+  }
+});
+
+test("invalid ASD_MAX_PROJECT_LEARNINGS falls back to default cap", () => {
+  const original = process.env.ASD_MAX_PROJECT_LEARNINGS;
+  process.env.ASD_MAX_PROJECT_LEARNINGS = "invalid";
+  try {
+    const source = sourceSession();
+    const turns = [];
+    for (let i = 0; i < 15; i++) {
+      turns.push(
+        turn({
+          commands_seen: ["./scripts/qa"],
+          files_touched: [`desktop/src/feature-${i}.ts`],
+          index: i,
+          session_id: source.session_id,
+          turn_id: `${source.session_id}:turn-${String(i).padStart(4, "0")}`,
+          user_prompt: "Fix the project issue.",
+          verification_seen: true,
+        }),
+      );
+    }
+
+    const events = [];
+    for (let i = 0; i < 15; i++) {
+      const turnId = `${source.session_id}:turn-${String(i).padStart(4, "0")}`;
+      events.push(
+        event(turnId, "fix", `Fixed issue ${i} in desktop/src/feature-${i}.ts; verified.`, {
+          event_id: `${turnId}:fix:001`,
+        }),
+      );
+      events.push(
+        event(turnId, "verification", `Verification ${i}: tests pass.`, {
+          event_id: `${turnId}:verification:001`,
+          payload_small: { matched_rule: "verification", verification_command: "./scripts/qa" },
+        }),
+      );
+    }
+
+    const result = extractLearnings({ events, sourceSession: source, turns });
+    assert.equal(result.project.length, 12);
+  } finally {
+    if (original === undefined) {
+      delete process.env.ASD_MAX_PROJECT_LEARNINGS;
+    } else {
+      process.env.ASD_MAX_PROJECT_LEARNINGS = original;
+    }
+  }
+});
+test("rejects multi-sentence decision candidates", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "decision",
+      "First, I reviewed the options. Then I chose the adapter pattern. Finally, I updated the docs.",
+      {
+        event_id: `${firstTurn.turn_id}:decision:000001`,
+      },
+    ),
+  ];
+
+  const result = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  assert.equal(result.project.length, 0);
+});
+
+test("rejects multi-sentence failure-mode candidates", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "failure",
+      "The build failed. It could not find the module. The path was wrong.",
+      {
+        event_id: `${firstTurn.turn_id}:failure:000001`,
+      },
+    ),
+  ];
+
+  const result = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  assert.equal(result.project.length, 0);
+});
+
+test("keeps single-sentence verified-fix workflow with semicolon", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    files_touched: ["desktop/vitest.config.ts"],
+    verification_seen: true,
+  });
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "fix",
+      "Use worker threads instead of forks in desktop/vitest.config.ts.",
+      {
+        event_id: `${firstTurn.turn_id}:fix:000001`,
+      },
+    ),
+    event(firstTurn.turn_id, "verification", "Tests pass.", {
+      event_id: `${firstTurn.turn_id}:verification:000001`,
+      payload_small: { matched_rule: "verification", verification_command: "./scripts/qa" },
+    }),
+  ];
+
+  const result = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  assert.equal(result.project.length, 1);
+  assert.equal(result.project[0].kind, "workflow");
+  assert.ok(result.project[0].statement.includes("verified"));
+});
+
+test("truncates project-learning statements at 240 characters", () => {
+  const source = sourceSession();
+  const firstTurn = turn();
+  const longStatement = "A".repeat(300);
+  const events = [
+    event(firstTurn.turn_id, "decision", longStatement, {
+      event_id: `${firstTurn.turn_id}:decision:000001`,
+    }),
+  ];
+
+  const result = extractLearnings({ events, sourceSession: source, turns: [firstTurn] });
+  assert.equal(result.project.length, 1);
+  assert.ok(result.project[0].statement.length <= 240);
+  assert.ok(result.project[0].statement.endsWith("..."));
+});
+
+test("rejects multi-sentence workflow candidates that are not verified-fix patterns", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: ["git worktree list"],
+  });
+  // Craft a turn-fallback-like workflow by making the prompt concrete and providing a command.
+  const turnWithPrompt = { ...firstTurn, user_prompt: "Set up a worktree for the feature branch." };
+  const result = extractLearnings({ events: [], sourceSession: source, turns: [turnWithPrompt] });
+  // The derived workflow should be single-sentence; this regression test guards against
+  // future multi-sentence turn-fallback statements.
+  for (const learning of result.project) {
+    assert.ok(
+      learning.statement.split(/[.!?]+(?:\s|$)/).filter(Boolean).length <= 1 ||
+        learning.statement.includes(";"),
+      `expected single-sentence workflow, got: ${learning.statement}`,
+    );
+  }
 });

@@ -65,7 +65,10 @@ export async function executeExportIndex(
 
 export async function buildSessionIndex(): Promise<SessionIndexRecord[]> {
   const manifestPaths = await listManifestPaths();
-  const records: SessionIndexRecord[] = [];
+  const recordsByIdentity = new Map<
+    string,
+    { generatedAt: string; manifestPath: string; record: SessionIndexRecord }
+  >();
 
   for (const manifestPath of manifestPaths) {
     const manifest = sessionManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
@@ -88,9 +91,22 @@ export async function buildSessionIndex(): Promise<SessionIndexRecord[]> {
       summary_json_path: manifest.artifact_paths.summary_json_path,
       updated_at: manifest.generated_at,
     });
-
-    records.push(record);
+    const identityKey = `${manifest.session.source_tool}\0${manifest.session.source_path}\0${manifest.session.session_id}`;
+    const existing = recordsByIdentity.get(identityKey);
+    if (
+      !existing ||
+      manifest.generated_at > existing.generatedAt ||
+      (manifest.generated_at === existing.generatedAt && manifestPath > existing.manifestPath)
+    ) {
+      recordsByIdentity.set(identityKey, {
+        generatedAt: manifest.generated_at,
+        manifestPath,
+        record,
+      });
+    }
   }
+
+  const records = Array.from(recordsByIdentity.values()).map((entry) => entry.record);
 
   return records.sort((left, right) => {
     const byPath = left.source_path.localeCompare(right.source_path);

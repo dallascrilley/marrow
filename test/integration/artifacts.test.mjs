@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
 import {
@@ -19,7 +19,11 @@ import {
   getUserKnowledgeSessionPath,
   writeKnowledgeArtifacts,
 } from "../../dist/writers/knowledge-writer.js";
-import { writeSessionManifest } from "../../dist/writers/manifest-writer.js";
+import {
+  getSessionManifestPath,
+  getSessionManifestPathForRevision,
+  writeSessionManifest,
+} from "../../dist/writers/manifest-writer.js";
 import {
   getRetentionReceiptPath,
   writeRetentionBatchReport,
@@ -191,7 +195,7 @@ test("retention blocks deletion until summary, learnings, manifest, and receipt 
         learnings.project
           .map((learning) => learning.kind)
           .sort((left, right) => left.localeCompare(right)),
-        ["decision", "pattern", "verification_rule"],
+        ["decision", "pattern", "verification_rule", "workflow"],
       );
       assert.equal(learnings.user.length, 2);
 
@@ -307,7 +311,7 @@ test("retention blocks deletion until summary, learnings, manifest, and receipt 
         projectKnowledgeLines
           .map((entry) => entry.kind)
           .sort((left, right) => left.localeCompare(right)),
-        ["decision", "pattern", "verification_rule"],
+        ["decision", "pattern", "verification_rule", "workflow"],
       );
       assert.ok(projectKnowledgeLines.every((entry) => entry.confidence !== "low"));
       assert.ok(
@@ -334,7 +338,7 @@ test("retention blocks deletion until summary, learnings, manifest, and receipt 
         parsedSummary.next_step,
         "Next step is wiring the batch retention report into the CLI.",
       );
-      assert.equal(parsedSummary.project_learnings.length, 3);
+      assert.equal(parsedSummary.project_learnings.length, 4);
       assert.equal(parsedSummary.user_learnings.length, 2);
 
       const parsedManifest = JSON.parse(await readFile(manifestResult.path, "utf8"));
@@ -352,6 +356,254 @@ test("retention blocks deletion until summary, learnings, manifest, and receipt 
 
       const refreshedReceipt = afterReceipt.receipt;
       assert.equal(refreshedReceipt.safe_to_delete, true);
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("changed source hash writes a separate revision manifest", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+
+    try {
+      const sourceSessionOld = { ...buildSourceSession(), source_hash: "sha256:old" };
+      const sourceSessionNew = { ...buildSourceSession(), source_hash: "sha256:new" };
+      const insertedOld = upsertSourceSession(database, sourceSessionOld);
+      const turns = buildTurns(sourceSessionOld.session_id);
+      const events = buildEvents(turns[0].turn_id);
+      const learnings = extractLearnings({
+        events,
+        sourceSession: sourceSessionOld,
+        turns,
+      });
+      const summary = summarizeSession({
+        events,
+        projectLearnings: learnings.project,
+        sourceSession: sourceSessionOld,
+        turns,
+        userLearnings: learnings.user,
+      });
+      const summaryResult = await writeSessionSummary(summary);
+      const receiptPath = getRetentionReceiptPath(sourceSessionOld.session_id);
+      const artifactPaths = {
+        project_knowledge_jsonl_path: null,
+        retention_receipt_path: receiptPath,
+        summary_json_path: summaryResult.summaryPath,
+        summary_markdown_path: summaryResult.markdownPath,
+        user_knowledge_jsonl_path: null,
+      };
+      const manifestOld = await writeSessionManifest({
+        artifactPaths,
+        events,
+        sourceSession: sourceSessionOld,
+        turns,
+      });
+      assert.equal(manifestOld.created, true);
+      assert.equal(
+        manifestOld.path,
+        getSessionManifestPathForRevision(
+          sourceSessionOld.session_id,
+          sourceSessionOld.source_hash,
+        ),
+      );
+
+      const manifestNew = await writeSessionManifest({
+        artifactPaths,
+        events,
+        sourceSession: sourceSessionNew,
+        turns,
+      });
+      assert.equal(manifestNew.created, true);
+      assert.notEqual(manifestNew.path, manifestOld.path);
+      assert.equal(
+        manifestNew.path,
+        getSessionManifestPathForRevision(
+          sourceSessionNew.session_id,
+          sourceSessionNew.source_hash,
+        ),
+      );
+
+      const manifestNewAgain = await writeSessionManifest({
+        artifactPaths,
+        events,
+        sourceSession: sourceSessionNew,
+        turns,
+      });
+      assert.equal(manifestNewAgain.created, false);
+      assert.equal(manifestNewAgain.path, manifestNew.path);
+      assert.equal(
+        await readFile(manifestNew.path, "utf8"),
+        await readFile(manifestNewAgain.path, "utf8"),
+      );
+
+      transitionPhase(database, {
+        phaseName: "extracted",
+        phaseState: "completed",
+        sourceSessionId: insertedOld.sourceSession.id,
+      });
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("legacy-only manifest still satisfies retention manifest presence", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+
+    try {
+      const sourceSession = buildSourceSession();
+      sourceSession.session_id = "legacy-manifest-session";
+      sourceSession.conversation_id = "conversation-legacy";
+      const inserted = upsertSourceSession(database, sourceSession);
+      const turns = buildTurns(sourceSession.session_id);
+      const events = buildEvents(turns[0].turn_id);
+      const learnings = extractLearnings({
+        events,
+        sourceSession,
+        turns,
+      });
+      const summary = summarizeSession({
+        events,
+        projectLearnings: learnings.project,
+        sourceSession,
+        turns,
+        userLearnings: learnings.user,
+      });
+      const summaryResult = await writeSessionSummary(summary);
+      const knowledgeResult = await writeKnowledgeArtifacts({
+        projectLearnings: learnings.project,
+        sessionId: sourceSession.session_id,
+        userLearnings: learnings.user,
+      });
+      const receiptPath = getRetentionReceiptPath(sourceSession.session_id);
+      const legacyPath = getSessionManifestPath(sourceSession.session_id);
+      const manifest = {
+        artifact_paths: {
+          project_knowledge_jsonl_path: knowledgeResult.project.path,
+          retention_receipt_path: receiptPath,
+          summary_json_path: summaryResult.summaryPath,
+          summary_markdown_path: summaryResult.markdownPath,
+          user_knowledge_jsonl_path: knowledgeResult.user.path,
+        },
+        generated_at: sourceSession.updated_at,
+        session: sourceSession,
+        source_span: {
+          event_count: events.length,
+          first_turn_id: turns[0]?.turn_id ?? null,
+          last_turn_id: turns[turns.length - 1]?.turn_id ?? null,
+          line_end: null,
+          line_start: null,
+          turn_count: turns.length,
+        },
+        version: 1,
+      };
+      await mkdir(dirname(legacyPath), { recursive: true });
+      await writeFile(legacyPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+      const afterManifest = await evaluateRetentionReadiness({
+        currentLifecycleState: "extracted",
+        sourceSession,
+        sourceSessionId: inserted.sourceSession.id,
+      });
+      assert.equal(afterManifest.artifactState.manifestWritten, true);
+
+      await writeRetentionReceipt(afterManifest.receipt);
+      const afterReceipt = await evaluateRetentionReadiness({
+        currentLifecycleState: "extracted",
+        sourceSession,
+        sourceSessionId: inserted.sourceSession.id,
+      });
+      assert.equal(afterReceipt.receipt.safe_to_delete, true);
+      assert.equal(afterReceipt.candidate.candidateState, "ready");
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("tiny no-signal session is discardable only after required artifacts exist", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+
+    try {
+      const sourceSession = buildSourceSession();
+      sourceSession.session_id = "tiny-no-signal-session";
+      sourceSession.conversation_id = "conversation-tiny";
+      sourceSession.source_hash = "sha256:tiny";
+      const inserted = upsertSourceSession(database, sourceSession);
+      const turns = [
+        turnSchema.parse({
+          assistant_summary: "Answered a trivia question.",
+          commands_seen: [],
+          ended_at: "2026-05-16T09:05:00.000Z",
+          files_touched: [],
+          index: 0,
+          session_id: sourceSession.session_id,
+          started_at: "2026-05-16T09:00:00.000Z",
+          tool_stub_count: 0,
+          turn_id: `${sourceSession.session_id}:turn-0000`,
+          user_prompt: "What is 2 + 2?",
+          verification_seen: false,
+        }),
+      ];
+      const events = [];
+      const learnings = extractLearnings({
+        events,
+        sourceSession,
+        turns,
+      });
+      const summary = summarizeSession({
+        events,
+        projectLearnings: learnings.project,
+        sourceSession,
+        turns,
+        userLearnings: learnings.user,
+      });
+      const summaryResult = await writeSessionSummary(summary);
+
+      const beforeArtifacts = await evaluateRetentionReadiness({
+        currentLifecycleState: "summarized",
+        sourceSession,
+        sourceSessionId: inserted.sourceSession.id,
+        turns,
+      });
+      assert.equal(beforeArtifacts.receipt.safe_to_delete, false);
+      assert.equal(beforeArtifacts.candidate.candidateState, "pending_artifacts");
+
+      const receiptPath = getRetentionReceiptPath(sourceSession.session_id);
+      const manifestResult = await writeSessionManifest({
+        artifactPaths: {
+          project_knowledge_jsonl_path: null,
+          retention_receipt_path: receiptPath,
+          summary_json_path: summaryResult.summaryPath,
+          summary_markdown_path: summaryResult.markdownPath,
+          user_knowledge_jsonl_path: null,
+        },
+        events,
+        sourceSession,
+        turns,
+      });
+      assert.equal(manifestResult.created, true);
+
+      const afterManifest = await evaluateRetentionReadiness({
+        currentLifecycleState: "summarized",
+        sourceSession,
+        sourceSessionId: inserted.sourceSession.id,
+        turns,
+      });
+      assert.equal(afterManifest.receipt.safe_to_delete, false);
+
+      await writeRetentionReceipt(afterManifest.receipt);
+      const afterReceipt = await evaluateRetentionReadiness({
+        currentLifecycleState: "summarized",
+        sourceSession,
+        sourceSessionId: inserted.sourceSession.id,
+        turns,
+      });
+      assert.equal(afterReceipt.receipt.safe_to_delete, true);
+      assert.equal(afterReceipt.candidate.candidateState, "discardable_no_signal");
     } finally {
       database.close();
     }

@@ -188,3 +188,41 @@ test("missing Cursor tracking databases do not fail transcript discovery", async
     assert.deepEqual(result.supportDatabases, []);
   });
 });
+
+test("skips root-level Cursor agent-transcripts directory without aborting sibling discovery", async () => {
+  await withSyntheticHome(async (homeDir) => {
+    const workspaceDir = join(homeDir, "Code", "valid-workspace");
+    const validProjectRoot = join(homeDir, ".cursor", "projects", "valid-workspace");
+    const validTranscriptPath = join(
+      validProjectRoot,
+      "agent-transcripts",
+      "session-valid",
+      "session-valid.jsonl",
+    );
+    const validTranscriptContent = '{"type":"assistant","message":"ok"}\n';
+    const strayTranscriptPath = join(
+      homeDir,
+      ".cursor",
+      "projects",
+      "agent-transcripts",
+      "e6b6e195-9815-466a-bfb6-c493b5c302f9",
+      "e6b6e195-9815-466a-bfb6-c493b5c302f9.jsonl",
+    );
+
+    await mkdir(workspaceDir, { recursive: true });
+    await writeFixture(
+      join(validProjectRoot, "workspace.json"),
+      JSON.stringify({ workspacePath: workspaceDir }, null, 2),
+    );
+    await writeFixture(validTranscriptPath, validTranscriptContent);
+    await writeFixture(strayTranscriptPath, '{"type":"assistant","message":"stray"}\n');
+
+    const result = await discoverCursorInputs({ homeDir });
+
+    assert.equal(result.transcripts.length, 1);
+    assert.equal(result.transcripts[0].sourcePath, validTranscriptPath);
+    assert.equal(result.transcripts[0].sourceHash, sha256(validTranscriptContent));
+    assert.equal(result.transcripts[0].workspaceSlug, "valid-workspace");
+    assert.equal(result.transcripts[0].projectKey, "valid-workspace");
+  });
+});
