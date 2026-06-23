@@ -27,6 +27,9 @@ export const learningKinds = [
   "workflow",
   "failure_mode",
   "verification_rule",
+  // An approach that was tried and abandoned — a negative-polarity learning that
+  // steers future work away from a known dead end (see classification contract).
+  "dead_end",
 ] as const;
 
 export const ingestStatuses = [

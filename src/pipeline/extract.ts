@@ -137,24 +137,28 @@ function extractProjectLearningCandidates(
       turn,
     }),
   );
-  const hasWorkflowCandidate = [...eventCandidates, ...turnCandidates].some(
-    (candidate) => candidate.kind === "workflow",
-  );
-  const hasUsefulTurnSignal = input.turns.some(
-    (turn) => usefulCommandsForTurn(turn, []).length > 0 || usefulFilesForTurn(turn, []).length > 0,
+  const deadEndCandidates = extractDeadEndCandidates(
+    input.sourceSession,
+    input.events,
+    eventsInVerifiedFixTurns,
   );
   const fallbackCandidates =
-    !hasWorkflowCandidate && hasUsefulTurnSignal
-      ? extractConcreteTurnFallbackCandidates(input)
-      : [];
-
-  const candidates = dedupeProjectCandidates(
-    [...eventCandidates, ...turnCandidates, ...fallbackCandidates]
-      .map(finalizeProjectLearningCandidate)
-      .filter((candidate): candidate is ProjectLearningCandidate => candidate !== null),
+    input.events.length === 0 ? extractNoEventTurnFallbackCandidates(input) : [];
+  return applyProjectLearningCap(
+    dedupeProjectCandidates(
+      [...eventCandidates, ...turnCandidates, ...deadEndCandidates, ...fallbackCandidates]
+        .map(finalizeProjectLearningCandidate)
+        .filter((candidate): candidate is ProjectLearningCandidate => candidate !== null),
+    ),
   );
+}
+const defaultProjectLearningCap = 12;
 
-  return applyProjectLearningCap(candidates);
+function getProjectLearningCap(): number {
+  const raw = process.env.ASD_MAX_PROJECT_LEARNINGS;
+  if (raw === undefined || raw.length === 0) return defaultProjectLearningCap;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isNaN(parsed) || parsed < 1 ? defaultProjectLearningCap : parsed;
 }
 
 function applyProjectLearningCap(
@@ -168,13 +172,61 @@ function applyProjectLearningCap(
   return candidates.slice(0, cap);
 }
 
-const defaultProjectLearningCap = 12;
+// Strong abandonment signals only — high precision. "reverted"/"rolled back"
+// are deliberately excluded because they routinely precede a successful fix
+// ("reverted X, then fixed it"); events in verified-fix turns are skipped too.
+const deadEndSignalPattern =
+  /\b(?:abandoned|gave up on|dead[- ]ends?|not viable|wasn['’]t viable|won['’]t work|did(?:n['’]t| not) pan out|turned out not to work|was a waste of time)\b/i;
 
-function getProjectLearningCap(): number {
-  const raw = process.env.ASD_MAX_PROJECT_LEARNINGS;
-  if (raw === undefined || raw.length === 0) return defaultProjectLearningCap;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isNaN(parsed) || parsed < 1 ? defaultProjectLearningCap : parsed;
+const triedApproachPattern =
+  /\b(?:tried|attempted|experimented with)\s+(?:to\s+)?(.+?)(?=\s+(?:but|because|then|so|,|;|—)|[.!?]|$)/i;
+
+function extractDeadEndCandidates(
+  sourceSession: SourceSession,
+  events: readonly Event[],
+  eventsInVerifiedFixTurns: ReadonlySet<string>,
+): ProjectLearningCandidate[] {
+  const candidates: ProjectLearningCandidate[] = [];
+  for (const event of events) {
+    if (event.confidence === "low" || eventsInVerifiedFixTurns.has(event.event_id)) {
+      continue;
+    }
+    const summary = event.summary;
+    if (!deadEndSignalPattern.test(summary)) {
+      continue;
+    }
+    if (looksLikeProcessNarration(summary) || looksLikeSkillHarnessLeak(summary)) {
+      continue;
+    }
+
+    const approach = summary
+      .match(triedApproachPattern)?.[1]
+      ?.trim()
+      .replace(/[\s,;:]+$/, "");
+    const statement =
+      approach !== undefined && approach.length >= 4
+        ? `Avoid ${lowercaseFirst(approach)} in ${sourceSession.project_key} (tried and abandoned).`
+        : `In ${sourceSession.project_key}, avoid the approach that was abandoned: ${truncateInline(stripTrailingPunctuation(summary), 100)}.`;
+
+    candidates.push({
+      confidence: "medium",
+      dedupeKey: `dead-end:${statement.toLowerCase()}`,
+      evidence: [summary],
+      kind: "dead_end",
+      learningId: `${sourceSession.session_id}:project:dead-end:${event.event_id}`,
+      promotionBasis: "Derived from an abandoned-approach signal in the reduced transcript.",
+      sourceRefs: [
+        createSourceRef(sourceSession, {
+          eventId: event.event_id,
+          line: event.source_offsets.start_line,
+          turnId: event.turn_id,
+        }),
+      ],
+      statement,
+      title: `Dead end: ${truncateInline(statement, 60)}`,
+    });
+  }
+  return candidates;
 }
 
 function hasSameTurnVerifiedFix(events: readonly Event[], turnId: string): boolean {
@@ -557,10 +609,15 @@ function toProjectTurnCandidates(input: {
   return candidates;
 }
 
-function extractConcreteTurnFallbackCandidates(
+function extractNoEventTurnFallbackCandidates(
   input: ExtractLearningsInput,
 ): ProjectLearningCandidate[] {
+  if (input.events.length > 0) {
+    return [];
+  }
+
   const candidates: ProjectLearningCandidate[] = [];
+
   for (const [index, turn] of input.turns.entries()) {
     const promptForClassification = sanitizeUserPrompt(turn.user_prompt) || turn.user_prompt;
 
@@ -641,13 +698,6 @@ function isConcreteProjectPrompt(prompt: string): boolean {
   );
 }
 
-function looksLikePromptInstruction(prompt: string): boolean {
-  return (
-    /\b(?:re-read|review|update|edit|change)\b.*\bONLY\b/i.test(prompt) ||
-    /^\s*When working on\b/i.test(prompt)
-  );
-}
-
 function toVerifiedCompletionStatement(event: Event): string | null {
   if (event.type !== "verification") {
     return null;
@@ -672,6 +722,12 @@ function toVerifiedCompletionStatement(event: Event): string | null {
   const verifiedClause = command === null ? "verified" : `verified with ${formatCommand(command)}`;
 
   return `${startsWithPastTenseVerb(doneText) ? "" : "Completed "}${lowercaseFirst(stripTrailingPunctuation(doneText))}; ${verifiedClause}.`;
+}
+function looksLikePromptInstruction(prompt: string): boolean {
+  return (
+    /\b(?:re-read|review|update|edit|change)\b.*\bONLY\b/i.test(prompt) ||
+    /^\s*When working on\b/i.test(prompt)
+  );
 }
 
 function extractUserPreferenceCandidates(prompt: string): Array<{
@@ -1587,6 +1643,8 @@ function deriveProjectTrigger(kind: LearningKind, scopeKey: string): string {
       return `When revisiting related design decisions in ${scopeKey}.`;
     case "pattern":
       return `When editing the affected files in ${scopeKey}.`;
+    case "dead_end":
+      return `When tempted to try the same approach in ${scopeKey}.`;
     default:
       return `When running the same workflow in ${scopeKey}.`;
   }
@@ -1857,6 +1915,8 @@ function candidatePriority(candidate: ProjectLearningCandidate): number {
         : 30;
     case "decision":
       return 25;
+    case "dead_end":
+      return 22;
     case "pattern":
       return 20;
     case "failure_mode":
