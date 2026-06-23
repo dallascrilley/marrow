@@ -1,6 +1,7 @@
 import type { Event, Learning, SourceSession, Summary, Turn } from "../models/canonical.js";
 import { summarySchema } from "../models/canonical.js";
 import { hasProcessChatter, hasWrapperTags } from "./artifact-heuristics.js";
+import { extractPathsFromText, normalizeFilePath } from "./file-paths.js";
 import {
   generateTopicWithOpenRouter,
   type LlmCallUsage,
@@ -142,8 +143,10 @@ function summarizeSessionWithTopic(
     [
       ...input.turns.flatMap((turn) => turn.files_touched),
       ...input.events.flatMap((event) => collectEventFiles(event)),
+      ...input.events.flatMap((event) => extractPathsFromText(event.summary)),
     ]
-      .filter((filePath) => filePath.trim().length > 0)
+      .map((filePath) => normalizeFilePath(filePath))
+      .filter((filePath): filePath is string => filePath !== null)
       .filter((filePath) => isUsefulFilePath(filePath)),
   ).slice(0, 6);
   const summary = {
@@ -462,9 +465,12 @@ function collectEventCommands(event: Event): string[] {
 }
 
 function collectEventFiles(event: Event): string[] {
-  return readPayloadStringArray(event, "command_strings").filter((value) =>
-    looksLikeSourcePath(value),
-  );
+  return [
+    ...readPayloadStringArray(event, "command_strings"),
+    ...readPayloadStringArray(event, "files_touched"),
+    ...readPayloadStringArray(event, "file_paths"),
+    ...readPayloadStringArray(event, "paths"),
+  ];
 }
 
 function stripEventPrefix(value: string): string {
@@ -714,11 +720,14 @@ function isUsefulCommand(command: string): boolean {
 function isUsefulFilePath(filePath: string): boolean {
   const normalized = filePath.trim();
 
-  if (/\/(?:\.codex\/worktrees|Code)\/[^/]+\/?$/.test(normalized)) {
+  if (/\/\.(?:codex)\/worktrees\/|\/Code\/[^/]+\/?$/.test(normalized)) {
     return false;
   }
 
-  return looksLikeSourcePath(normalized);
+  return (
+    looksLikeSourcePath(normalized) ||
+    /^(?:src|app|lib|docs|test|tests|scripts)(?:\/[A-Za-z0-9_.-]+)*$/.test(normalized)
+  );
 }
 
 function looksLikeSourcePath(value: string): boolean {
