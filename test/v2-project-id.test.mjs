@@ -14,15 +14,33 @@ import {
 
 const execFileAsync = promisify(execFile);
 
+// Strip inherited git env vars (GIT_DIR/GIT_WORK_TREE, exported when this suite
+// runs inside a git hook like pre-push) so the temp-repo setup below targets the
+// fixture dir via -C/cwd instead of the ambient host repo.
+const GIT_ENV = (() => {
+  const env = { ...process.env };
+  for (const key of [
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_PREFIX",
+    "GIT_COMMON_DIR",
+  ]) {
+    delete env[key];
+  }
+  return env;
+})();
+
 test("normaliseGitRemote strips scheme and .git suffix", () => {
   assert.equal(normaliseGitRemote("https://GitHub.com/Org/Repo.git"), "github.com/org/repo");
 });
 
 test("resolveProjectId prefers git remote over path and declared key", async () => {
   const workspace = await mkdtemp(join(tmpdir(), "asd-v2-proj-"));
-  await execFileAsync("git", ["init"], { cwd: workspace });
+  await execFileAsync("git", ["init"], { cwd: workspace, env: GIT_ENV });
   await execFileAsync("git", ["remote", "add", "origin", "git@github.com:acme/demo.git"], {
     cwd: workspace,
+    env: GIT_ENV,
   });
   await writeFile(join(workspace, ".asd-project-key"), "manual-key", "utf8");
 

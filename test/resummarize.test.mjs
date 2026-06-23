@@ -8,6 +8,7 @@ import { createLedger, listSourceSessions, upsertSourceSession } from "../dist/d
 import { sourceSessionFixture, turnSchema } from "../dist/models/canonical.js";
 import { resummarizeSessions } from "../dist/pipeline/resummarize.js";
 import { isLowSignalTopic, summarizeSession } from "../dist/pipeline/summarize.js";
+import { getProjectKnowledgeSessionPath } from "../dist/writers/knowledge-writer.js";
 import { writeSessionManifest } from "../dist/writers/manifest-writer.js";
 import { writeSessionSummary } from "../dist/writers/summary-writer.js";
 
@@ -314,6 +315,74 @@ test("resummarizeSessions --low-signal-only skips high-signal topics", async () 
     assert.equal(result.skipped[0]?.session_id, "high-signal-session");
     assert.equal(result.sessions[0]?.session_id, "low-signal-session");
   } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+async function writeProjectKnowledge({ projectKey, sessionId, learningCount }) {
+  const path = getProjectKnowledgeSessionPath(projectKey, sessionId);
+  await mkdir(join(path, ".."), { recursive: true });
+  const lines = Array.from({ length: learningCount }, (_, index) =>
+    JSON.stringify({ statement: `learning ${index}` }),
+  );
+  await writeFile(path, lines.length === 0 ? "" : `${lines.join("\n")}\n`, "utf8");
+}
+
+test("resummarizeSessions --over-extracted-only selects only sessions above the cap", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-over-"));
+  const runtimeRoot = join(sandbox, "runtime");
+  process.env[runtimeOverrideEnvVar] = runtimeRoot;
+  const previousCap = process.env.ASD_MAX_PROJECT_LEARNINGS;
+  process.env.ASD_MAX_PROJECT_LEARNINGS = "3";
+
+  try {
+    const database = await createLedger();
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId: "over-extracted-session",
+      topic: "Fix export-index contract topic provenance",
+      userPrompt: "Fix export-index contract topic provenance",
+    });
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId: "within-cap-session",
+      topic: "Fix export-index contract topic provenance",
+      userPrompt: "Fix export-index contract topic provenance",
+    });
+
+    // Cap is 3: 5 learnings is over, 2 is within.
+    await writeProjectKnowledge({
+      projectKey: "demo",
+      sessionId: "over-extracted-session",
+      learningCount: 5,
+    });
+    await writeProjectKnowledge({
+      projectKey: "demo",
+      sessionId: "within-cap-session",
+      learningCount: 2,
+    });
+
+    const result = await resummarizeSessions(database, {
+      dryRun: true,
+      overExtractedOnly: true,
+    });
+
+    assert.equal(result.would_process_count, 1);
+    assert.equal(result.skipped_count, 1);
+    const skipped = result.skipped.find((entry) => entry.reason === "not_over_extracted");
+    assert.ok(skipped, "within-cap session should be skipped as not_over_extracted");
+    assert.equal(skipped.session_id, "within-cap-session");
+  } finally {
+    if (previousCap === undefined) {
+      delete process.env.ASD_MAX_PROJECT_LEARNINGS;
+    } else {
+      process.env.ASD_MAX_PROJECT_LEARNINGS = previousCap;
+    }
     delete process.env[runtimeOverrideEnvVar];
     await rm(sandbox, { force: true, recursive: true });
   }

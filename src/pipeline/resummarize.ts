@@ -9,6 +9,8 @@ import {
   getSessionManifestPathForRevision,
 } from "../writers/manifest-writer.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
+import { getProjectLearningCap } from "./extract.js";
+import { countProjectLearnings } from "./learning-count.js";
 import {
   assessLlmBudget,
   getDefaultMaxPerWindow,
@@ -25,7 +27,7 @@ import {
 } from "./summarize.js";
 import { runSummarizePhase } from "./summarize-phase.js";
 
-export type ResummarizeSkipReason = "high_signal_topic" | "missing_manifest";
+export type ResummarizeSkipReason = "high_signal_topic" | "missing_manifest" | "not_over_extracted";
 
 export type ResummarizeSkip = {
   reason: ResummarizeSkipReason;
@@ -41,6 +43,7 @@ export type ResummarizeOptions = {
   lowSignalOnly?: boolean;
   maxPer?: string;
   onUsage?: LlmUsageSink;
+  overExtractedOnly?: boolean;
   projectKeys?: readonly string[];
   sessionIds?: readonly string[];
 };
@@ -85,12 +88,25 @@ export async function resummarizeSessions(
   const maxPer = options.maxPer ?? getDefaultMaxPerWindow();
   let llmBudget = options.llmTopic === true ? await assessLlmBudget(maxPer) : null;
 
+  const overExtractionCap = options.overExtractedOnly === true ? getProjectLearningCap() : 0;
+
   for (const sourceSession of candidates) {
     if (options.lowSignalOnly === true) {
       const existingTopic = await readExistingTopic(sourceSession.session_id);
       if (existingTopic === null || !isLowSignalTopic(existingTopic)) {
         skipped.push({
           reason: "high_signal_topic",
+          session_id: sourceSession.session_id,
+        });
+        continue;
+      }
+    }
+
+    if (options.overExtractedOnly === true) {
+      const learningCount = await countProjectLearnings(sourceSession);
+      if (learningCount <= overExtractionCap) {
+        skipped.push({
+          reason: "not_over_extracted",
           session_id: sourceSession.session_id,
         });
         continue;
