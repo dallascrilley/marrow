@@ -15,11 +15,13 @@ function learning(overrides = {}) {
   return {
     confidence: "medium",
     evidence: ["Yes — keeping the rule + fixing generation is the right design."],
+    evidence_type: "inferred",
     kind: "decision",
     learning_id: "session:project:decision:1",
     promotion_basis: "fixture",
     scope: "project",
     scope_key: "studio-tools",
+    trigger: "When revisiting related design decisions in studio-tools.",
     source_refs: [
       {
         event_id: null,

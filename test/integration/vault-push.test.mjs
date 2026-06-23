@@ -176,9 +176,11 @@ test("memory push-wiki --refresh re-runs export-wiki against the runtime", async
         scope_key: "agent-session-distillery",
         kind: "decision",
         title: "Refresh-driven page",
+        trigger: "When revisiting related design decisions in agent-session-distillery.",
         statement: "Refresh re-runs export-wiki before pushing.",
         evidence: ["The integration uses --refresh to re-export."],
         confidence: "medium",
+        evidence_type: "inferred",
         promotion_basis: "Explicit decision recorded in the planning loop.",
         source_refs: [
           {

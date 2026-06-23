@@ -1,6 +1,7 @@
 import type {
   ConfidenceLevel,
   Event,
+  EvidenceType,
   Learning,
   LearningKind,
   SourceRef,
@@ -51,6 +52,7 @@ export function extractLearnings(input: ExtractLearningsInput): ExtractedLearnin
       createLearning({
         confidence: candidate.confidence,
         evidence: candidate.evidence,
+        evidenceType: deriveProjectEvidenceType(candidate),
         kind: candidate.kind,
         learningId: candidate.learningId,
         promotionBasis: candidate.promotionBasis,
@@ -59,6 +61,7 @@ export function extractLearnings(input: ExtractLearningsInput): ExtractedLearnin
         sourceRefs: candidate.sourceRefs,
         statement: candidate.statement,
         title: candidate.title,
+        trigger: deriveProjectTrigger(candidate.kind, input.sourceSession.project_key),
       }),
     ),
   );
@@ -69,6 +72,8 @@ export function extractLearnings(input: ExtractLearningsInput): ExtractedLearnin
           createLearning({
             confidence: candidate.confidence,
             evidence: [candidate.evidence],
+            // Direct operator instructions captured from the user's own prompt.
+            evidenceType: "user_stated",
             kind: candidate.kind,
             learningId: `${input.sourceSession.session_id}:user:${turn.index}:${index}`,
             promotionBasis: "Explicit user instruction captured in the source prompt.",
@@ -81,6 +86,7 @@ export function extractLearnings(input: ExtractLearningsInput): ExtractedLearnin
             ],
             statement: candidate.statement,
             title: candidate.title,
+            trigger: "When applying the operator's stated working preferences.",
           }),
       ),
     ),
@@ -1306,9 +1312,42 @@ function uniqueStrings(values: readonly string[]): string[] {
   return uniqueValues;
 }
 
+// Dedupe-key prefixes whose candidates are backed by observed fix/verification
+// evidence rather than a heuristic inference (see ProjectLearningCandidate).
+const verifiedDedupePrefixes = [
+  "verified-fix:",
+  "completion:",
+  "verification:",
+  "error-resolution:",
+];
+
+function deriveProjectEvidenceType(candidate: ProjectLearningCandidate): EvidenceType {
+  return verifiedDedupePrefixes.some((prefix) => candidate.dedupeKey.startsWith(prefix))
+    ? "verified"
+    : "inferred";
+}
+
+// Tier-1 MVP precondition: deterministic, kind-derived. No LLM. The future
+// LLM-recall pass (per the classification contract) refines these in place.
+function deriveProjectTrigger(kind: LearningKind, scopeKey: string): string {
+  switch (kind) {
+    case "verification_rule":
+      return `When verifying changes in ${scopeKey}.`;
+    case "failure_mode":
+      return `When the same failure recurs in ${scopeKey}.`;
+    case "decision":
+      return `When revisiting related design decisions in ${scopeKey}.`;
+    case "pattern":
+      return `When editing the affected files in ${scopeKey}.`;
+    default:
+      return `When running the same workflow in ${scopeKey}.`;
+  }
+}
+
 function createLearning(input: {
   confidence: ConfidenceLevel;
   evidence: string[];
+  evidenceType: EvidenceType;
   kind: LearningKind;
   learningId: string;
   promotionBasis: string;
@@ -1317,10 +1356,12 @@ function createLearning(input: {
   sourceRefs: SourceRef[];
   statement: string;
   title: string;
+  trigger: string;
 }): Learning {
   return learningSchema.parse({
     confidence: input.confidence,
     evidence: input.evidence,
+    evidence_type: input.evidenceType,
     kind: input.kind,
     learning_id: input.learningId,
     promotion_basis: input.promotionBasis,
@@ -1329,6 +1370,7 @@ function createLearning(input: {
     source_refs: input.sourceRefs,
     statement: input.statement,
     title: input.title,
+    trigger: input.trigger,
   } satisfies Learning);
 }
 
