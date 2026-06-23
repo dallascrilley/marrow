@@ -6,10 +6,31 @@ import type { SourceSessionRow } from "../db/queries.js";
 import { runArchivePhase } from "../pipeline/archive.js";
 import { type DiscoveredSourceSession, runDiscoverPhase } from "../pipeline/discover.js";
 import { extractLearnings } from "../pipeline/extract.js";
+import type { LlmCallUsage, LlmUsageSink } from "../pipeline/llm-learning-review.js";
+import { appendLlmTelemetry, buildLlmTelemetryRecord } from "../pipeline/llm-telemetry.js";
 import { runParsePhase } from "../pipeline/parse.js";
 import { runReducePhase } from "../pipeline/reduce.js";
 import { runSummarizePhase } from "../pipeline/summarize-phase.js";
 import { writeKnowledgeArtifacts } from "../writers/knowledge-writer.js";
+
+// Topic-generation telemetry sink for the ingest path, mirroring the one in
+// `quality resummarize`. Returns undefined when --llm-topic is off (no paid
+// topic-generation calls happen, so there is nothing to record).
+export function topicGenerationTelemetrySink(llmTopic: boolean): LlmUsageSink | undefined {
+  if (!llmTopic) {
+    return undefined;
+  }
+  return async (usage: LlmCallUsage, sessionId?: string) => {
+    await appendLlmTelemetry(
+      buildLlmTelemetryRecord({
+        usage,
+        operation: "topic_generation",
+        sessionId: sessionId ?? "unknown",
+        createdAt: new Date().toISOString(),
+      }),
+    );
+  };
+}
 
 export async function executeIngestBackfill(
   context: CommandContext,
@@ -32,6 +53,7 @@ export async function executeIngestBackfill(
     discovery.sessions,
     options.resume,
     options.llmTopic,
+    topicGenerationTelemetrySink(options.llmTopic),
   );
 
   context.output.info(
@@ -65,6 +87,7 @@ export async function processDiscoveredSessions(
   entries: readonly DiscoveredSourceSession[],
   resume: boolean,
   llmTopic = false,
+  onUsage?: LlmUsageSink,
 ): Promise<ProcessDiscoveredSessionsResult> {
   const sessions: Array<Record<string, unknown>> = [];
   const failures: ProcessDiscoveredSessionsResult["failures"] = [];
@@ -91,6 +114,9 @@ export async function processDiscoveredSessions(
         reduced.events,
         resume,
         llmTopic,
+        false,
+        undefined,
+        onUsage,
       );
       const extracted = await runExtractPhase(
         database,

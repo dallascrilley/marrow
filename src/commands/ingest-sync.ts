@@ -2,7 +2,11 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
 import { runDiscoverPhase } from "../pipeline/discover.js";
-import { parseIngestOptions, processDiscoveredSessions } from "./ingest-backfill.js";
+import {
+  parseIngestOptions,
+  processDiscoveredSessions,
+  topicGenerationTelemetrySink,
+} from "./ingest-backfill.js";
 
 export async function executeIngestSync(
   context: CommandContext,
@@ -26,6 +30,7 @@ export async function executeIngestSync(
     discovery.sessions,
     options.resume,
     options.llmTopic,
+    topicGenerationTelemetrySink(options.llmTopic),
   );
 
   context.output.info(
