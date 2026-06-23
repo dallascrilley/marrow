@@ -44,6 +44,10 @@ type ProjectLearningCandidate = {
   sourceRefs: SourceRef[];
   statement: string;
   title: string;
+  // Optional precondition override. When set (e.g. an error-signature trigger
+  // for failure learnings), it is used verbatim instead of the kind-derived
+  // default from deriveProjectTrigger. May be explicitly undefined (no override).
+  trigger?: string | undefined;
 };
 
 export function extractLearnings(input: ExtractLearningsInput): ExtractedLearnings {
@@ -67,7 +71,9 @@ export function extractLearnings(input: ExtractLearningsInput): ExtractedLearnin
         statement: candidate.statement,
         technologies,
         title: candidate.title,
-        trigger: deriveProjectTrigger(candidate.kind, input.sourceSession.project_key),
+        trigger:
+          candidate.trigger ??
+          deriveProjectTrigger(candidate.kind, input.sourceSession.project_key),
       }),
     ),
   );
@@ -311,6 +317,7 @@ function toProjectEventCandidate(
         ],
         statement: event.summary,
         title: `Failure mode: ${truncateInline(event.summary, 68)}`,
+        trigger: errorSignatureTrigger(event.summary, sourceSession.project_key),
       };
     case "verification": {
       const payloadCommand = readPayloadString(event, "verification_command");
@@ -416,6 +423,7 @@ function toProjectTurnCandidates(input: {
       sourceRefs: sourceRefsForEvents(input.sourceSession, [failure, resolution]),
       statement,
       title: `Error resolution: ${truncateInline(statement, 60)}`,
+      trigger: errorSignatureTrigger(failure.summary, input.sourceSession.project_key),
     });
   }
 
@@ -1397,6 +1405,30 @@ function deriveProjectEvidenceType(candidate: ProjectLearningCandidate): Evidenc
 
 // Tier-1 MVP precondition: deterministic, kind-derived. No LLM. The future
 // LLM-recall pass (per the classification contract) refines these in place.
+// Tier-3b: normalize a failure summary to a canonical symptom signature so the
+// same error keys to the same trigger — and thus the same durable Instinct id —
+// across sessions. Returns null when no recognizable signature is present.
+function normalizeErrorSignature(text: string): string | null {
+  const errno = text.match(/\b(E[A-Z]{3,})\b/)?.[1];
+  if (errno !== undefined && errno !== "ERROR" && errno !== "EXCEPTION") {
+    return errno;
+  }
+  const exception = text.match(/\b([A-Z][A-Za-z0-9]*(?:Error|Exception))\b/)?.[1];
+  if (exception !== undefined) {
+    return exception;
+  }
+  const exitCode = text.match(/\bexit(?:ed with)?(?:\s+status)?\s+code\s+(\d+)\b/i)?.[1];
+  if (exitCode !== undefined) {
+    return `exit code ${exitCode}`;
+  }
+  return null;
+}
+
+function errorSignatureTrigger(summary: string, scopeKey: string): string | undefined {
+  const signature = normalizeErrorSignature(summary);
+  return signature === null ? undefined : `When ${signature} recurs in ${scopeKey}.`;
+}
+
 function deriveProjectTrigger(kind: LearningKind, scopeKey: string): string {
   switch (kind) {
     case "verification_rule":
