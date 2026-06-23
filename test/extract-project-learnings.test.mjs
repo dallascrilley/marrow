@@ -411,6 +411,41 @@ test("promotes file-scoped implementation learning from concrete fix evidence", 
   );
 });
 
+test("promotes file-scoped implementation learning from payload file arrays", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    files_touched: [],
+    user_prompt: "Fix files of interest extraction.",
+  });
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "fix",
+      "Resolved by tightening path extraction in /Users/example/Code/demo/src/pipeline/summarize.ts.",
+      {
+        payload_small: {
+          file_paths: ["/Users/example/Code/demo/src/pipeline/summarize.ts"],
+          matched_rule: "resolved",
+        },
+      },
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.ok(
+    learnings.project.some(
+      (learning) =>
+        learning.statement ===
+        "In src/pipeline/summarize.ts, resolved by tightening path extraction in /Users/example/Code/demo/src/pipeline/summarize.ts.",
+    ),
+  );
+});
+
 test("does not promote process-only file-scoped fix events", () => {
   const source = sourceSession();
   const firstTurn = turn({

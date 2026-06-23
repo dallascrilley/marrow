@@ -51,6 +51,7 @@ test("ingest backfill --source claude-code processes the smoke fixture end-to-en
     assert.ok(session.summary_path.endsWith("summary.json"));
 
     const summary = JSON.parse(await readFile(session.summary_path, "utf8"));
+    assert.deepEqual(summary.files_of_interest, ["src"]);
     assert.equal(summary.session_id, "session-fixture-0001");
 
     const summariesDir = join(runtimeRoot, "summaries", "by-session", "session-fixture-0001");
