@@ -129,13 +129,75 @@ function extractProjectLearningCandidates(
       turn,
     }),
   );
+  const deadEndCandidates = extractDeadEndCandidates(
+    input.sourceSession,
+    input.events,
+    eventsInVerifiedFixTurns,
+  );
   const fallbackCandidates =
     input.events.length === 0 ? extractNoEventTurnFallbackCandidates(input) : [];
   return dedupeProjectCandidates(
-    [...eventCandidates, ...turnCandidates, ...fallbackCandidates]
+    [...eventCandidates, ...turnCandidates, ...deadEndCandidates, ...fallbackCandidates]
       .map(finalizeProjectLearningCandidate)
       .filter((candidate): candidate is ProjectLearningCandidate => candidate !== null),
   );
+}
+
+// Strong abandonment signals only — high precision. "reverted"/"rolled back"
+// are deliberately excluded because they routinely precede a successful fix
+// ("reverted X, then fixed it"); events in verified-fix turns are skipped too.
+const deadEndSignalPattern =
+  /\b(?:abandoned|gave up on|dead[- ]ends?|not viable|wasn['’]t viable|won['’]t work|did(?:n['’]t| not) pan out|turned out not to work|was a waste of time)\b/i;
+
+const triedApproachPattern =
+  /\b(?:tried|attempted|experimented with)\s+(?:to\s+)?(.+?)(?=\s+(?:but|because|then|so|,|;|—)|[.!?]|$)/i;
+
+function extractDeadEndCandidates(
+  sourceSession: SourceSession,
+  events: readonly Event[],
+  eventsInVerifiedFixTurns: ReadonlySet<string>,
+): ProjectLearningCandidate[] {
+  const candidates: ProjectLearningCandidate[] = [];
+  for (const event of events) {
+    if (event.confidence === "low" || eventsInVerifiedFixTurns.has(event.event_id)) {
+      continue;
+    }
+    const summary = event.summary;
+    if (!deadEndSignalPattern.test(summary)) {
+      continue;
+    }
+    if (looksLikeProcessNarration(summary) || looksLikeSkillHarnessLeak(summary)) {
+      continue;
+    }
+
+    const approach = summary
+      .match(triedApproachPattern)?.[1]
+      ?.trim()
+      .replace(/[\s,;:]+$/, "");
+    const statement =
+      approach !== undefined && approach.length >= 4
+        ? `Avoid ${lowercaseFirst(approach)} in ${sourceSession.project_key} (tried and abandoned).`
+        : `In ${sourceSession.project_key}, avoid the approach that was abandoned: ${truncateInline(stripTrailingPunctuation(summary), 100)}.`;
+
+    candidates.push({
+      confidence: "medium",
+      dedupeKey: `dead-end:${statement.toLowerCase()}`,
+      evidence: [summary],
+      kind: "dead_end",
+      learningId: `${sourceSession.session_id}:project:dead-end:${event.event_id}`,
+      promotionBasis: "Derived from an abandoned-approach signal in the reduced transcript.",
+      sourceRefs: [
+        createSourceRef(sourceSession, {
+          eventId: event.event_id,
+          line: event.source_offsets.start_line,
+          turnId: event.turn_id,
+        }),
+      ],
+      statement,
+      title: `Dead end: ${truncateInline(statement, 60)}`,
+    });
+  }
+  return candidates;
 }
 
 function hasSameTurnVerifiedFix(events: readonly Event[], turnId: string): boolean {
@@ -1345,6 +1407,8 @@ function deriveProjectTrigger(kind: LearningKind, scopeKey: string): string {
       return `When revisiting related design decisions in ${scopeKey}.`;
     case "pattern":
       return `When editing the affected files in ${scopeKey}.`;
+    case "dead_end":
+      return `When tempted to try the same approach in ${scopeKey}.`;
     default:
       return `When running the same workflow in ${scopeKey}.`;
   }
@@ -1589,6 +1653,8 @@ function candidatePriority(candidate: ProjectLearningCandidate): number {
         : 30;
     case "decision":
       return 25;
+    case "dead_end":
+      return 22;
     case "pattern":
       return 20;
     case "failure_mode":

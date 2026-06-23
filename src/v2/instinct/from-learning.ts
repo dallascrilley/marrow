@@ -23,6 +23,8 @@ export function domainFromLearning(learning: Learning): Domain {
       return "tooling";
     case "decision":
       return "workflow";
+    case "dead_end":
+      return "debugging";
     default:
       return "workflow";
   }
