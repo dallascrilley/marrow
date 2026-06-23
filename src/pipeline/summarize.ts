@@ -206,6 +206,10 @@ export function isLowSignalTopic(topic: string): boolean {
     return true;
   }
 
+  if (looksLikeAgentLauncherInvocation(normalized)) {
+    return true;
+  }
+
   if (isTooShortOrGeneric(normalized)) {
     return true;
   }
@@ -268,6 +272,13 @@ function looksLikeWrapperPromptTopic(topic: string): boolean {
     "Full review output",
     "Tether phone steering reply received",
     "Handled prompt:",
+    // Operator control-loop, continuation, and persona-header prompts. These recur
+    // across sessions (chief-of-staff heartbeats, agent-driver continuations) and
+    // carry no session-specific signal, so the deterministic topic deriver should
+    // not surface them.
+    "Heartbeat. Run one bounded operating loop",
+    "Continue with the next best set of actions",
+    "Role:",
   ];
 
   return prefixes.some((prefix) => trimmed.startsWith(prefix));
@@ -315,7 +326,7 @@ function looksLikeTypoOnlyFixTopic(topic: string): boolean {
 }
 
 function looksLikeMarkdownSkillHeaderTopic(topic: string): boolean {
-  return /^#\s+[A-Za-z][^\n`]{0,120}$/.test(topic.trim());
+  return /^#{1,6}\s+[A-Za-z][^\n`]{0,120}$/.test(topic.trim());
 }
 
 function looksLikeBacktickFragmentTopic(topic: string): boolean {
@@ -623,6 +634,13 @@ function looksLikeBareCommand(topic: string): boolean {
   return /^(?:cd|ls|cat|sed|awk|rg|grep|git|gh|npm|pnpm|bun|node|python3?|uv|just|make|cargo|go|swift|xcodebuild|docker|curl)\b(?:\s|$)/i.test(
     topic,
   );
+}
+
+function looksLikeAgentLauncherInvocation(topic: string): boolean {
+  // A bare agent-CLI launch with flags (e.g. "pi --no-extensions --no-skills ...")
+  // is the harness starting an agent, not a session topic. Require a flag so real
+  // topics like "claude code hooks not firing" are not swept up.
+  return /^(?:pi|codex|claude|cursor|kimi)\s+--/i.test(topic.trim());
 }
 
 function looksLikeBareSkillSlugTopic(topic: string): boolean {
