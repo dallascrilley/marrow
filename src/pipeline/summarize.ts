@@ -1,5 +1,6 @@
 import type { Event, Learning, SourceSession, Summary, Turn } from "../models/canonical.js";
 import { summarySchema } from "../models/canonical.js";
+import { hasProcessChatter, hasWrapperTags } from "./artifact-heuristics.js";
 import { generateTopicWithOpenRouter } from "./llm-learning-review.js";
 import {
   extractSubstantivePrompt,
@@ -94,12 +95,14 @@ function summarizeSessionWithTopic(
   const decisions = uniquePreservingOrder(
     input.events
       .filter((event) => event.type === "decision")
-      .map((event) => normalizeSummaryLine(event.summary)),
+      .map((event) => normalizeSummaryLine(event.summary))
+      .filter((line) => isOperatorReadySummaryLine(line)),
   );
   const failures = uniquePreservingOrder(
     input.events
       .filter((event) => event.type === "failure")
-      .map((event) => normalizeSummaryLine(event.summary)),
+      .map((event) => normalizeSummaryLine(event.summary))
+      .filter((line) => isOperatorReadySummaryLine(line)),
   );
   const fixes = summarizeWorkedOutcomes(input.events);
   const fallbackWorkflowOutcomes =
@@ -107,7 +110,8 @@ function summarizeSessionWithTopic(
       ? uniquePreservingOrder(
           (input.projectLearnings ?? [])
             .filter((learning) => learning.kind === "workflow")
-            .map((learning) => normalizeSummaryLine(learning.statement)),
+            .map((learning) => normalizeSummaryLine(learning.statement))
+            .filter((line) => isOperatorReadySummaryLine(line)),
         )
       : [];
   const whatWorked = uniquePreservingOrder([...fixes, ...fallbackWorkflowOutcomes]);
@@ -133,14 +137,18 @@ function summarizeSessionWithTopic(
     files_of_interest: filesOfInterest,
     next_step: normalizeSummaryLine(nextStep),
     project_learnings: uniquePreservingOrder(
-      (input.projectLearnings ?? []).map((learning) => learning.statement),
+      (input.projectLearnings ?? [])
+        .map((learning) => normalizeSummaryLine(learning.statement))
+        .filter((line) => isOperatorReadySummaryLine(line)),
     ),
     session_id: input.sourceSession.session_id,
     topic: topicInput.topic,
     topic_source: topicInput.topicSource,
     useful_commands: usefulCommands,
     user_learnings: uniquePreservingOrder(
-      (input.userLearnings ?? []).map((learning) => learning.statement),
+      (input.userLearnings ?? [])
+        .map((learning) => normalizeSummaryLine(learning.statement))
+        .filter((line) => isOperatorReadySummaryLine(line)),
     ),
     what_failed: failures,
     what_was_decided: decisions,
@@ -333,16 +341,17 @@ function isPositiveVerification(event: Event): boolean {
     /verified|confirmed|tests? pass(?:ed)?|build succeeded|all checks passed/i.test(event.summary)
   );
 }
-
 function summarizeWorkedOutcomes(events: readonly Event[]): string[] {
   const fixes = events
     .filter((event) => event.type === "fix")
-    .map((event) => summarizeOutcome(event));
+    .map((event) => summarizeOutcome(event))
+    .filter((line) => isOperatorReadySummaryLine(line));
   const completionOutcomes = events
     .filter((event) => event.type === "verification")
     .map((event) => summarizeCompletionOutcome(stripEventPrefix(event.summary)))
     .filter((outcome): outcome is string => outcome !== null)
-    .map((outcome) => normalizeSummaryLine(outcome));
+    .map((outcome) => normalizeSummaryLine(outcome))
+    .filter((line) => isOperatorReadySummaryLine(line));
 
   if (completionOutcomes.length > 0) {
     return uniquePreservingOrder([...fixes, ...completionOutcomes]);
@@ -351,7 +360,8 @@ function summarizeWorkedOutcomes(events: readonly Event[]): string[] {
   return uniquePreservingOrder(
     events
       .filter((event) => event.type === "fix" || isPositiveVerification(event))
-      .map((event) => summarizeOutcome(event)),
+      .map((event) => summarizeOutcome(event))
+      .filter((line) => isOperatorReadySummaryLine(line)),
   );
 }
 
@@ -513,6 +523,11 @@ function normalizeSummaryLine(value: string): string {
   const sanitized = sanitizeLearningStatement(sanitizeHarnessLeakText(value));
   const normalized = (sanitized.length > 0 ? sanitized : value).replace(/\s+/g, " ").trim();
   return truncateInline(normalized, 180);
+}
+
+function isOperatorReadySummaryLine(value: string): boolean {
+  const normalized = normalizeSummaryLine(value);
+  return normalized.length > 0 && !hasProcessChatter(normalized) && !hasWrapperTags(normalized);
 }
 
 function selectTopicLine(prompt: string): string {

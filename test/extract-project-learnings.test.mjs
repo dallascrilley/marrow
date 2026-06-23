@@ -147,6 +147,40 @@ test("promotes workflow learning from project-specific commands", () => {
   );
 });
 
+test("rejects pasted document lines as user learnings", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    user_prompt: [
+      "370\t  - wildcard_probe       # always present",
+      "124\tFor each run, produce one **Top user-critical gap**.",
+      "138\t**Always run the rollforward preprocessor first.**",
+    ].join("\n"),
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.user, []);
+});
+
+test("keeps explicit user preference lines that are not pasted document fragments", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    user_prompt: "Always run the focused regression before finalizing.",
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.equal(learnings.user.length, 1);
+  assert.equal(learnings.user[0].statement, "Always run the focused regression before finalizing.");
+});
 test("promotes file-scoped implementation learning from concrete fix evidence", () => {
   const source = sourceSession();
   const firstTurn = turn({
@@ -174,6 +208,31 @@ test("promotes file-scoped implementation learning from concrete fix evidence", 
         learning.statement === "In shared/db_sqlite.py, resolved by adding `import psycopg.rows`.",
     ),
   );
+});
+
+test("does not promote process-only file-scoped fix events", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    files_touched: [
+      "/Users/dallascrilley/.hub/artifacts/skills/ce-ideate/source/original/SKILL.md",
+    ],
+    user_prompt: "Please take a look.",
+  });
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "fix",
+      "Now regenerate the registry summary + projections from the corrected description, then check whether the provenance edit survived the update.",
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.project, []);
 });
 
 test("does not promote process-only future verification text", () => {
@@ -1224,6 +1283,30 @@ test("compresses markdown-heavy fix into file-scoped pattern learning", () => {
   assert.equal(learnings.project[0].kind, "pattern");
   assert.ok(learnings.project[0].statement.includes("desktop/vitest.config.ts"));
   assert.ok(learnings.project[0].statement.includes("use worker threads"));
+});
+
+test("never emits empty file-scoped learning prefixes", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    files_touched: ["desktop/vitest.config.ts"],
+    user_prompt: "Speed up the Vitest suite",
+  });
+  const markdownFixSummary =
+    "Summary of changes: ## Implemented **Vitest config** ([`desktop/vitest.config.ts`](desktop/vitest.config.ts)) - " +
+    "`pool: 'threads'` – use worker threads instead of forks - `environment: 'happy-dom'` – lighter DOM env than jsdom";
+  const events = [
+    event(firstTurn.turn_id, "fix", markdownFixSummary, {
+      event_id: `${firstTurn.turn_id}:fix:000001`,
+    }),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.ok(learnings.project.every((learning) => !learning.statement.startsWith("In ,")));
 });
 
 test("still rejects markdown-heavy summary without recoverable file and action", () => {

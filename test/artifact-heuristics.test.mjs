@@ -40,11 +40,19 @@ test("looksLikeProcessChatterLine permits durable signal wrapped in process word
     ),
   );
   assert.ok(
-    !looksLikeProcessChatterLine(
+    looksLikeProcessChatterLine(
       "Checking whether we can quickly stabilize the two previous tests.",
     ),
   );
-  assert.ok(!looksLikeProcessChatterLine("I'll fix the failing test in desktop/vitest.config.ts."));
+  assert.ok(looksLikeProcessChatterLine("I'll fix the failing test in desktop/vitest.config.ts."));
+  assert.ok(
+    looksLikeProcessChatterLine(
+      "Now regenerate the registry summary + projections from the corrected description, then check whether the provenance edit survived the update.",
+    ),
+  );
+  assert.ok(
+    looksLikeProcessChatterLine("Now stage it in a cleanly-named directory and add it to hub."),
+  );
 });
 
 test("looksLikeProcessChatterLine ignores lines without process prefix", () => {

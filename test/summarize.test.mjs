@@ -91,6 +91,71 @@ test("summary synthesis skips prompt noise, prefers the latest next step, and fi
   assert.deepEqual(summary.what_worked, ["Tests passed after switching to happy-dom."]);
 });
 
+test("summary synthesis drops process chatter while keeping durable outcomes", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "agent-session-distillery",
+    session_id: "summary-process-chatter",
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Updated Vitest config and verified the suite.",
+      commands_seen: [],
+      ended_at: "2026-05-16T12:05:00Z",
+      files_touched: ["desktop/vitest.config.ts"],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-16T12:00:00Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: "Speed up the Vitest suite",
+      verification_seen: true,
+    }),
+  ];
+  const events = [
+    eventSchema.parse({
+      confidence: "medium",
+      event_id: "summary-process-chatter:fix:1",
+      payload_small: { matched_rule: "fix" },
+      source_offsets: { end_line: 10, start_line: 10 },
+      summary:
+        "Now regenerate the registry summary + projections from the corrected description, then check whether the provenance edit survived the update.",
+      turn_id: turns[0].turn_id,
+      type: "fix",
+    }),
+    eventSchema.parse({
+      confidence: "medium",
+      event_id: "summary-process-chatter:fix:2",
+      payload_small: { matched_rule: "updated" },
+      source_offsets: { end_line: 11, start_line: 11 },
+      summary: "Updated Vitest config to use worker threads and happy-dom.",
+      turn_id: turns[0].turn_id,
+      type: "fix",
+    }),
+    eventSchema.parse({
+      confidence: "high",
+      event_id: "summary-process-chatter:verification:1",
+      payload_small: { matched_rule: "tests pass" },
+      source_offsets: { end_line: 12, start_line: 12 },
+      summary: "Verification noted: Tests passed after switching to happy-dom.",
+      turn_id: turns[0].turn_id,
+      type: "verification",
+    }),
+  ];
+
+  const summary = summarizeSession({
+    events,
+    sourceSession,
+    turns,
+  });
+
+  assert.ok(
+    summary.what_worked.includes("Updated Vitest config to use worker threads and happy-dom."),
+  );
+  assert.ok(summary.what_worked.includes("Tests passed after switching to happy-dom."));
+  assert.ok(summary.what_worked.every((line) => !/^Now regenerate/i.test(line)));
+});
+
 test("summary synthesis turns final completion evidence into operator-ready outcomes", () => {
   const sourceSession = {
     ...sourceSessionFixture,

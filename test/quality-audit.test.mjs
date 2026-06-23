@@ -55,7 +55,12 @@ test("quality audit ranks summary defects and deletion readiness", async () => {
         session_id: "noisy-session",
         source_hash: "sha256:noisy",
       }).sourceSession;
-
+      const manualReviewSession = upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "agent-session-distillery",
+        session_id: "manual-review-session",
+        source_hash: "sha256:manual-review",
+      }).sourceSession;
       transitionPhase(database, {
         phaseName: "deletion_candidate",
         phaseState: "completed",
@@ -67,6 +72,12 @@ test("quality audit ranks summary defects and deletion readiness", async () => {
         phaseState: "completed",
         sourceHash: noisySession.source_hash,
         sourceSessionId: noisySession.id,
+      });
+      transitionPhase(database, {
+        phaseName: "deletion_candidate",
+        phaseState: "completed",
+        sourceHash: manualReviewSession.source_hash,
+        sourceSessionId: manualReviewSession.id,
       });
 
       await writeSessionSummary({
@@ -115,6 +126,18 @@ test("quality audit ranks summary defects and deletion readiness", async () => {
         useful_commands: [],
         what_worked: ["Let me verify this before finishing."],
       });
+      await writeSessionSummary({
+        ...summaryFixture,
+        files_of_interest: ["src/pipeline/extract.ts"],
+        next_step: "No open next step recorded.",
+        project_learnings: [],
+        session_id: "manual-review-session",
+        topic: "Review the ingestion quality heuristics.",
+        useful_commands: [],
+        what_worked: [
+          "Now regenerate the registry summary + projections from the corrected description, then check whether the provenance edit survived the update.",
+        ],
+      });
 
       upsertDeletionCandidate(database, {
         candidateState: "ready",
@@ -136,19 +159,29 @@ test("quality audit ranks summary defects and deletion readiness", async () => {
         sourceHash: noisySession.source_hash,
         sourceSessionId: noisySession.id,
       });
+      upsertDeletionCandidate(database, {
+        candidateState: "pending_artifacts",
+        currentLifecycleState: "deletion_candidate",
+        projectKey: manualReviewSession.project_key,
+        reason: "no_durable_learnings: No project or user learnings have been written yet.",
+        safeToDelete: false,
+        sessionId: manualReviewSession.session_id,
+        sourceHash: manualReviewSession.source_hash,
+        sourceSessionId: manualReviewSession.id,
+      });
 
       const report = await auditQuality(database);
 
-      assert.equal(report.totals.audited, 2);
+      assert.equal(report.totals.audited, 3);
       assert.equal(report.deletion_readiness.ready, 1);
-      assert.equal(report.deletion_readiness.blocked, 1);
-      assert.equal(report.issue_counts.process_chatter, 1);
-      assert.equal(report.issue_counts.no_useful_commands, 1);
+      assert.equal(report.deletion_readiness.blocked, 2);
+      assert.equal(report.issue_counts.process_chatter, 2);
+      assert.equal(report.issue_counts.no_useful_commands, 2);
       assert.equal(report.issue_counts.no_files_of_interest, 1);
-      assert.equal(report.issue_counts.no_project_learnings, 1);
-      assert.equal(report.issue_counts.blocked_deletion, 1);
+      assert.equal(report.issue_counts.no_project_learnings, 2);
+      assert.equal(report.issue_counts.blocked_deletion, 2);
       assert.equal(report.recommendations[0].issue, "blocked_deletion");
-      assert.equal(report.recommendations[0].affected_sessions, 1);
+      assert.equal(report.recommendations[0].affected_sessions, 2);
       assert.deepEqual(
         report.sessions.find((session) => session.session_id === "good-session")
           .knowledge_artifacts,
@@ -158,6 +191,11 @@ test("quality audit ranks summary defects and deletion readiness", async () => {
         },
       );
       assert.equal(report.worst_sessions[0].session_id, "noisy-session");
+      assert.ok(
+        report.sessions
+          .find((session) => session.session_id === "manual-review-session")
+          .issues.includes("process_chatter"),
+      );
     } finally {
       database.close();
     }

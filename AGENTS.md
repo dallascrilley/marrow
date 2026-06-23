@@ -1,3 +1,24 @@
+---
+ijfw_version: 1.3.2
+ijfw_schema: 1
+type: software
+primary_type: software
+secondary_types: []
+confidence: 0.907
+detected_at: 2026-06-15T01:03:13.259Z
+signals:
+  - kind: manifest
+    weight: 0.9
+    manifests: [package.json]
+  - kind: dir_business
+    weight: 0.4
+    name: ops
+  - kind: file_extension_ratio
+    weight: 0.7
+    domain: software
+    ratio: 1
+    count: 159
+---
 # AGENTS.md — agent-session-distillery
 
 Agent-facing contract for this repo. Human docs live in `README.md`; project
@@ -117,3 +138,11 @@ discovered during bootstrap are appended below this baseline as a
   - **Why this project:** `memory push-wiki` and v2 renderers touch vault project pages; agents must respect carve-out vs vault-owned paths.
   - **Path:** `~/.claude/skills/vault/SKILL.md`
   - **Load:** `/library load vault`
+
+<!-- IJFW-MEMORY-START -->
+Project memory at .ijfw/memory/. Call `ijfw_memory_prelude` for full context.
+<!-- IJFW-MEMORY-END -->
+
+<!-- IJFW-AGENTS-START -->
+No project agents yet. Run `ijfw team` to set them up.
+<!-- IJFW-AGENTS-END -->

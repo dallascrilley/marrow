@@ -18,21 +18,20 @@ export type SummarySignalFields = {
 };
 
 const processPhrasePattern =
-  /^(?:let me|i(?:'|')ll|i will|i need to|i(?:'|')m|checking|exploring|now let me|now i(?:'|')ll|now i(?:'|')m|first, let me|first, i(?:'|')ll|first, i(?:'|')m)\b/i;
+  /^(?:let me|i(?:'|')ll|i will|i need to|i(?:'|')m|checking|exploring|now let me|now i(?:'|')ll|now i(?:'|')m|first, let me|first, i(?:'|')ll|first, i(?:'|')m|now\s+(?:stage|regenerate|check|inspect|read|review|run|verify|commit|add|update|fix|implement|create|write))\b/i;
 
-const concreteSignalPattern =
-  /\b(?:fix|fixed|implement|implemented|resolve|resolved|verify|verified|test|tests?|pass|passed|fail|failed|error|add|added|update|updated|remove|removed|create|created|commit|committed|push|pushed|merge|merged|build|built|run|ran|command|file|path|change|changes|outcome|result|results|output|done|completed|deployed|released|refactored|migrated|upgraded|downgraded|configured|installed)\b/i;
+const completedDurableOutcomePattern =
+  /\b(?:fixed|resolved|implemented|updated|added|removed|replaced|merged|pushed|verified with|tests? pass(?:ed)?|build succeeded|all checks passed)\b/i;
 
 /**
  * True when a single line is process-only assistant narration.
  *
- * A line that starts with a process phrase ("let me", "i'll", "checking", etc.)
- * is only flagged as chatter when it lacks concrete outcome signal AND is short.
- * Long lines or lines mentioning fixes/verifications/commands are durable signal
- * wrapped in process wording and are NOT flagged.
+ * A line that starts with process wording is chatter unless it contains a
+ * completed durable outcome. Mentions of files, commands, or generic concrete
+ * terms alone are not enough when the line is still future/action narration.
  */
 export function looksLikeProcessChatterLine(line: string): boolean {
-  const normalized = line.trim().toLowerCase();
+  const normalized = line.trim();
 
   if (normalized.length === 0) {
     return false;
@@ -42,10 +41,10 @@ export function looksLikeProcessChatterLine(line: string): boolean {
     return false;
   }
 
-  const hasConcreteSignal = concreteSignalPattern.test(normalized);
-  const isSubstantiveLength = normalized.length >= 60;
-
-  return !(hasConcreteSignal || isSubstantiveLength);
+  if (completedDurableOutcomePattern.test(normalized)) {
+    return false;
+  }
+  return true;
 }
 
 /**

@@ -428,21 +428,39 @@ function toProjectTurnCandidates(input: {
     const file = files.at(0);
     if (fix && file) {
       const compressedFix = compressMarkdownHeavySummary(fix.summary);
-      const statement =
-        compressedFix !== null
-          ? `In ${compressedFix.file}, ${compressedFix.action}.`
-          : `In ${file}, ${lowercaseFirst(normalizeFixSummary(fix.summary))}.`;
-      candidates.push({
-        confidence: "medium",
-        dedupeKey: `file-scoped:${statement.toLowerCase()}`,
-        evidence: [fix.summary, file],
-        kind: "pattern",
-        learningId: `${input.sourceSession.session_id}:project:file-scoped:${input.index}`,
-        promotionBasis: "Derived from a concrete file path and fix outcome in the same turn.",
-        sourceRefs: sourceRefsForEvents(input.sourceSession, [fix]),
-        statement,
-        title: `File update: ${truncateInline(statement, 60)}`,
-      });
+      const fileForStatement = compressedFix?.file.trim() ? compressedFix.file : file.trim();
+
+      if (fileForStatement.length > 0) {
+        let statement: string | null;
+
+        if (compressedFix !== null) {
+          const normalizedFix = lowercaseFirst(normalizeFixSummary(fix.summary));
+          if (!compressedFix.file.trim() && looksLikeProcessNarration(normalizedFix)) {
+            statement = null;
+          } else {
+            statement = `In ${fileForStatement}, ${compressedFix.action}.`;
+          }
+        } else {
+          const normalizedFix = lowercaseFirst(normalizeFixSummary(fix.summary));
+          statement = looksLikeProcessNarration(normalizedFix)
+            ? null
+            : `In ${fileForStatement}, ${normalizedFix}.`;
+        }
+
+        if (statement !== null) {
+          candidates.push({
+            confidence: "medium",
+            dedupeKey: `file-scoped:${statement.toLowerCase()}`,
+            evidence: [fix.summary, file],
+            kind: "pattern",
+            learningId: `${input.sourceSession.session_id}:project:file-scoped:${input.index}`,
+            promotionBasis: "Derived from a concrete file path and fix outcome in the same turn.",
+            sourceRefs: sourceRefsForEvents(input.sourceSession, [fix]),
+            statement,
+            title: `File update: ${truncateInline(statement, 60)}`,
+          });
+        }
+      }
     }
   }
 
@@ -660,6 +678,10 @@ function extractUserPreferenceCandidates(prompt: string): Array<{
   }> = [];
 
   for (const line of splitPromptLines(prompt)) {
+    if (looksLikePastedDocumentLine(line)) {
+      continue;
+    }
+
     if (/final response format/i.test(line)) {
       candidates.push({
         confidence: "high",
@@ -706,6 +728,10 @@ function extractUserPreferenceCandidates(prompt: string): Array<{
   }
 
   return candidates;
+}
+
+function looksLikePastedDocumentLine(line: string): boolean {
+  return /^\d+\t/.test(line) || /^\d+\s*\|/.test(line) || /^\d+\s*#/.test(line);
 }
 
 function splitPromptLines(prompt: string): string[] {
@@ -1137,6 +1163,7 @@ function looksLikeProcessNarration(value: string): boolean {
   const normalized = value.trim().toLowerCase();
 
   return (
+    isProcessChatterText(value) ||
     /\b(?:let me|i(?:'|’)m checking|i(?:'|’)ll check|i need to check|checking whether|now let me|clarifying)\b/i.test(
       value,
     ) ||
@@ -1371,7 +1398,7 @@ function compressMarkdownHeavySummary(value: string): { action: string; file: st
   }
 
   const firstFile = fileMatches[0];
-  if (firstFile === undefined) {
+  if (firstFile === undefined || firstFile.file.trim().length === 0) {
     return null;
   }
   const regionEnd =
@@ -1596,6 +1623,10 @@ function finalizeProjectLearningCandidate(
   }
 
   const statement = cleanedForDumpCheck.replace(/\s+/g, " ").trim();
+
+  if (/^In\s*,/i.test(statement)) {
+    return null;
+  }
 
   // Reject multi-sentence assistant narratives unless they are verified-fix
   // workflow patterns, which legitimately join action and verification clauses.

@@ -47,24 +47,27 @@ export async function discoverCursorInputs(
       join(homeDir, "Library", "Application Support", "Cursor", "User"),
   );
   const transcriptPaths = await discoverTranscriptPaths(cursorProjectsRoot);
-  const transcripts = await Promise.all(
-    transcriptPaths.map(async (transcriptPath) => {
+  const transcripts: CursorTranscriptDiscovery[] = [];
+
+  for (const transcriptPath of transcriptPaths) {
+    try {
       const [metadata, sourceHash, workspaceMapping] = await Promise.all([
         stat(transcriptPath),
         hashFileContents(transcriptPath),
         deriveCursorWorkspaceMapping(transcriptPath, { cursorProjectsRoot }),
       ]);
 
-      return {
+      transcripts.push({
         ...workspaceMapping,
         modifiedAt: metadata.mtime.toISOString(),
         sizeBytes: metadata.size,
         sourceFormat: normalizeTranscriptFormat(transcriptPath),
         sourceHash,
         sourcePath: transcriptPath,
-      };
-    }),
-  );
+      });
+    } catch {}
+  }
+
   const supportDatabases = await discoverSupportDatabases(cursorUserStateRoot);
 
   return {
@@ -79,11 +82,15 @@ async function discoverTranscriptPaths(cursorProjectsRoot: string): Promise<stri
   }
 
   const discoveredPaths: string[] = [];
-  await walkCursorProjects(cursorProjectsRoot, discoveredPaths);
+  await walkCursorProjects(cursorProjectsRoot, discoveredPaths, cursorProjectsRoot);
   return discoveredPaths.sort((left, right) => left.localeCompare(right));
 }
 
-async function walkCursorProjects(directoryPath: string, discoveredPaths: string[]): Promise<void> {
+async function walkCursorProjects(
+  directoryPath: string,
+  discoveredPaths: string[],
+  cursorProjectsRoot: string,
+): Promise<void> {
   const directoryEntries = await readdir(directoryPath, { withFileTypes: true });
   directoryEntries.sort((left, right) => left.name.localeCompare(right.name));
 
@@ -96,9 +103,13 @@ async function walkCursorProjects(directoryPath: string, discoveredPaths: string
 
     if (entry.isDirectory()) {
       if (entry.name === "agent-transcripts") {
+        if (directoryPath === cursorProjectsRoot) {
+          continue;
+        }
+
         await collectTranscriptFiles(entryPath, discoveredPaths);
       } else {
-        await walkCursorProjects(entryPath, discoveredPaths);
+        await walkCursorProjects(entryPath, discoveredPaths, cursorProjectsRoot);
       }
     }
   }
