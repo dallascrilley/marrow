@@ -1,8 +1,10 @@
 import type { Learning } from "../models/canonical.js";
 import { isLowSignalTopic } from "./summarize.js";
 
-// Why a learning was dropped before any paid LLM review.
-export type PreLlmSkipReason = "low_signal" | "duplicate";
+// Why a learning was dropped before any paid LLM review. `low_signal_session`
+// means the whole source session was junk (its summary topic is low-signal, e.g.
+// a chief-of-staff heartbeat), so none of its learnings are worth reviewing.
+export type PreLlmSkipReason = "low_signal" | "duplicate" | "low_signal_session";
 
 export type PreLlmSkip = {
   learning_id: string;
