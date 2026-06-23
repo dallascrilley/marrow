@@ -142,6 +142,15 @@ export const eventSchema = z.object({
   }),
 });
 
+// Backward-compat default for learnings persisted before `trigger` became a
+// required tier-1 field. Fresh extractions always set a real trigger (the
+// extractor falls back to a project-scoped signature), so this only fills the
+// field on records written before the field existed, instead of aborting the
+// whole pipeline on parse. Mirrors the `.default([])` treatment the tier-2
+// `technologies`/`skill_ref` fields already got.
+const legacyLearningTrigger =
+  "When a similar situation recurs (legacy learning; original trigger not recorded).";
+
 export const learningSchema = z.object({
   learning_id: nonEmptyStringSchema,
   scope: learningScopeSchema,
@@ -150,12 +159,17 @@ export const learningSchema = z.object({
   title: nonEmptyStringSchema,
   // Precondition — "when this matters". Gates contextual recall and is the
   // identity input on the durable Instinct (see learning-classification-contract).
-  trigger: nonEmptyStringSchema,
+  // `.default` only applies to legacy records missing the field; live extraction
+  // always sets a real trigger.
+  trigger: nonEmptyStringSchema.default(legacyLearningTrigger),
   statement: nonEmptyStringSchema,
   evidence: z.array(nonEmptyStringSchema),
   confidence: confidenceLevelSchema,
   // Trust tier of the evidence behind this learning (see evidenceTypes).
-  evidence_type: evidenceTypeSchema,
+  // Legacy records predate this field; default them to `inferred`, the tier for a
+  // deterministic/heuristic extraction claim (these learnings came from the
+  // deterministic extractor, never the LLM path that owns `model_inferred`).
+  evidence_type: evidenceTypeSchema.default("inferred"),
   // Subject — technologies/entities the source session touched (languages, package
   // managers, CLIs). Always present; `[]` when nothing is detected. Deterministic.
   technologies: z.array(nonEmptyStringSchema).default([]),
