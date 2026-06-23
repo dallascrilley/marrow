@@ -426,6 +426,61 @@ test("resummarizeSessions --low-signal-only + llmTopic uses mocked generator", a
   }
 });
 
+test("resummarizeSessions threads onUsage and tags topic_generation telemetry", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-topic-telemetry-"));
+  const runtimeRoot = join(sandbox, "runtime");
+  process.env[runtimeOverrideEnvVar] = runtimeRoot;
+
+  try {
+    const database = await createLedger();
+    const sessionId = "topic-telemetry-session";
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId,
+      topic: "brainstorming",
+      userPrompt: "Read .agents-state/handoff.md in this worktree - it is the authoritative spec.",
+    });
+
+    const usageEvents = [];
+    const result = await resummarizeSessions(database, {
+      generateTopic: async (input) => {
+        input.onUsage?.({
+          model: "openai/gpt-5.4-nano",
+          input_tokens: 10,
+          output_tokens: 5,
+          total_tokens: 15,
+          reasoning_tokens: 1,
+          cached_tokens: 0,
+          cost: 0.0001,
+          cost_source: "upstream",
+          cost_is_known: true,
+          missing_reason: null,
+          duration_ms: 100,
+          cache_hit: false,
+        });
+        return "telemetry topic";
+      },
+      llmTopic: true,
+      lowSignalOnly: true,
+      sessionIds: [sessionId],
+      onUsage: (usage, sessionId) => {
+        usageEvents.push({ usage, sessionId });
+      },
+    });
+
+    assert.equal(result.processed_count, 1);
+    assert.equal(result.sessions[0]?.topic_source, "llm");
+    assert.equal(usageEvents.length, 1);
+    assert.equal(usageEvents[0].sessionId, sessionId);
+    assert.equal(usageEvents[0].usage.cost, 0.0001);
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
 test("resummarizeSessions skips sessions missing manifests without failing batch", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-orphan-"));
   const runtimeRoot = join(sandbox, "runtime");

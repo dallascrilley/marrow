@@ -1,6 +1,8 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
+import type { LlmCallUsage } from "../pipeline/llm-learning-review.js";
+import { appendLlmTelemetry, buildLlmTelemetryRecord } from "../pipeline/llm-telemetry.js";
 import { resummarizeSessions } from "../pipeline/resummarize.js";
 import { executeExportIndex } from "./export-index.js";
 
@@ -13,7 +15,19 @@ export async function executeQualityResummarize(
     console.warn("[asd] quality resummarize: --max-per has no effect without --llm-topic");
   }
 
-  const result = await resummarizeSessions(database, options);
+  const result = await resummarizeSessions(database, {
+    ...options,
+    onUsage: async (usage: LlmCallUsage, sessionId?: string) => {
+      await appendLlmTelemetry(
+        buildLlmTelemetryRecord({
+          usage,
+          operation: "topic_generation",
+          sessionId: sessionId ?? "unknown",
+          createdAt: new Date().toISOString(),
+        }),
+      );
+    },
+  });
 
   if (options.exportIndex === true && !options.dryRun && result.processed_count > 0) {
     await executeExportIndex(context, database);
