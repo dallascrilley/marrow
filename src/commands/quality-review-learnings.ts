@@ -5,7 +5,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { CommandContext } from "../cli.js";
 import { getRuntimePath } from "../config/paths.js";
 import { listSourceSessions } from "../db/ledger.js";
-import { type Learning, learningSchema } from "../models/canonical.js";
+import { type Learning, learningSchema, summarySchema } from "../models/canonical.js";
 import { type PreLlmSkip, partitionLearningsForReview } from "../pipeline/learning-prefilter.js";
 import {
   assessLlmBudget,
@@ -17,7 +17,9 @@ import {
 import { reviewLearningsBatchedWithOpenRouter } from "../pipeline/llm-learning-review.js";
 import { appendLlmTelemetry, buildLlmTelemetryRecord } from "../pipeline/llm-telemetry.js";
 import { countPendingLlmReview } from "../pipeline/pipeline-gate.js";
+import { isLowSignalTopic } from "../pipeline/summarize.js";
 import { getProjectKnowledgeSessionPath } from "../writers/knowledge-writer.js";
+import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
 
 export async function executeQualityReviewLearnings(
   context: CommandContext,
@@ -84,6 +86,22 @@ export async function executeQualityReviewLearnings(
       reviewedLearningCount >= options.maxTotalLearnings
     ) {
       break;
+    }
+    // Skip whole low-signal sessions (e.g. chief-of-staff heartbeats, agent-driver
+    // continuations) before paying to review any of their learnings. Their summary
+    // topic flags them as junk, and their extracted learnings are near-uniformly
+    // tool output and error dumps, so reviewing them wastes spend.
+    const sessionTopic = await readSessionTopic(session.session_id);
+    if (sessionTopic !== null && isLowSignalTopic(sessionTopic)) {
+      const junkLearnings = await readProjectLearnings(session.project_key, session.session_id);
+      for (const learning of junkLearnings) {
+        prefilterSkipped.push({
+          learning_id: learning.learning_id,
+          session_id: session.session_id,
+          reason: "low_signal_session",
+        });
+      }
+      continue;
     }
     const learnings = await readProjectLearnings(session.project_key, session.session_id);
     if (learnings.length === 0) {
@@ -215,6 +233,9 @@ export async function executeQualityReviewLearnings(
         skipped_pre_llm_breakdown: {
           low_signal: prefilterSkipped.filter((entry) => entry.reason === "low_signal").length,
           duplicate: prefilterSkipped.filter((entry) => entry.reason === "duplicate").length,
+          low_signal_session: prefilterSkipped.filter(
+            (entry) => entry.reason === "low_signal_session",
+          ).length,
         },
         usd_budget: usdBudget,
         total_sessions: sessions.length,
@@ -300,6 +321,18 @@ async function readProjectLearnings(projectKey: string, sessionId: string): Prom
     }
 
     throw error;
+  }
+}
+
+// Best-effort read of a session's summary topic for the low-signal-session gate.
+// Returns null when the summary is missing or unreadable, so a missing summary
+// never causes a session to be skipped (fail open: review rather than drop).
+async function readSessionTopic(sessionId: string): Promise<string | null> {
+  try {
+    const contents = await readFile(getSessionSummaryJsonPath(sessionId), "utf8");
+    return summarySchema.parse(JSON.parse(contents)).topic;
+  } catch {
+    return null;
   }
 }
 
