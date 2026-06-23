@@ -350,6 +350,8 @@ test("low-signal topic heuristic is conservative but catches harness paths and c
   assert.equal(isLowSignalTopic("whats-next"), true);
   assert.equal(isLowSignalTopic("# Writing Plans"), true);
   assert.equal(isLowSignalTopic("# PATH Doctor"), true);
+  assert.equal(isLowSignalTopic("## Catalog facets"), true);
+  assert.equal(isLowSignalTopic("### Operating model"), true);
   assert.equal(isLowSignalTopic("$brainstorming given the following pieces of"), true);
   assert.equal(isLowSignalTopic("Fix export-index contract topic provenance"), false);
   assert.equal(isLowSignalTopic("Automation: macOS stability scan"), false);
@@ -373,6 +375,32 @@ test("low-signal topic heuristic catches wrapper/harness topic leaks", () => {
     isLowSignalTopic("Scan recent commits for likely bugs and propose minimal fixes."),
     false,
   );
+});
+
+test("low-signal topic heuristic catches operator control-loop and launcher prompts", () => {
+  // Recurring chief-of-staff / agent-driver prompts that carry no session signal.
+  assert.equal(
+    isLowSignalTopic(
+      "Heartbeat. Run one bounded operating loop now. This is a recurring control loop",
+    ),
+    true,
+  );
+  assert.equal(
+    isLowSignalTopic(
+      "Continue with the next best set of actions, using your best judgement to resolve",
+    ),
+    true,
+  );
+  assert.equal(isLowSignalTopic("Role: Lead Systems Architect & ~/.hub Specialist"), true);
+  // Bare agent-CLI launch with flags is the harness starting an agent, not a topic.
+  assert.equal(
+    isLowSignalTopic("pi --no-extensions --no-skills --no-prompt-templates --no-themes"),
+    true,
+  );
+  // False-positive guards: real topics that merely mention these words stay high-signal.
+  assert.equal(isLowSignalTopic("claude code hooks not firing on SessionEnd"), false);
+  assert.equal(isLowSignalTopic("Fix the heartbeat endpoint returning 500"), false);
+  assert.equal(isLowSignalTopic("Role-based access control for the admin dashboard"), false);
 });
 
 test("low-signal topic heuristic rejects embedded foreign system prompts", () => {
