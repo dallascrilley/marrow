@@ -168,7 +168,7 @@ function extractProjectLearningCandidates(
 }
 const defaultProjectLearningCap = 12;
 
-function getProjectLearningCap(): number {
+export function getProjectLearningCap(): number {
   const raw = process.env.ASD_MAX_PROJECT_LEARNINGS;
   if (raw === undefined || raw.length === 0) return defaultProjectLearningCap;
   const parsed = Number.parseInt(raw, 10);

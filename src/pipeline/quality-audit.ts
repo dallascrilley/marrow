@@ -18,6 +18,7 @@ import {
   looksLikeCompletedOutcome,
 } from "./artifact-heuristics.js";
 import { defaultUserScopeKey } from "./extract.js";
+import { countProjectLearnings } from "./learning-count.js";
 
 export type QualityIssueCode =
   | "summary_missing"
@@ -372,22 +373,6 @@ function createIssueCountMap(): Record<QualityIssueCode, number> {
     summary_missing: 0,
     wrapper_tags: 0,
   };
-}
-
-async function countProjectLearnings(sourceSession: SourceSessionRow): Promise<number> {
-  try {
-    const contents = await readFile(
-      getProjectKnowledgeSessionPath(sourceSession.project_key, sourceSession.session_id),
-      "utf8",
-    );
-    return contents.split(/\r?\n/).filter((line) => line.trim().length > 0).length;
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return 0;
-    }
-
-    throw error;
-  }
 }
 
 function buildLearningDistribution(sessions: readonly QualityAuditSession[]): LearningDistribution {
