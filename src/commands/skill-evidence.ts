@@ -4,6 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
 import { summarySchema } from "../models/canonical.js";
+import { loadSessionIndexRecords } from "../read/session-index.js";
 import { parseSkillCommandOptions } from "../skill/parse-skill-options.js";
 import {
   findSkillEvidenceInSummary,
@@ -11,7 +12,6 @@ import {
   resolveSkillPath,
   type SkillEvidenceMatch,
 } from "../skill/resolve-skill.js";
-import { loadSessionIndexRecords } from "../skill/session-index.js";
 
 export async function executeSkillEvidence(
   context: CommandContext,
@@ -30,7 +30,7 @@ export async function executeSkillEvidence(
   }
 
   const skill = await readSkillMetadata(skillPath);
-  const records = await loadSessionIndexRecords();
+  const records = await loadSessionIndexRecords({ fallbackToBuild: true });
   const matches: SkillEvidenceMatch[] = [];
 
   for (const record of records) {

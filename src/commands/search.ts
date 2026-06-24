@@ -1,18 +1,20 @@
-import { access, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { access } from "node:fs/promises";
 
 import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
-import { getRuntimePath } from "../config/paths.js";
-import { type SessionIndexRecord, sessionIndexRecordSchema } from "./export-index.js";
+import {
+  getSessionIndexPath,
+  readSessionIndexFile,
+  type SessionIndexRecord,
+} from "../read/session-index.js";
 
 export async function executeSearch(
   context: CommandContext,
   _database: DatabaseSync,
 ): Promise<number> {
   const { query, limit, json } = parseSearchArgs(context.args);
-  const indexPath = join(getRuntimePath("index"), "session-index.jsonl");
+  const indexPath = getSessionIndexPath();
 
   try {
     await access(indexPath);
@@ -21,8 +23,7 @@ export async function executeSearch(
     return 1;
   }
 
-  const contents = await readFile(indexPath, "utf8");
-  const records = parseSessionIndex(contents);
+  const records = await readSessionIndexFile(indexPath);
 
   if (records.length === 0) {
     context.output.error(
@@ -104,21 +105,6 @@ function parseSearchArgs(args: string[]): {
     limit,
     json,
   };
-}
-
-function parseSessionIndex(contents: string): SessionIndexRecord[] {
-  const records: SessionIndexRecord[] = [];
-
-  for (const line of contents.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed.length === 0) {
-      continue;
-    }
-
-    records.push(sessionIndexRecordSchema.parse(JSON.parse(trimmed)));
-  }
-
-  return records;
 }
 
 function matchesQuery(record: SessionIndexRecord, needle: string): boolean {
