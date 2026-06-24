@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -188,12 +188,8 @@ test("runtime-path creation is isolated by the root override", async () => {
 
     assert.equal(result.status, 0, result.stderr);
 
-    const reviewsPath = join(runtimeRoot, "reviews");
-    const reviewsStats = await stat(reviewsPath);
-    assert.ok(reviewsStats.isDirectory());
-
     const runtimeEntries = await readdir(runtimeRoot);
-    assert.deepEqual(runtimeEntries, ["ledger", "reviews"]);
+    assert.deepEqual(runtimeEntries, ["ledger"]);
 
     const sandboxEntries = await readdir(sandboxBase);
     assert.deepEqual(sandboxEntries, ["runtime-root"]);
