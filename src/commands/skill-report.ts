@@ -1,11 +1,11 @@
-import { access, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile } from "node:fs/promises";
 
 import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
-import { getRuntimePath } from "../config/paths.js";
 import { summarySchema, turnSchema } from "../models/canonical.js";
+import { getReducedArtifactPath } from "../pipeline/reduce.js";
+import { loadSessionIndexRecords } from "../read/session-index.js";
 import {
   buildSkillSuggestions,
   parseSkillChecklist,
@@ -15,7 +15,6 @@ import {
 } from "../skill/adherence.js";
 import { parseSkillCommandOptions } from "../skill/parse-skill-options.js";
 import { readSkillMetadata, resolveSkillPath } from "../skill/resolve-skill.js";
-import { loadSessionIndexRecords } from "../skill/session-index.js";
 
 export async function executeSkillReport(
   context: CommandContext,
@@ -36,7 +35,7 @@ export async function executeSkillReport(
   const skillContents = await readFile(skillPath, "utf8");
   const skill = await readSkillMetadata(skillPath);
   const checklist = parseSkillChecklist(skillContents);
-  const records = await loadSessionIndexRecords();
+  const records = await loadSessionIndexRecords({ fallbackToBuild: true });
   const sessions: SessionAdherenceScore[] = [];
 
   for (const record of records) {
@@ -116,13 +115,11 @@ export async function executeSkillReport(
 }
 
 async function loadReducedSessionText(asdSessionId: string): Promise<string> {
-  const reducedPath = join(getRuntimePath("staging"), asdSessionId, "reduced-session.json");
-
   try {
-    await access(reducedPath);
-    const parsed = JSON.parse(await readFile(reducedPath, "utf8")) as { turns?: unknown[] };
-    const turns = (parsed.turns ?? []).map((turn) => turnSchema.parse(turn));
-    return reducedSessionText(turns);
+    const parsed = JSON.parse(await readFile(getReducedArtifactPath(asdSessionId), "utf8")) as {
+      turns?: unknown[];
+    };
+    return reducedSessionText((parsed.turns ?? []).map((turn) => turnSchema.parse(turn)));
   } catch {
     return "";
   }
