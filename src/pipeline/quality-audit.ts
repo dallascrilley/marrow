@@ -360,44 +360,6 @@ async function readKnowledgeArtifactState(sourceSession: SourceSessionRow): Prom
   return { project, user };
 }
 
-function hasProcessChatter(summaryText: string): boolean {
-  const lines = summaryText.split(/\r?\n/);
-
-  for (const line of lines) {
-    if (looksLikeProcessChatterLine(line)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function looksLikeProcessChatterLine(line: string): boolean {
-  const normalized = line.trim().toLowerCase();
-
-  if (normalized.length === 0) {
-    return false;
-  }
-
-  // Process-only prefixes/phrases that strongly signal assistant narration.
-  const processPhrasePattern =
-    /^(?:let me|i(?:'|’)ll|i will|i need to|i(?:'|’)m|checking|exploring|now let me|now i(?:'|’)ll|now i(?:'|’)m|first, let me|first, i(?:'|’)ll|first, i(?:'|’)m)\b/i;
-
-  if (!processPhrasePattern.test(normalized)) {
-    return false;
-  }
-
-  // If the same line also contains concrete outcome signal or is long enough
-  // to convey substance, it is durable content wrapped in process wording,
-  // not pure chatter.
-  const concreteSignalPattern =
-    /\b(?:fix|fixed|implement|implemented|resolve|resolved|verify|verified|test|tests?|pass|passed|fail|failed|error|add|added|update|updated|remove|removed|create|created|commit|committed|push|pushed|merge|merged|build|built|run|ran|command|file|path|change|changes|outcome|result|results|output|done|completed|deployed|released|refactored|migrated|upgraded|downgraded|configured|installed)\b/i;
-  const hasConcreteSignal = concreteSignalPattern.test(normalized);
-  const isSubstantiveLength = normalized.length >= 60;
-
-  return !(hasConcreteSignal || isSubstantiveLength);
-}
-
 function createIssueCountMap(): Record<QualityIssueCode, number> {
   return {
     blocked_deletion: 0,

@@ -5,7 +5,7 @@ import { summarySchema, turnSchema } from "../models/canonical.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
 import type { SessionIndexRecord } from "./session-index.js";
-import { loadSessionIndexRecords } from "./session-index.js";
+import { buildSessionIndex, loadSessionIndexRecords } from "./session-index.js";
 
 export type ArtifactReadResult<T> = { found: true; value: T } | { found: false; value: null };
 
@@ -51,9 +51,10 @@ export async function readReducedTurns(sessionId: string): Promise<ArtifactReadR
 }
 
 export async function getSessionDetail(asdSessionId: string): Promise<SessionDetail | null> {
-  const record = (await loadSessionIndexRecords({ fallbackToBuild: true })).find(
-    (entry) => entry.asd_session_id === asdSessionId,
-  );
+  const cachedRecords = await loadSessionIndexRecords({ fallbackToBuild: true });
+  const record =
+    cachedRecords.find((entry) => entry.asd_session_id === asdSessionId) ??
+    (await buildSessionIndex()).find((entry) => entry.asd_session_id === asdSessionId);
 
   if (!record) {
     return null;

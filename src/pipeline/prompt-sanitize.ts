@@ -426,7 +426,9 @@ function isShortConversationalNoSignal(line: string): boolean {
   }
 
   if (
-    /\b(?:fix|implement|refactor|debug|error|failing|tests?|build|commit|pr|merge)\b/i.test(line)
+    /\b(?:fix|implement|refactor|debug|error|failing|tests?|build|commit|prs?|pull requests?|merge|review)\b/i.test(
+      line,
+    )
   ) {
     return false;
   }
