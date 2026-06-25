@@ -98,6 +98,10 @@ export async function executePipelineReextract(
         summary_path: summary.summaryPath,
       });
     } catch (error) {
+      // A throw partway through the phases (e.g. summary written but extract
+      // failed) leaves this session partially regenerated. The phases are
+      // overwrite-safe, so re-running `reextract --session-id <id>` heals it;
+      // the session is reported below so the operator can re-target it.
       processed.push({
         error: error instanceof Error ? error.message : String(error),
         session_id: session.session_id,
@@ -107,9 +111,18 @@ export async function executePipelineReextract(
   }
 
   const reextractedCount = processed.filter((entry) => entry.skipped !== true).length;
+  const skippedCount = sessions.length - reextractedCount;
   context.output.info(
     JSON.stringify(
-      { matched_count: sessions.length, processed, reextracted_count: reextractedCount },
+      {
+        matched_count: sessions.length,
+        processed,
+        reextracted_count: reextractedCount,
+        skipped_count: skippedCount,
+        ...(skippedCount > 0
+          ? { note: "Re-run with --session-id <id> to heal partially-processed sessions." }
+          : {}),
+      },
       null,
       2,
     ),
