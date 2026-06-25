@@ -148,7 +148,7 @@ Important directories:
 - `archives/` — archive runtime path
 - `deletes/receipts/` — per-session retention receipts
 - `deletes/tombstones/` — explicit deletion apply tombstones
-- `reports/` — retention, audit, and LLM learning-review reports
+- `reports/` — retention, audit, LLM learning-review, and static dashboard HTML reports
 ## Real Regression Fixtures
 
 The repo also carries a small real-session regression corpus under
@@ -214,6 +214,15 @@ High-level runtime stats:
 ```bash
 node dist/cli.js stats
 ```
+
+Static offline dashboard export:
+
+```bash
+node dist/cli.js report --html
+node dist/cli.js report --html --out /tmp/asd-dashboard.html
+```
+
+By default this writes `reports/dashboard.html` under the runtime root. The output is self-contained and works offline: session list, source/lifecycle filters, pipeline-health metrics, knowledge/instinct explorer cards with back-links, cross-harness comparison cards for volume/topic yield/LLM cost, a read-only review-queue snapshot with CLI follow-up hints, search, and per-session drill-down into summary and reduced timeline.
 
 Audit summary and deletion-readiness quality across already-ingested sessions:
 
