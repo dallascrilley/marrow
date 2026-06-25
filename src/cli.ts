@@ -15,6 +15,7 @@ import { executeMemoryExportWiki } from "./commands/memory-export-wiki.js";
 import { executeMemoryPushWiki } from "./commands/memory-push-wiki.js";
 import { executeMigrateProjectIds } from "./commands/migrate-project-ids.js";
 import { executePipelineGate } from "./commands/pipeline-gate.js";
+import { executePipelineReextract } from "./commands/pipeline-reextract.js";
 import { executePromoteReview } from "./commands/promote-review.js";
 import { executeQualityApplyLearningReview } from "./commands/quality-apply-learning-review.js";
 import { executeQualityAudit } from "./commands/quality-audit.js";
@@ -205,6 +206,11 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "Report pending ingest work, unreviewed learnings, and LLM budget headroom without calling OpenRouter. Pass --skip-ingest after a sync loop to avoid re-scanning adapters.",
         execute: async (context) => withLedger(context, executePipelineGate),
+      },
+      reextract: {
+        description:
+          "Retroactively re-run summarize+extract+archive on already-ingested sessions with the current pipeline (deterministic, no LLM). Requires --process-chatter-only or --session-id <id>; pass --dry-run to preview matched sessions.",
+        execute: async (context) => withLedger(context, executePipelineReextract),
       },
     },
   },
