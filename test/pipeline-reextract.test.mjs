@@ -71,6 +71,59 @@ test("executePipelineReextract refuses to run without an explicit selector", asy
   });
 });
 
+test("--process-chatter-only --dry-run matches only flagged sessions", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+    for (const [id, decided] of [
+      ["chatter-sess", ["Let me check the logs now."]],
+      ["clean-sess", ["Use worker threads instead of forks."]],
+    ]) {
+      upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        conversation_id: `demo:${id}`,
+        ingest_status: "extracted",
+        session_id: id,
+        source_hash: `sha256:${id}`,
+        source_path: `/nonexistent/${id}.jsonl`,
+      });
+      const summaryPath = getSessionSummaryJsonPath(id);
+      await mkdir(dirname(summaryPath), { recursive: true });
+      await writeFile(
+        summaryPath,
+        JSON.stringify({
+          deletion_readiness: "not_ready",
+          files_of_interest: [],
+          next_step: "No explicit next step recorded.",
+          project_learnings: [],
+          session_id: id,
+          topic: "t",
+          topic_source: "deterministic",
+          useful_commands: [],
+          user_learnings: [],
+          what_failed: [],
+          what_was_decided: decided,
+          what_worked: [],
+        }),
+        "utf8",
+      );
+    }
+
+    const output = makeOutput();
+    const rc = await executePipelineReextract(
+      { args: ["--process-chatter-only", "--dry-run"], commandPath: [], output },
+      database,
+    );
+    assert.equal(rc, 0);
+
+    const result = JSON.parse(output.lines.join("\n"));
+    assert.equal(result.dry_run, true);
+    assert.equal(result.matched_count, 1);
+    assert.deepEqual(result.matched_session_ids, ["chatter-sess"]);
+
+    database.close();
+  });
+});
+
 test("pipeline reextract regenerates the summary and drops process_chatter", async () => {
   await withRuntimeRoot(async () => {
     const database = await createLedger();
