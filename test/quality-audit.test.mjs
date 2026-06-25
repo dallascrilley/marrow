@@ -357,6 +357,77 @@ test("quality audit does not flag ready sessions with directory-level file evide
   });
 });
 
+test("quality audit distinguishes pure process chatter from durable signal with process wording", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+
+    try {
+      const pureChatterSession = upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "agent-session-distillery",
+        session_id: "pure-chatter-session",
+        source_hash: "sha256:pure-chatter",
+      }).sourceSession;
+      const durableSignalSession = upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "agent-session-distillery",
+        session_id: "durable-signal-session",
+        source_hash: "sha256:durable-signal",
+      }).sourceSession;
+
+      transitionPhase(database, {
+        phaseName: "deletion_candidate",
+        phaseState: "completed",
+        sourceHash: pureChatterSession.source_hash,
+        sourceSessionId: pureChatterSession.id,
+      });
+      transitionPhase(database, {
+        phaseName: "deletion_candidate",
+        phaseState: "completed",
+        sourceHash: durableSignalSession.source_hash,
+        sourceSessionId: durableSignalSession.id,
+      });
+
+      await writeSessionSummary({
+        ...summaryFixture,
+        files_of_interest: [],
+        next_step: "No explicit next step recorded.",
+        project_learnings: [],
+        session_id: "pure-chatter-session",
+        topic: "Let me inspect the repo first.",
+        useful_commands: [],
+        what_worked: ["Let me verify this before finishing."],
+      });
+      await writeSessionSummary({
+        ...summaryFixture,
+        files_of_interest: ["src/pipeline/summarize.ts"],
+        next_step: "No open next step recorded.",
+        project_learnings: ["Verified completion outcomes are promoted conservatively."],
+        session_id: "durable-signal-session",
+        topic: "Fix toast infrastructure for desktop-polish.",
+        useful_commands: ["npm test"],
+        what_worked: [
+          "Let me check what toast infrastructure is available: fixed the desktop-polish wiring and verified with `npm test`.",
+        ],
+      });
+
+      const report = await auditQuality(database);
+
+      const pureChatter = report.sessions.find(
+        (session) => session.session_id === "pure-chatter-session",
+      );
+      const durableSignal = report.sessions.find(
+        (session) => session.session_id === "durable-signal-session",
+      );
+
+      assert.ok(pureChatter.issues.includes("process_chatter"));
+      assert.ok(!durableSignal.issues.includes("process_chatter"));
+    } finally {
+      database.close();
+    }
+  });
+});
+
 test("quality audit reports project-learning distribution statistics", async () => {
   await withRuntimeRoot(async () => {
     const database = await createLedger();

@@ -396,6 +396,146 @@ test("summary topic skips Codex protocol-only preambles", () => {
   assert.equal(summary.topic, "Add a consolidated session index export command.");
 });
 
+test("summary topic skips low-signal first lines and promotes later substantive prompt lines", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "low-signal-first-line-topic",
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Started the requested fix.",
+      commands_seen: [],
+      ended_at: "2026-05-03T23:11:00.000Z",
+      files_touched: ["src/pipeline/summarize.ts"],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-03T23:10:59.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: [
+        "{",
+        "/commit",
+        "/Users/example/Code/demo/.agents-state/handoff.md",
+        "Improve deterministic topic derivation for summary regeneration.",
+      ].join("\n"),
+      verification_seen: false,
+    }),
+  ];
+
+  const summary = summarizeSession({
+    events: [],
+    sourceSession,
+    turns,
+  });
+
+  assert.equal(summary.topic, "Improve deterministic topic derivation for summary regeneration.");
+});
+
+test("summary topic skips wrapper markdown headings like User Input and promotes the real task", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "wrapper-heading-topic",
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Started the requested review.",
+      commands_seen: [],
+      ended_at: "2026-05-03T23:11:00.000Z",
+      files_touched: [],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-03T23:10:59.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: [
+        "## User Input",
+        "/reviewer https://github.com/dallascrilley/example-studio/pull/487",
+      ].join("\n"),
+      verification_seen: false,
+    }),
+  ];
+
+  const summary = summarizeSession({
+    events: [],
+    sourceSession,
+    turns,
+  });
+
+  assert.equal(
+    summary.topic,
+    "/reviewer https://github.com/dallascrilley/example-studio/pull/487",
+  );
+});
+
+test("summary topic falls back to assistant summary when prompt is a bare control command", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "assistant-fallback-topic",
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary:
+        "Preparing the commit: checking git status and recent changes, then running the repo verification.",
+      commands_seen: [],
+      ended_at: "2026-05-03T23:11:00.000Z",
+      files_touched: [],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-03T23:10:59.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: "/commit",
+      verification_seen: false,
+    }),
+  ];
+
+  const summary = summarizeSession({
+    events: [],
+    sourceSession,
+    turns,
+  });
+
+  assert.equal(
+    summary.topic,
+    "Preparing the commit: checking git status and recent changes, then running the repo verification.",
+  );
+});
+
+test("summary topic prefers first meaningful assistant-summary sentence for bare skill command prompts", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "assistant-fallback-skill-topic",
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary:
+        "Inspecting key diffs to group changes logically. Curating the full analysis and commit plan.",
+      commands_seen: [],
+      ended_at: "2026-05-03T23:12:00.000Z",
+      files_touched: [],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-03T23:11:59.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: "/git-atomic-commits",
+      verification_seen: false,
+    }),
+  ];
+
+  const summary = summarizeSession({
+    events: [],
+    sourceSession,
+    turns,
+  });
+
+  assert.equal(summary.topic, "Inspecting key diffs to group changes logically.");
+});
+
 test("low-signal topic heuristic is conservative but catches harness paths and commands", () => {
   assert.equal(isLowSignalTopic("Read .agents-state/handoff.md in this worktree"), true);
   assert.equal(isLowSignalTopic("Base directory for this skill is /tmp/demo"), true);
@@ -408,7 +548,8 @@ test("low-signal topic heuristic is conservative but catches harness paths and c
   assert.equal(isLowSignalTopic("# PATH Doctor"), true);
   assert.equal(isLowSignalTopic("## Catalog facets"), true);
   assert.equal(isLowSignalTopic("### Operating model"), true);
-  assert.equal(isLowSignalTopic("$brainstorming given the following pieces of"), true);
+  assert.equal(isLowSignalTopic("## User Input"), true);
+  assert.equal(isLowSignalTopic("$brainstorming given the following pieces of"), false);
   assert.equal(isLowSignalTopic("Fix export-index contract topic provenance"), false);
   assert.equal(isLowSignalTopic("Automation: macOS stability scan"), false);
 });
@@ -713,6 +854,29 @@ test("low-signal topic heuristic catches wrapper and context-dump topics", () =>
   );
   assert.equal(isLowSignalTopic("resolve these:"), true);
   assert.equal(isLowSignalTopic("fix whatever is causinf tools to hng:"), true);
+  assert.equal(isLowSignalTopic("/commit"), true);
+  assert.equal(
+    isLowSignalTopic("/reviewer https://github.com/dallascrilley/example-studio/pull/487"),
+    false,
+  );
+  assert.equal(
+    isLowSignalTopic(
+      "/td-task-management review open/unresolved td tasks/issues/epics and help me move them forward",
+    ),
+    false,
+  );
+  assert.equal(isLowSignalTopic("/audit-meta @campaigns/shows/dallas-mar-2026/ad-copy.md"), false);
+  assert.equal(isLowSignalTopic('"globalShortcut": "Cmd+/",'), true);
+  assert.equal(
+    isLowSignalTopic('"resource": "/Users/operator/Code/example-studio/justfile",'),
+    true,
+  );
+  assert.equal(
+    isLowSignalTopic(
+      'line 47, in raise SystemExit(main)) ^n^ File "/Users/operator/Code/studio-tools/shared/query.py", line 28, in main',
+    ),
+    true,
+  );
   assert.equal(isLowSignalTopic("Fix export-index contract topic provenance"), false);
   assert.equal(isLowSignalTopic("Automation: macOS stability scan"), false);
 });
