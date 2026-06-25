@@ -15,6 +15,7 @@ import { executeMemoryExportWiki } from "./commands/memory-export-wiki.js";
 import { executeMemoryPushWiki } from "./commands/memory-push-wiki.js";
 import { executeMigrateProjectIds } from "./commands/migrate-project-ids.js";
 import { executePipelineGate } from "./commands/pipeline-gate.js";
+import { executePromoteReview } from "./commands/promote-review.js";
 import { executeQualityApplyLearningReview } from "./commands/quality-apply-learning-review.js";
 import { executeQualityAudit } from "./commands/quality-audit.js";
 import { executeQualityCostReport } from "./commands/quality-cost-report.js";
@@ -204,6 +205,15 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "Report pending ingest work, unreviewed learnings, and LLM budget headroom without calling OpenRouter. Pass --skip-ingest after a sync loop to avoid re-scanning adapters.",
         execute: async (context) => withLedger(context, executePipelineGate),
+      },
+    },
+  },
+  promote: {
+    description: "Inspect cross-project promotion candidates and global-tier state.",
+    subcommands: {
+      review: {
+        description: "List queued cross-project promotion candidates from ADR-0006.",
+        execute: async (context) => executePromoteReview(context),
       },
     },
   },
