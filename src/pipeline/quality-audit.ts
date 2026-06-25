@@ -24,6 +24,7 @@ export type QualityIssueCode =
   | "summary_missing"
   | "summary_invalid"
   | "summary_low_signal"
+  | "topic_process_chatter"
   | "completion_as_next_step"
   | "process_chatter"
   | "wrapper_tags"
@@ -227,6 +228,8 @@ function recommendationForIssue(issue: QualityIssueCode): string {
       return "Improve file extraction/ranking from event payloads, source refs, and project-relative paths.";
     case "summary_low_signal":
       return "Improve summary synthesis for short sessions or classify them as intentionally low-signal.";
+    case "topic_process_chatter":
+      return "Improve topic derivation: reject chatter-shaped prompts as topics, or LLM-rescue the topic.";
     case "process_chatter":
       return "Suppress assistant process chatter before summary and learning promotion.";
     case "blocked_deletion":
@@ -302,8 +305,11 @@ function collectSessionIssues(
     return issues;
   }
 
-  const summaryText = [
-    summary.topic,
+  // Process-chatter is checked separately for the topic vs the durable body:
+  // chatter in the topic (topic_process_chatter) points at topic derivation,
+  // chatter in the body (process_chatter) at extraction/summarization. Broad
+  // low-signal-topic quality is already tracked by topic-distribution.
+  const bodyText = [
     ...summary.what_worked,
     ...summary.what_failed,
     ...summary.what_was_decided,
@@ -316,15 +322,19 @@ function collectSessionIssues(
     issues.push("summary_low_signal");
   }
 
+  if (hasProcessChatter(summary.topic)) {
+    issues.push("topic_process_chatter");
+  }
+
   if (looksLikeCompletedOutcome(summary.next_step)) {
     issues.push("completion_as_next_step");
   }
 
-  if (hasProcessChatter(summaryText)) {
+  if (hasProcessChatter(bodyText)) {
     issues.push("process_chatter");
   }
 
-  if (hasWrapperTags(summaryText)) {
+  if (hasWrapperTags([summary.topic, bodyText].join("\n"))) {
     issues.push("wrapper_tags");
   }
 
@@ -371,6 +381,7 @@ function createIssueCountMap(): Record<QualityIssueCode, number> {
     summary_invalid: 0,
     summary_low_signal: 0,
     summary_missing: 0,
+    topic_process_chatter: 0,
     wrapper_tags: 0,
   };
 }
