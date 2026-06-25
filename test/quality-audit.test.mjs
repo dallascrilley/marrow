@@ -628,7 +628,7 @@ test("quality audit does not flag discovered sessions as summary_missing", async
   });
 });
 
-test("low_signal_topic and process_chatter are distinct audit dimensions", async () => {
+test("topic_process_chatter and process_chatter are distinct audit dimensions", async () => {
   await withRuntimeRoot(async () => {
     const database = await createLedger();
 
@@ -669,13 +669,13 @@ test("low_signal_topic and process_chatter are distinct audit dimensions", async
       );
       const bodySession = report.sessions.find((session) => session.session_id === "body-chatter");
 
-      // Topic chatter is a topic-quality issue, NOT body process_chatter.
-      assert.ok(topicSession.issues.includes("low_signal_topic"));
+      // Topic chatter is flagged on the topic, NOT as body process_chatter.
+      assert.ok(topicSession.issues.includes("topic_process_chatter"));
       assert.ok(!topicSession.issues.includes("process_chatter"));
 
       // Body chatter is process_chatter; its clean topic is not flagged.
       assert.ok(bodySession.issues.includes("process_chatter"));
-      assert.ok(!bodySession.issues.includes("low_signal_topic"));
+      assert.ok(!bodySession.issues.includes("topic_process_chatter"));
     } finally {
       database.close();
     }

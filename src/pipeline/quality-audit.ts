@@ -19,13 +19,12 @@ import {
 } from "./artifact-heuristics.js";
 import { defaultUserScopeKey } from "./extract.js";
 import { countProjectLearnings } from "./learning-count.js";
-import { isLowSignalTopic } from "./summarize.js";
 
 export type QualityIssueCode =
   | "summary_missing"
   | "summary_invalid"
   | "summary_low_signal"
-  | "low_signal_topic"
+  | "topic_process_chatter"
   | "completion_as_next_step"
   | "process_chatter"
   | "wrapper_tags"
@@ -229,8 +228,8 @@ function recommendationForIssue(issue: QualityIssueCode): string {
       return "Improve file extraction/ranking from event payloads, source refs, and project-relative paths.";
     case "summary_low_signal":
       return "Improve summary synthesis for short sessions or classify them as intentionally low-signal.";
-    case "low_signal_topic":
-      return "Improve topic derivation: reject chatter-shaped or low-signal prompts, or LLM-rescue the topic.";
+    case "topic_process_chatter":
+      return "Improve topic derivation: reject chatter-shaped prompts as topics, or LLM-rescue the topic.";
     case "process_chatter":
       return "Suppress assistant process chatter before summary and learning promotion.";
     case "blocked_deletion":
@@ -306,9 +305,10 @@ function collectSessionIssues(
     return issues;
   }
 
-  // The topic is the operator's own prompt wording; its quality is a distinct
-  // dimension (low_signal_topic) from assistant process-chatter that leaked into
-  // the durable summary body. Keep them separate so each metric stays accurate.
+  // Process-chatter is checked separately for the topic vs the durable body:
+  // chatter in the topic (topic_process_chatter) points at topic derivation,
+  // chatter in the body (process_chatter) at extraction/summarization. Broad
+  // low-signal-topic quality is already tracked by topic-distribution.
   const bodyText = [
     ...summary.what_worked,
     ...summary.what_failed,
@@ -322,8 +322,8 @@ function collectSessionIssues(
     issues.push("summary_low_signal");
   }
 
-  if (isLowSignalTopic(summary.topic) || hasProcessChatter(summary.topic)) {
-    issues.push("low_signal_topic");
+  if (hasProcessChatter(summary.topic)) {
+    issues.push("topic_process_chatter");
   }
 
   if (looksLikeCompletedOutcome(summary.next_step)) {
@@ -374,7 +374,6 @@ function createIssueCountMap(): Record<QualityIssueCode, number> {
   return {
     blocked_deletion: 0,
     completion_as_next_step: 0,
-    low_signal_topic: 0,
     no_files_of_interest: 0,
     no_project_learnings: 0,
     no_useful_commands: 0,
@@ -382,6 +381,7 @@ function createIssueCountMap(): Record<QualityIssueCode, number> {
     summary_invalid: 0,
     summary_low_signal: 0,
     summary_missing: 0,
+    topic_process_chatter: 0,
     wrapper_tags: 0,
   };
 }
