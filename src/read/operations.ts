@@ -19,6 +19,8 @@ import type {
   SourceSessionRow,
 } from "../db/queries.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
+import type { HarnessBreakdownSnapshot } from "./harness-breakdown.js";
+import { listHarnessBreakdown } from "./harness-breakdown.js";
 
 export type PipelineStatus = {
   blockedReasons: Record<string, number>;
@@ -34,6 +36,12 @@ export function listPipelineStatus(database: DatabaseSync): PipelineStatus {
 
 export function listReviewItems(database: DatabaseSync): ReviewQueueEntryRow[] {
   return listReviewQueueEntries(database);
+}
+
+export async function listHarnessComparison(
+  database: DatabaseSync,
+): Promise<HarnessBreakdownSnapshot> {
+  return listHarnessBreakdown(database);
 }
 
 export async function getExplainBundle(
