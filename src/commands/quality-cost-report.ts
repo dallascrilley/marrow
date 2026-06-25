@@ -28,12 +28,53 @@ export async function executeQualityCostReport(context: CommandContext): Promise
   return 0;
 }
 
-export type CostReport = ReturnType<typeof buildCostReport>;
+export type CostReportMeta = {
+  backlogLearnings?: number | undefined;
+  path: string;
+};
+
+export type CostPerSessionUsd = {
+  sessions: number;
+  mean: number;
+  p50: number;
+  p90: number;
+  max: number;
+};
+
+export type CostReportProjection = {
+  backlog_learnings: number;
+  projected_cost_usd: number;
+  basis: string;
+};
+
+export type CostReport = {
+  source: string;
+  totals: {
+    calls: number;
+    real_calls: number;
+    http_calls: number;
+    cache_hits: number;
+    cache_hit_rate: number;
+    unknown_cost_calls: number;
+    total_cost_usd: number;
+  };
+  cost_by_operation_usd: Record<string, number>;
+  calls_by_cost_source: Record<string, number>;
+  cost_per_session_usd: CostPerSessionUsd;
+  cost_per_learning_usd: number;
+  tokens_per_call: {
+    input_mean: number | null;
+    output_mean: number | null;
+    reasoning_mean: number | null;
+    total_mean: number | null;
+  };
+  projection: CostReportProjection | null;
+};
 
 export function buildCostReport(
   records: readonly LlmTelemetryRecord[],
-  meta: { backlogLearnings?: number | undefined; path: string },
-) {
+  meta: CostReportMeta,
+): CostReport {
   const realCalls = records.filter((r) => r["asd.cache_hit"] === false);
   const cacheHits = records.length - realCalls.length;
   // Each batched learning is its own record, so real_calls counts learnings, not
@@ -79,7 +120,7 @@ export function buildCostReport(
   const costPerLearning =
     reviewLearningsKnown.length === 0 ? 0 : reviewLearningsCost / reviewLearningsKnown.length;
 
-  const projection =
+  const projection: CostReportProjection | null =
     meta.backlogLearnings === undefined
       ? null
       : {
@@ -113,7 +154,7 @@ export function buildCostReport(
   };
 }
 
-function describe(values: readonly number[]) {
+function describe(values: readonly number[]): CostPerSessionUsd {
   if (values.length === 0) {
     return { sessions: 0, mean: 0, p50: 0, p90: 0, max: 0 };
   }

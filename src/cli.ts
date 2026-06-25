@@ -20,6 +20,7 @@ import { executeQualityAudit } from "./commands/quality-audit.js";
 import { executeQualityCostReport } from "./commands/quality-cost-report.js";
 import { executeQualityResummarize } from "./commands/quality-resummarize.js";
 import { executeQualityReviewLearnings } from "./commands/quality-review-learnings.js";
+import { executeReport } from "./commands/report.js";
 import { executeReviewQueue } from "./commands/review-queue.js";
 import { executeReviewShow } from "./commands/review-show.js";
 import { executeSearch } from "./commands/search.js";
@@ -156,6 +157,10 @@ const commandTree: Record<string, CommandDefinition> = {
   explain: {
     description: "Explain how a stored result was derived.",
     execute: async (context) => withLedger(context, executeExplain),
+  },
+  report: {
+    description: "Write static offline reports from the current runtime.",
+    execute: async (context) => withLedger(context, executeReport),
   },
   migrate: {
     description: "Migrate runtime artifacts between naming schemes.",
