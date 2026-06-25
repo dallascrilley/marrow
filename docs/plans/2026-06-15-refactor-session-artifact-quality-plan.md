@@ -157,6 +157,62 @@ Spot-check of the worst session shows:
   node dist/cli.js quality audit --topic-distribution
   ```
 
+### Results
+
+The quality work moved the learning-distribution metrics in the right direction, but the original U8 acceptance is only partially met.
+
+Baseline from the original plan (`quality audit` over 5,879 sessions before U1–U7):
+
+| Metric | Baseline |
+|---|---|
+| `summary_low_signal` | 133 |
+| `blocked_deletion` | 153 |
+| `process_chatter` | 321 |
+| `no_useful_commands` | 104 |
+| `no_files_of_interest` | 132 |
+| `no_project_learnings` | 150 |
+| `max_project_learnings` | 55 |
+| `learning_distribution.p99` | 40 |
+
+Post-U7 evidence previously recorded on 2026-06-16 (full-corpus runtime at 6,148 sessions):
+
+| Metric | Post-U7 |
+|---|---|
+| `summary_low_signal` | 799 |
+| `no_project_learnings` | 1,493 |
+| `max_project_learnings` | 28 |
+| `learning_distribution.p99` | 12 |
+| `total_project_learnings` | 9,610 |
+
+Fresh verification on 2026-06-25 from `verify/td-ee566c-artifact-quality` under Node 22 (`npm ci`, `npm run build`, `node dist/cli.js quality audit`, `node dist/cli.js quality audit --topic-distribution`, `node dist/cli.js stats`, `node dist/cli.js quality cost-report`) observed a larger full-corpus runtime of 7,467 sessions:
+
+| Metric | 2026-06-25 current |
+|---|---|
+| `summary_low_signal` | 910 |
+| `blocked_deletion` | 2,382 |
+| `process_chatter` | 407 |
+| `no_useful_commands` | 975 |
+| `no_files_of_interest` | 1,311 |
+| `no_project_learnings` | 1,571 |
+| `max_project_learnings` | 28 |
+| `learning_distribution.p99` | 12 |
+| deletion readiness `ready` | 4,858 |
+| deletion readiness `blocked` | 2,382 |
+| deletion readiness `missing_candidate` | 174 |
+| deletion readiness `discardable_no_signal` | 53 |
+| `total_project_learnings` | 11,109 |
+| topic distribution `low_signal_topics` | 2,103 |
+| topic distribution `wrapper_leak_topics` | 1,349 |
+| topic distribution `llm_rescued_topics` | 24 |
+
+What this proves:
+
+- The over-extraction controls held: `max_project_learnings` improved from 55 to 28 and `learning_distribution.p99` improved from 40 to 12.
+- The deterministic low-signal rewrite helped some downstream learning promotion (`no_project_learnings` improved from the 1,902 pre-resummarize runtime noted during the 2026-06-16 session to 1,493 immediately after that run), but it did not materially clear the low-signal summary backlog.
+- The original U8 acceptance is not satisfied as written because the issue-count and deletion-readiness comparisons are no longer on the same corpus size, and the comparable post-U7 evidence already showed deletion readiness unchanged rather than improved.
+
+Conclusion: U8 produced valuable empirical verification and documented that the distribution-focused fixes worked, but it should not be treated as a successful acceptance closeout until either (a) the comparison is reframed around a stable same-session sample, or (b) a follow-up remediation pass improves low-signal/deletion-readiness metrics on a comparable corpus.
+
 ## Prior learnings applied
 
 - `docs/solutions/performance/openrouter-reasoning-tokens-dominate-trivial-tasks.md` — the LLM review already caps reasoning effort; U6 raises the call-count throttle but keeps the USD ceiling so the cost guardrail from this learning remains the binding constraint.
