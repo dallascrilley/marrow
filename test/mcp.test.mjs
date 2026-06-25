@@ -7,12 +7,18 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { saveInstinct } from "../dist/v2/instinct/store.js";
+import { refreshPromotionQueue } from "../dist/v2/promotion/queue.js";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
 const cliPath = join(projectRoot, "dist", "cli.js");
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
 const projectId = "mcptestproj01";
+const matureObservations = [
+  { session: "sess-1", reinforcing: true, at: "2026-05-20T00:00:00.000Z" },
+  { session: "sess-2", reinforcing: true, at: "2026-05-28T00:00:00.000Z" },
+  { session: "sess-3", reinforcing: true, at: "2026-06-05T00:00:00.000Z" },
+];
 
 function makeInstinct(overrides = {}) {
   return {
@@ -29,7 +35,7 @@ function makeInstinct(overrides = {}) {
       first_session: "sess-1",
       first_observed_at: "2026-06-10T10:00:00.000Z",
       source_refs: [{ kind: "file", path: "shared/db_sqlite.py", session: "sess-1" }],
-      observations: [{ session: "sess-1", reinforcing: true, at: "2026-06-10T10:00:00.000Z" }],
+      observations: matureObservations,
     },
     related: [],
     created_at: "2026-06-10T10:00:00.000Z",
@@ -65,6 +71,46 @@ function runCli(root, args) {
     encoding: "utf8",
     env: { ...process.env, [runtimeOverrideEnvVar]: root },
   });
+}
+
+async function writeQueuedPromotionCandidate() {
+  await saveInstinct(
+    "proj-two00002",
+    makeInstinct({
+      id: "prefer-pnpm-aaaaaaaa",
+      project_id: "proj-two00002",
+      trigger: "When installing packages",
+      finding: "Use pnpm in this repo.",
+      confidence: 0.86,
+      created_at: "2026-06-01T10:00:00.000Z",
+      updated_at: "2026-06-12T11:00:00.000Z",
+      source: {
+        first_session: "sess-2",
+        first_observed_at: "2026-05-20T00:00:00.000Z",
+        source_refs: [{ kind: "file", path: "package.json", session: "sess-2" }],
+        observations: matureObservations,
+      },
+    }),
+  );
+  await saveInstinct(
+    "proj-three003",
+    makeInstinct({
+      id: "prefer-pnpm-aaaaaaaa",
+      project_id: "proj-three003",
+      trigger: "When installing packages",
+      finding: "Use pnpm in this repo.",
+      confidence: 0.88,
+      created_at: "2026-06-01T10:00:00.000Z",
+      updated_at: "2026-06-12T11:00:00.000Z",
+      source: {
+        first_session: "sess-3",
+        first_observed_at: "2026-05-20T00:00:00.000Z",
+        source_refs: [{ kind: "file", path: "package.json", session: "sess-3" }],
+        observations: matureObservations,
+      },
+    }),
+  );
+  await refreshPromotionQueue("2026-06-25T00:00:00.000Z");
 }
 
 test("mcp search_instincts returns lexical hits scoped to the project", async () => {
@@ -116,6 +162,24 @@ test("mcp recent_instincts returns instincts in the window", async () => {
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.hits.length, 1);
     assert.ok(payload.window_start <= payload.window_end);
+  });
+});
+
+test("mcp search_instincts does not expose queued promotion candidates as approved global instincts", async () => {
+  await withRuntime(async (root) => {
+    await writeQueuedPromotionCandidate();
+    const result = runCli(root, [
+      "mcp",
+      "search_instincts",
+      "--scope",
+      "global",
+      "--query",
+      "pnpm",
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.hits.length, 0);
+    assert.equal(payload.total_in_corpus, 0);
   });
 });
 

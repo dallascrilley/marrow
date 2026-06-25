@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { getSessionDetail } from "../dist/read/session-detail.js";
+import { getSessionDetail, getSessionDetailForRecord } from "../dist/read/session-detail.js";
 import { getSessionManifestPathForRevision } from "../dist/writers/manifest-writer.js";
 
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
@@ -102,6 +102,57 @@ test("getSessionDetail returns index, parsed summary, and reduced turns", async 
     assert.equal(detail.index.asd_session_id, sessionId);
     assert.equal(detail.summary?.topic, "Detail summary topic");
     assert.equal(detail.reduced_turns.length, 1);
+  });
+});
+
+test("getSessionDetailForRecord reuses a supplied index record without reading the index file", async () => {
+  await withRuntime(async (runtimeRoot) => {
+    const sessionId = "detail-session-direct-record";
+    await mkdir(join(runtimeRoot, "summaries", "by-session", sessionId), { recursive: true });
+    await mkdir(join(runtimeRoot, "staging", sessionId), { recursive: true });
+
+    await writeFile(
+      join(runtimeRoot, "summaries", "by-session", sessionId, "summary.json"),
+      `${JSON.stringify({
+        session_id: sessionId,
+        topic: "Direct record summary",
+        topic_source: "deterministic",
+        what_worked: [],
+        what_failed: [],
+        what_was_decided: [],
+        useful_commands: [],
+        files_of_interest: [],
+        next_step: "Use the supplied record",
+        project_learnings: [],
+        user_learnings: [],
+        deletion_readiness: "ready",
+      })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      join(runtimeRoot, "staging", sessionId, "reduced-session.json"),
+      `${JSON.stringify({
+        turns: [],
+      })}\n`,
+      "utf8",
+    );
+
+    const detail = await getSessionDetailForRecord({
+      v: 1,
+      source_path: "/tmp/source.jsonl",
+      source_uuid: "source-uuid-direct",
+      source_tool: "cursor",
+      asd_session_id: sessionId,
+      topic: "Direct record topic",
+      topic_source: "deterministic",
+      next_step: "Use the supplied record",
+      summary_json_path: join(runtimeRoot, "summaries", "by-session", sessionId, "summary.json"),
+      updated_at: "2026-06-24T00:00:00.000Z",
+    });
+
+    assert.equal(detail.index.asd_session_id, sessionId);
+    assert.equal(detail.summary?.topic, "Direct record summary");
+    assert.deepEqual(detail.reduced_turns, []);
   });
 });
 

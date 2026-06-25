@@ -6,6 +6,10 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { saveInstinct } from "../dist/v2/instinct/store.js";
+
+import { hashToProjectId } from "../dist/v2/project/resolve.js";
+
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
 const cliPath = join(projectRoot, "dist", "cli.js");
@@ -44,6 +48,7 @@ test("asd --help lists every Task 1 command", () => {
     "search",
     "memory export-wiki",
     "export-index",
+    "report",
     "stats",
     "explain",
   ];
@@ -171,6 +176,347 @@ test("search reports missing session index", async () => {
     assert.match(result.stderr, /export-index/);
   } finally {
     await rm(runtimeRoot, { force: true, recursive: true });
+  }
+});
+test("report --html writes a static dashboard artifact via CLI", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-report-html-"));
+  const runtimeRoot = join(sandbox, "runtime-root");
+  const outputPath = join(sandbox, "dashboard.html");
+  const { createLedger, upsertSourceSession } = await import("../dist/db/ledger.js");
+  const { upsertReviewQueueEntry } = await import("../dist/db/ledger.js");
+  const { writeSessionSummary } = await import("../dist/writers/summary-writer.js");
+  const { writeSessionManifest } = await import("../dist/writers/manifest-writer.js");
+  const { turnSchema } = await import("../dist/models/canonical.js");
+
+  try {
+    const projectId = hashToProjectId("/Users/example/Code/demo");
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const database = await createLedger();
+    const sessionId = "dashboard-session";
+    const sourcePath = join(sandbox, "fixture.jsonl");
+    await writeFile(sourcePath, '{"type":"session"}\n', "utf8");
+    const upserted = upsertSourceSession(database, {
+      conversation_id: `demo:${sessionId}`,
+      ingest_status: "archived",
+      project_key: "demo",
+      retention_status: "kept",
+      session_id: sessionId,
+      source_format: "jsonl",
+      source_hash: "sha256:dashboard-session",
+      source_path: sourcePath,
+      source_tool: "cursor",
+      started_at: "2026-06-24T00:00:00.000Z",
+      updated_at: "2026-06-24T00:10:00.000Z",
+      workspace_path: "/Users/example/Code/demo",
+    });
+    const summary = await writeSessionSummary({
+      session_id: sessionId,
+      topic: "Dashboard detail topic",
+      topic_source: "deterministic",
+      what_worked: ["Dashboard report renders offline."],
+      what_failed: [],
+      what_was_decided: ["Ship a static HTML artifact."],
+      useful_commands: ["node dist/cli.js report --html"],
+      files_of_interest: ["src/commands/report.ts"],
+      next_step: "Open the dashboard.",
+      project_learnings: ["The report can stay read-only."],
+      user_learnings: [],
+      deletion_readiness: "ready",
+    });
+    await writeSessionManifest({
+      artifactPaths: {
+        project_knowledge_jsonl_path: null,
+        retention_receipt_path: join(runtimeRoot, "reports", "receipt.json"),
+        summary_json_path: summary.summaryPath,
+        summary_markdown_path: summary.markdownPath,
+        user_knowledge_jsonl_path: null,
+      },
+      events: [],
+      sourceSession: {
+        conversation_id: upserted.sourceSession.conversation_id,
+        ingest_status: upserted.sourceSession.ingest_status,
+        project_key: upserted.sourceSession.project_key,
+        retention_status: upserted.sourceSession.retention_status,
+        session_id: sessionId,
+        source_format: upserted.sourceSession.source_format,
+        source_hash: upserted.sourceSession.source_hash,
+        source_path: sourcePath,
+        source_tool: upserted.sourceSession.source_tool,
+        started_at: upserted.sourceSession.started_at,
+        updated_at: upserted.sourceSession.updated_at,
+        workspace_path: upserted.sourceSession.workspace_path,
+      },
+      turns: [],
+    });
+    await mkdir(join(runtimeRoot, "staging", sessionId), { recursive: true });
+    await writeFile(
+      join(runtimeRoot, "staging", sessionId, "reduced-session.json"),
+      JSON.stringify({
+        events: [],
+        turns: [
+          turnSchema.parse({
+            assistant_summary: "Implemented the dashboard exporter.",
+            commands_seen: ["node dist/cli.js report --html"],
+            ended_at: "2026-06-24T00:11:00.000Z",
+            files_touched: ["src/commands/report.ts", "src/report/dashboard.ts"],
+            index: 0,
+            session_id: sessionId,
+            started_at: "2026-06-24T00:10:30.000Z",
+            tool_stub_count: 0,
+            turn_id: `${sessionId}:turn-0000`,
+            user_prompt: "Show me the phase 1 dashboard.",
+            verification_seen: true,
+          }),
+        ],
+      }),
+      "utf8",
+    );
+    await saveInstinct(projectId, {
+      schema_version: 1,
+      id: "dashboard-instinct-aaaa1111",
+      trigger: "When extending the dashboard",
+      finding: "Keep the knowledge explorer read-only and reuse shared readers.",
+      confidence: 0.74,
+      domain: "workflow",
+      maturity: "established",
+      scope: "project",
+      project_id: projectId,
+      source: {
+        first_session: sessionId,
+        first_observed_at: "2026-06-24T00:10:00.000Z",
+        source_refs: [{ kind: "file", path: "src/read/knowledge.ts", session: sessionId }],
+        observations: [{ session: sessionId, reinforcing: true, at: "2026-06-24T00:10:00.000Z" }],
+      },
+      related: [],
+      created_at: "2026-06-24T00:10:00.000Z",
+      updated_at: "2026-06-24T00:11:00.000Z",
+      last_promoted_at: null,
+    });
+    await mkdir(join(runtimeRoot, "knowledge", "projects", "demo"), { recursive: true });
+    await writeFile(
+      join(runtimeRoot, "knowledge", "projects", "demo", `${sessionId}.jsonl`),
+      `${JSON.stringify({
+        learning_id: `${sessionId}:project:workflow:event-1`,
+        scope: "project",
+        scope_key: "demo",
+        kind: "workflow",
+        title: "Reuse shared read surfaces",
+        trigger: "When adding a dashboard view in ASD.",
+        statement: "Reuse shared typed readers instead of adding a dashboard-only query path.",
+        evidence: ["The report exporter already consumed shared read modules."],
+        confidence: "high",
+        evidence_type: "inferred",
+        promotion_basis: "Observed during dashboard implementation.",
+        source_refs: [
+          {
+            source_path: sourcePath,
+            source_hash: "sha256:dashboard-session",
+            session_id: sessionId,
+            turn_id: `${sessionId}:turn-0000`,
+            event_id: "event-1",
+            line: 12,
+          },
+        ],
+      })}\n`,
+      "utf8",
+    );
+    await mkdir(join(runtimeRoot, "reports"), { recursive: true });
+    await writeFile(
+      join(runtimeRoot, "reports", "llm-telemetry.jsonl"),
+      `${JSON.stringify({
+        "gen_ai.provider.name": "openrouter",
+        "gen_ai.operation.name": "learning_review",
+        "gen_ai.request.model": "openai/gpt-5-nano",
+        "gen_ai.usage.input_tokens": 100,
+        "gen_ai.usage.output_tokens": 20,
+        "gen_ai.usage.total_tokens": 120,
+        "gen_ai.usage.reasoning_tokens": 0,
+        "gen_ai.usage.cached_tokens": 0,
+        "gen_ai.usage.cost": 0.001,
+        "gen_ai.usage.cost_is_known": true,
+        "gen_ai.client.operation.duration_ms": 100,
+        "asd.cost_source": "upstream",
+        "asd.session_id": sessionId,
+        "asd.learning_id": "dashboard-learning-1",
+        "asd.cache_hit": false,
+        "asd.missing_reason": null,
+        "asd.batch_size": 1,
+        "asd.created_at": "2026-06-24T00:10:00.000Z",
+      })}\n`,
+      "utf8",
+    );
+    upsertReviewQueueEntry(database, {
+      currentLifecycleState: upserted.sourceSession.ingest_status,
+      projectKey: upserted.sourceSession.project_key,
+      queueState: "pending",
+      reason: "Summary and reduced artifacts are ready for review.",
+      reviewKind: "summary",
+      sessionId: sessionId,
+      sourceHash: upserted.sourceSession.source_hash,
+      sourceSessionId: upserted.sourceSession.id,
+    });
+    database.close();
+
+    const result = runCli(["report", "--html", "--out", outputPath], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Wrote dashboard HTML for 1 session/);
+    const html = await readFile(outputPath, "utf8");
+    assert.match(html, /ASD Dashboard/);
+    assert.match(html, /Dashboard detail topic/);
+    assert.match(html, /Show me the phase 1 dashboard\./);
+    assert.match(html, /node dist\/cli\.js report --html/);
+
+    assert.match(html, /Pipeline health/);
+    assert.match(html, /Read-only operational snapshot from the current runtime ledger\./);
+    assert.match(html, /Knowledge & instincts/);
+    assert.match(
+      html,
+      /Merged project learnings and project instinct store snapshots with source back-links\./,
+    );
+    assert.match(html, /Reuse shared read surfaces/);
+    assert.match(html, /Keep the knowledge explorer read-only and reuse shared readers\./);
+    assert.match(html, /src\/read\/knowledge\.ts/);
+    assert.match(html, /Cross-harness comparison/);
+    assert.match(
+      html,
+      /Volume, topic quality, learning yield, and LLM cost by normalized source harness\./,
+    );
+    assert.match(html, /Harness totals/);
+    assert.match(html, /cursor/);
+    assert.match(html, /project_learnings":1/);
+    assert.match(html, /llm_rescued_topics":0/);
+    assert.match(html, /total_cost_usd":0\.001/);
+    assert.match(html, /Review queue/);
+    assert.match(
+      html,
+      /Read-only triage snapshot from the current review queue; act through CLI commands\./,
+    );
+    assert.match(html, /Summary and reduced artifacts are ready for review\./);
+    assert.match(html, /CLI: asd review show /);
+    assert.match(html, /review_items":\[\{"current_lifecycle_state":"archived","enqueued_at":/);
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("report --html handles large runtimes without rereading the session index per session", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-report-large-"));
+  const runtimeRoot = join(sandbox, "runtime-root");
+  const outputPath = join(sandbox, "dashboard-large.html");
+  const { createLedger, upsertSourceSession } = await import("../dist/db/ledger.js");
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const database = await createLedger();
+    await mkdir(join(runtimeRoot, "index"), { recursive: true });
+
+    const sessionCount = 250;
+    const indexLines = [];
+    for (let index = 0; index < sessionCount; index += 1) {
+      const sessionId = `bulk-session-${String(index).padStart(4, "0")}`;
+      const sourcePath = join(sandbox, `${sessionId}.jsonl`);
+      await writeFile(sourcePath, '{"type":"session"}\n', "utf8");
+      upsertSourceSession(database, {
+        conversation_id: `demo:${sessionId}`,
+        ingest_status: "archived",
+        project_key: "demo",
+        retention_status: "kept",
+        session_id: sessionId,
+        source_format: "jsonl",
+        source_hash: `sha256:${sessionId}`,
+        source_path: sourcePath,
+        source_tool: index % 2 === 0 ? "cursor" : "claude-code",
+        started_at: "2026-06-24T00:00:00.000Z",
+        updated_at: `2026-06-24T00:${String(index % 60).padStart(2, "0")}:00.000Z`,
+        workspace_path: "/Users/example/Code/demo",
+      });
+      await mkdir(join(runtimeRoot, "summaries", "by-session", sessionId), { recursive: true });
+      await mkdir(join(runtimeRoot, "staging", sessionId), { recursive: true });
+      const summaryPath = join(runtimeRoot, "summaries", "by-session", sessionId, "summary.json");
+      await writeFile(
+        summaryPath,
+        `${JSON.stringify({
+          session_id: sessionId,
+          topic: `Large dashboard topic ${index}`,
+          topic_source: "deterministic",
+          what_worked: ["Kept the report bounded."],
+          what_failed: [],
+          what_was_decided: [],
+          useful_commands: [],
+          files_of_interest: [],
+          next_step: `Inspect session ${index}`,
+          project_learnings: [],
+          user_learnings: [],
+          deletion_readiness: "ready",
+        })}\n`,
+        "utf8",
+      );
+      await writeFile(
+        join(runtimeRoot, "staging", sessionId, "reduced-session.json"),
+        `${JSON.stringify({
+          turns: [
+            {
+              turn_id: `${sessionId}:turn-0000`,
+              session_id: sessionId,
+              index: 0,
+              user_prompt: `Prompt ${index}`,
+              assistant_summary: `Summary ${index}`,
+              tool_stub_count: 0,
+              files_touched: [],
+              commands_seen: [],
+              verification_seen: true,
+              started_at: "2026-06-24T00:00:00.000Z",
+              ended_at: "2026-06-24T00:01:00.000Z",
+            },
+          ],
+        })}\n`,
+        "utf8",
+      );
+      indexLines.push(
+        JSON.stringify({
+          v: 1,
+          source_path: sourcePath,
+          source_uuid: `uuid-${sessionId}`,
+          source_tool: index % 2 === 0 ? "cursor" : "claude-code",
+          asd_session_id: sessionId,
+          topic: `Large dashboard topic ${index}`,
+          topic_source: "deterministic",
+          next_step: `Inspect session ${index}`,
+          summary_json_path: summaryPath,
+          updated_at: `2026-06-24T00:${String(index % 60).padStart(2, "0")}:00.000Z`,
+        }),
+      );
+    }
+
+    await writeFile(
+      join(runtimeRoot, "index", "session-index.jsonl"),
+      `${indexLines.join("\n")}\n`,
+      "utf8",
+    );
+    database.close();
+
+    const result = runCli(["report", "--html", "--out", outputPath], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Wrote dashboard HTML for 250 sessions/);
+    const html = await readFile(outputPath, "utf8");
+    assert.match(html, /Large dashboard topic 249/);
+    assert.match(html, /Prompt 249/);
+
+    assert.match(html, /Deletion candidates/);
+    assert.match(html, /Sessions by lifecycle/);
+    assert.match(html, /archived/);
+    assert.match(html, /250/);
+    assert.match(html, /Knowledge totals/);
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
   }
 });
 

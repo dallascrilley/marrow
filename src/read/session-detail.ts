@@ -15,6 +15,21 @@ export type SessionDetail = {
   reduced_turns: Turn[];
 };
 
+export async function getSessionDetailForRecord(
+  record: SessionIndexRecord,
+): Promise<SessionDetail> {
+  const [summary, reduced] = await Promise.all([
+    readSessionSummary(record.asd_session_id),
+    readReducedTurns(record.asd_session_id),
+  ]);
+
+  return {
+    index: record,
+    summary: summary.value ?? null,
+    reduced_turns: reduced.value ?? [],
+  };
+}
+
 export async function readSessionSummary(sessionId: string): Promise<ArtifactReadResult<Summary>> {
   try {
     return {
@@ -60,16 +75,7 @@ export async function getSessionDetail(asdSessionId: string): Promise<SessionDet
     return null;
   }
 
-  const [summary, reduced] = await Promise.all([
-    readSessionSummary(asdSessionId),
-    readReducedTurns(asdSessionId),
-  ]);
-
-  return {
-    index: record,
-    summary: summary.value ?? null,
-    reduced_turns: reduced.value ?? [],
-  };
+  return getSessionDetailForRecord(record);
 }
 
 function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {
