@@ -74,8 +74,60 @@ export function buildDashboardData(
   };
 }
 
+function escapeScriptJson(value: unknown): string {
+  // `<` is the only character that can terminate a <script> block early.
+  return JSON.stringify(value).replaceAll("<", "\\u003c");
+}
+
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
 export function renderDashboardHtml(data: DashboardData): string {
-  const payload = JSON.stringify(data).replaceAll("<", "\\u003c");
+  // Split the payload so the page opens instantly regardless of corpus size:
+  // the lightweight list is parsed eagerly, while each session's heavy detail
+  // (summary + reduced timeline) ships as an inert <script type="application/json">
+  // block that is JSON.parsed only on demand. Keeps a single offline file.
+  const listData = {
+    generated_at: data.generated_at,
+    harness_breakdown: data.harness_breakdown,
+    knowledge_snapshot: data.knowledge_snapshot,
+    pipeline_status: data.pipeline_status,
+    review_items: data.review_items,
+    sessions: data.sessions.map((session) => ({
+      // Only the fields the sidebar list, filters, and search read — not the
+      // full index record (its absolute paths / uuid never reach the client).
+      index: {
+        asd_session_id: session.detail.index.asd_session_id,
+        topic: session.detail.index.topic,
+        topic_source: session.detail.index.topic_source,
+        next_step: session.detail.index.next_step,
+        source_tool: session.detail.index.source_tool,
+        updated_at: session.detail.index.updated_at,
+      },
+      lifecycle_state: session.lifecycle_state,
+      summary_topic: session.detail.summary ? session.detail.summary.topic : null,
+    })),
+    stats: data.stats,
+  };
+  const payload = escapeScriptJson(listData);
+  const detailBlocks = data.sessions
+    .map(
+      (session) =>
+        '<script type="application/json" class="asd-detail" data-session-id="' +
+        escapeHtmlAttr(session.detail.index.asd_session_id) +
+        '">' +
+        escapeScriptJson({
+          summary: session.detail.summary,
+          reduced_turns: session.detail.reduced_turns,
+        }) +
+        "</script>",
+    )
+    .join("\n");
 
   return [
     "<!DOCTYPE html>",
@@ -166,8 +218,20 @@ export function renderDashboardHtml(data: DashboardData): string {
     '        <div class="panel" id="detail"></div>',
     "      </main>",
     "    </div>",
+    detailBlocks,
     "    <script>",
     `      const data = ${payload};`,
+    "      const detailNodes = new Map();",
+    "      for (const node of document.querySelectorAll('script.asd-detail')) { detailNodes.set(node.getAttribute('data-session-id'), node); }",
+    "      const detailCache = new Map();",
+    "      function getDetail(id) {",
+    "        if (id === null || id === undefined) return { summary: null, reduced_turns: [] };",
+    "        if (detailCache.has(id)) return detailCache.get(id);",
+    "        const node = detailNodes.get(id);",
+    "        const parsed = node ? JSON.parse(node.textContent) : { summary: null, reduced_turns: [] };",
+    "        detailCache.set(id, parsed);",
+    "        return parsed;",
+    "      }",
     "      const sessionList = document.getElementById('session-list');",
     "      const detail = document.getElementById('detail');",
     "      const pipelineHealth = document.getElementById('pipeline-health');",
@@ -177,11 +241,11 @@ export function renderDashboardHtml(data: DashboardData): string {
     "      const searchInput = document.getElementById('search');",
     "      const sourceToolSelect = document.getElementById('source-tool');",
     "      const lifecycleStateSelect = document.getElementById('lifecycle-state');",
-    "      let selectedSessionId = data.sessions[0] ? data.sessions[0].detail.index.asd_session_id : null;",
+    "      let selectedSessionId = data.sessions[0] ? data.sessions[0].index.asd_session_id : null;",
     "      document.getElementById('stat-total').textContent = String(data.stats.total_sessions);",
     "      document.getElementById('stat-tools').textContent = String(Object.keys(data.stats.source_tools).length);",
     "      document.getElementById('stat-generated').textContent = new Date(data.generated_at).toLocaleDateString();",
-    "      hydrateSelect(sourceToolSelect, 'All source tools', uniqueValues(data.sessions.map((session) => session.detail.index.source_tool)));",
+    "      hydrateSelect(sourceToolSelect, 'All source tools', uniqueValues(data.sessions.map((session) => session.index.source_tool)));",
     "      hydrateSelect(lifecycleStateSelect, 'All lifecycle states', uniqueValues(data.sessions.map((session) => session.lifecycle_state)));",
     "      renderPipelineHealth();",
     "      renderKnowledgeView();",
@@ -194,19 +258,19 @@ export function renderDashboardHtml(data: DashboardData): string {
     "      function render() {",
     "        const filtered = filterSessions();",
     "        renderSessionList(filtered);",
-    "        const active = filtered.find((session) => session.detail.index.asd_session_id === selectedSessionId) || filtered[0] || null;",
-    "        selectedSessionId = active ? active.detail.index.asd_session_id : null;",
-    "        renderDetail(active);",
+    "        const active = filtered.find((session) => session.index.asd_session_id === selectedSessionId) || filtered[0] || null;",
+    "        selectedSessionId = active ? active.index.asd_session_id : null;",
+    "        renderDetail(active, active ? getDetail(active.index.asd_session_id) : null);",
     "      }",
     "      function filterSessions() {",
     "        const needle = searchInput.value.trim().toLowerCase();",
     "        const tool = sourceToolSelect.value;",
     "        const lifecycle = lifecycleStateSelect.value;",
     "        return data.sessions.filter((session) => {",
-    "          if (tool && session.detail.index.source_tool !== tool) return false;",
+    "          if (tool && session.index.source_tool !== tool) return false;",
     "          if (lifecycle && session.lifecycle_state !== lifecycle) return false;",
     "          if (!needle) return true;",
-    "          const text = [session.detail.index.asd_session_id, session.detail.index.topic, session.detail.index.next_step, session.lifecycle_state, session.detail.summary ? session.detail.summary.topic : ''].join('\\n').toLowerCase();",
+    "          const text = [session.index.asd_session_id, session.index.topic, session.index.next_step, session.lifecycle_state, session.summary_topic || ''].join('\\n').toLowerCase();",
     "          return text.includes(needle);",
     "        });",
     "      }",
@@ -281,7 +345,7 @@ export function renderDashboardHtml(data: DashboardData): string {
     "          return;",
     "        }",
     "        for (const session of sessions) {",
-    "          const record = session.detail.index;",
+    "          const record = session.index;",
     "          const button = document.createElement('button');",
     "          button.type = 'button';",
     "          button.className = 'session-card' + (record.asd_session_id === selectedSessionId ? ' active' : '');",
@@ -297,11 +361,11 @@ export function renderDashboardHtml(data: DashboardData): string {
     "          sessionList.append(button);",
     "        }",
     "      }",
-    "      function renderDetail(session) {",
+    "      function renderDetail(session, detailData) {",
     "        if (!session) { detail.innerHTML = '<p class=\"empty\">No sessions available.</p>'; return; }",
-    "        const record = session.detail.index;",
-    "        const summary = session.detail.summary;",
-    "        const turns = session.detail.reduced_turns;",
+    "        const record = session.index;",
+    "        const summary = detailData ? detailData.summary : null;",
+    "        const turns = detailData ? detailData.reduced_turns : [];",
     "        detail.innerHTML = '<h2>' + escapeHtml(record.topic) + '</h2>' +",
     "          '<div class=\"chips\">' +",
     "          '<span class=\"chip\">' + escapeHtml(record.asd_session_id) + '</span>' +",
