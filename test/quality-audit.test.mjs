@@ -55,7 +55,12 @@ test("quality audit ranks summary defects and deletion readiness", async () => {
         session_id: "noisy-session",
         source_hash: "sha256:noisy",
       }).sourceSession;
-
+      const manualReviewSession = upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "agent-session-distillery",
+        session_id: "manual-review-session",
+        source_hash: "sha256:manual-review",
+      }).sourceSession;
       transitionPhase(database, {
         phaseName: "deletion_candidate",
         phaseState: "completed",
@@ -67,6 +72,12 @@ test("quality audit ranks summary defects and deletion readiness", async () => {
         phaseState: "completed",
         sourceHash: noisySession.source_hash,
         sourceSessionId: noisySession.id,
+      });
+      transitionPhase(database, {
+        phaseName: "deletion_candidate",
+        phaseState: "completed",
+        sourceHash: manualReviewSession.source_hash,
+        sourceSessionId: manualReviewSession.id,
       });
 
       await writeSessionSummary({
@@ -100,6 +111,8 @@ test("quality audit ranks summary defects and deletion readiness", async () => {
             ],
             statement: "Verified completion outcomes are promoted conservatively.",
             title: "Verified completion",
+            trigger: "When running the same workflow in the test fixture project.",
+            evidence_type: "verified",
           },
         ],
         sessionId: goodSession.session_id,
@@ -114,6 +127,18 @@ test("quality audit ranks summary defects and deletion readiness", async () => {
         topic: "Let me inspect the repo first.",
         useful_commands: [],
         what_worked: ["Let me verify this before finishing."],
+      });
+      await writeSessionSummary({
+        ...summaryFixture,
+        files_of_interest: ["src/pipeline/extract.ts"],
+        next_step: "No open next step recorded.",
+        project_learnings: [],
+        session_id: "manual-review-session",
+        topic: "Review the ingestion quality heuristics.",
+        useful_commands: [],
+        what_worked: [
+          "Now regenerate the registry summary + projections from the corrected description, then check whether the provenance edit survived the update.",
+        ],
       });
 
       upsertDeletionCandidate(database, {
@@ -136,19 +161,29 @@ test("quality audit ranks summary defects and deletion readiness", async () => {
         sourceHash: noisySession.source_hash,
         sourceSessionId: noisySession.id,
       });
+      upsertDeletionCandidate(database, {
+        candidateState: "pending_artifacts",
+        currentLifecycleState: "deletion_candidate",
+        projectKey: manualReviewSession.project_key,
+        reason: "no_durable_learnings: No project or user learnings have been written yet.",
+        safeToDelete: false,
+        sessionId: manualReviewSession.session_id,
+        sourceHash: manualReviewSession.source_hash,
+        sourceSessionId: manualReviewSession.id,
+      });
 
       const report = await auditQuality(database);
 
-      assert.equal(report.totals.audited, 2);
+      assert.equal(report.totals.audited, 3);
       assert.equal(report.deletion_readiness.ready, 1);
-      assert.equal(report.deletion_readiness.blocked, 1);
-      assert.equal(report.issue_counts.process_chatter, 1);
-      assert.equal(report.issue_counts.no_useful_commands, 1);
+      assert.equal(report.deletion_readiness.blocked, 2);
+      assert.equal(report.issue_counts.process_chatter, 2);
+      assert.equal(report.issue_counts.no_useful_commands, 2);
       assert.equal(report.issue_counts.no_files_of_interest, 1);
-      assert.equal(report.issue_counts.no_project_learnings, 1);
-      assert.equal(report.issue_counts.blocked_deletion, 1);
+      assert.equal(report.issue_counts.no_project_learnings, 2);
+      assert.equal(report.issue_counts.blocked_deletion, 2);
       assert.equal(report.recommendations[0].issue, "blocked_deletion");
-      assert.equal(report.recommendations[0].affected_sessions, 1);
+      assert.equal(report.recommendations[0].affected_sessions, 2);
       assert.deepEqual(
         report.sessions.find((session) => session.session_id === "good-session")
           .knowledge_artifacts,
@@ -158,6 +193,164 @@ test("quality audit ranks summary defects and deletion readiness", async () => {
         },
       );
       assert.equal(report.worst_sessions[0].session_id, "noisy-session");
+      assert.ok(
+        report.sessions
+          .find((session) => session.session_id === "manual-review-session")
+          .issues.includes("process_chatter"),
+      );
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("quality audit distinguishes pure process chatter from durable signal with process wording", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+
+    try {
+      const pureChatterSession = upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "agent-session-distillery",
+        session_id: "pure-chatter-session",
+        source_hash: "sha256:pure-chatter",
+      }).sourceSession;
+      const durableSignalSession = upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "agent-session-distillery",
+        session_id: "durable-signal-session",
+        source_hash: "sha256:durable-signal",
+      }).sourceSession;
+
+      transitionPhase(database, {
+        phaseName: "deletion_candidate",
+        phaseState: "completed",
+        sourceHash: pureChatterSession.source_hash,
+        sourceSessionId: pureChatterSession.id,
+      });
+      transitionPhase(database, {
+        phaseName: "deletion_candidate",
+        phaseState: "completed",
+        sourceHash: durableSignalSession.source_hash,
+        sourceSessionId: durableSignalSession.id,
+      });
+
+      await writeSessionSummary({
+        ...summaryFixture,
+        files_of_interest: [],
+        next_step: "No explicit next step recorded.",
+        project_learnings: [],
+        session_id: "pure-chatter-session",
+        topic: "Let me inspect the repo first.",
+        useful_commands: [],
+        what_worked: ["Let me verify this before finishing."],
+      });
+      await writeSessionSummary({
+        ...summaryFixture,
+        files_of_interest: ["src/pipeline/summarize.ts"],
+        next_step: "No open next step recorded.",
+        project_learnings: ["Verified completion outcomes are promoted conservatively."],
+        session_id: "durable-signal-session",
+        topic: "Fix toast infrastructure for desktop-polish.",
+        useful_commands: ["npm test"],
+        what_worked: [
+          "Let me check what toast infrastructure is available: fixed the desktop-polish wiring and verified with `npm test`.",
+        ],
+      });
+
+      const report = await auditQuality(database);
+
+      const pureChatter = report.sessions.find(
+        (session) => session.session_id === "pure-chatter-session",
+      );
+      const durableSignal = report.sessions.find(
+        (session) => session.session_id === "durable-signal-session",
+      );
+
+      assert.ok(pureChatter.issues.includes("process_chatter"));
+      assert.ok(!durableSignal.issues.includes("process_chatter"));
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("quality audit does not flag ready sessions with directory-level file evidence", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+
+    try {
+      const session = upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "demo",
+        session_id: "directory-file-signal-session",
+        source_hash: "sha256:directory-signal",
+      }).sourceSession;
+
+      transitionPhase(database, {
+        phaseName: "deletion_candidate",
+        phaseState: "completed",
+        sourceHash: session.source_hash,
+        sourceSessionId: session.id,
+      });
+
+      await writeSessionSummary({
+        ...summaryFixture,
+        files_of_interest: ["src"],
+        next_step: "No open next step recorded.",
+        project_learnings: ["Keep the demo's test suite focused on src."],
+        session_id: session.session_id,
+        topic: "Use npm test to verify the demo before shipping.",
+        useful_commands: ["npm test"],
+        what_was_decided: ["Keep the demo's test suite focused on src."],
+      });
+
+      await writeKnowledgeArtifacts({
+        projectLearnings: [
+          {
+            confidence: "medium",
+            evidence: ["Keep the demo's test suite focused on src."],
+            kind: "decision",
+            learning_id: `${session.session_id}:project:decision:1`,
+            promotion_basis: "Test fixture",
+            scope: "project",
+            scope_key: session.project_key,
+            source_refs: [
+              {
+                event_id: null,
+                line: null,
+                session_id: session.session_id,
+                source_hash: session.source_hash,
+                source_path: session.source_path,
+                turn_id: null,
+              },
+            ],
+            statement: "Keep the demo's test suite focused on src.",
+            title: "Directory signal",
+          },
+        ],
+        sessionId: session.session_id,
+        userLearnings: [],
+      });
+
+      upsertDeletionCandidate(database, {
+        candidateState: "ready",
+        currentLifecycleState: "deletion_candidate",
+        projectKey: session.project_key,
+        reason: "All required retention artifacts are present.",
+        safeToDelete: true,
+        sessionId: session.session_id,
+        sourceHash: session.source_hash,
+        sourceSessionId: session.id,
+      });
+
+      const report = await auditQuality(database);
+      const auditedSession = report.sessions.find(
+        (entry) => entry.session_id === session.session_id,
+      );
+
+      assert.ok(auditedSession);
+      assert.ok(!auditedSession.issues.includes("no_files_of_interest"));
     } finally {
       database.close();
     }
@@ -282,6 +475,8 @@ test("quality audit reports project-learning distribution statistics", async () 
             ],
             statement: `Distribution learning ${index}.${learningIndex}`,
             title: `Distribution learning ${index}.${learningIndex}`,
+            trigger: `When running the same workflow in ${sourceSession.project_key}.`,
+            evidence_type: "inferred",
           })),
           sessionId,
           userLearnings: [],

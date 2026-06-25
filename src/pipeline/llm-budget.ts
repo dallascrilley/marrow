@@ -25,7 +25,11 @@ type BudgetState = {
   uses: string[];
 };
 
-const defaultMaxPer = "5/24h";
+// Courtesy throttle on LLM review-call count. The financial guardrail is the
+// USD ceiling (ASD_LLM_MAX_USD); this count cap only smooths bursts, so it is
+// set generously to let the review backlog drain at the cost pace rather than
+// an artificial call count. Override via ASD_LLM_MAX_PER.
+const defaultMaxPer = "50/24h";
 
 export function parseMaxPerWindow(spec: string): MaxPerWindow {
   const match = /^(\d+)\/(\d+)(h|m)$/.exec(spec.trim());

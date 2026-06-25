@@ -1,20 +1,31 @@
 import type { Event, Learning, SourceSession, Summary, Turn } from "../models/canonical.js";
 import { summarySchema } from "../models/canonical.js";
-import { generateTopicWithOpenRouter } from "./llm-learning-review.js";
+import { hasProcessChatter, hasWrapperTags } from "./artifact-heuristics.js";
+import { extractPathsFromText, normalizeFilePath } from "./file-paths.js";
+import {
+  generateTopicWithOpenRouter,
+  type LlmCallUsage,
+  type LlmUsageSink,
+} from "./llm-learning-review.js";
 import {
   extractSubstantivePrompt,
   firstSubstantivePromptFromTurns,
   isHarnessOrBootLine,
   isNoSignalPrompt,
   isSkillWrapperOnlyPrompt,
+  looksLikeEmbeddedAgentPrompt,
   looksLikeSkillHarnessLeak,
   sanitizeHarnessLeakText,
+  sanitizeLearningStatement,
 } from "./prompt-sanitize.js";
+
+export type { LlmUsageSink };
 
 type TopicSource = "deterministic" | "llm";
 
 export type LlmTopicGenerator = (input: {
   deterministicTopic: string;
+  onUsage?: LlmUsageSink;
   sourceSession: SourceSession;
   turns: readonly Turn[];
 }) => Promise<string>;
@@ -31,6 +42,7 @@ export type SummarizeSessionInput = {
 export type OptionalLlmTopicOptions = {
   generateTopic?: LlmTopicGenerator | undefined;
   llmTopic?: boolean | undefined;
+  onUsage?: LlmUsageSink | undefined;
 };
 
 export function summarizeSession(input: SummarizeSessionInput): Summary {
@@ -61,10 +73,16 @@ export async function summarizeSessionWithOptionalLlmTopic(
   }
 
   const generateTopic = options.generateTopic ?? generateTopicWithOpenRouter;
+  const userOnUsage = options.onUsage;
+  const onUsage =
+    userOnUsage === undefined
+      ? undefined
+      : (usage: LlmCallUsage) => userOnUsage(usage, input.sourceSession.session_id);
   try {
     const llmTopic = normalizeGeneratedTopic(
       await generateTopic({
         deterministicTopic,
+        ...(onUsage === undefined ? {} : { onUsage }),
         sourceSession: input.sourceSession,
         turns: input.turns,
       }),
@@ -92,14 +110,26 @@ function summarizeSessionWithTopic(
   const decisions = uniquePreservingOrder(
     input.events
       .filter((event) => event.type === "decision")
-      .map((event) => normalizeSummaryLine(event.summary)),
+      .map((event) => normalizeSummaryLine(event.summary))
+      .filter((line) => isOperatorReadySummaryLine(line)),
   );
   const failures = uniquePreservingOrder(
     input.events
       .filter((event) => event.type === "failure")
-      .map((event) => normalizeSummaryLine(event.summary)),
+      .map((event) => normalizeSummaryLine(event.summary))
+      .filter((line) => isOperatorReadySummaryLine(line)),
   );
   const fixes = summarizeWorkedOutcomes(input.events);
+  const fallbackWorkflowOutcomes =
+    fixes.length === 0
+      ? uniquePreservingOrder(
+          (input.projectLearnings ?? [])
+            .filter((learning) => learning.kind === "workflow")
+            .map((learning) => normalizeSummaryLine(learning.statement))
+            .filter((line) => isOperatorReadySummaryLine(line)),
+        )
+      : [];
+  const whatWorked = uniquePreservingOrder([...fixes, ...fallbackWorkflowOutcomes]);
   const nextStep = selectNextStep(input.events);
   const usefulCommands = uniquePreservingOrder(
     [
@@ -113,8 +143,10 @@ function summarizeSessionWithTopic(
     [
       ...input.turns.flatMap((turn) => turn.files_touched),
       ...input.events.flatMap((event) => collectEventFiles(event)),
+      ...input.events.flatMap((event) => extractPathsFromText(event.summary)),
     ]
-      .filter((filePath) => filePath.trim().length > 0)
+      .map((filePath) => normalizeFilePath(filePath))
+      .filter((filePath): filePath is string => filePath !== null)
       .filter((filePath) => isUsefulFilePath(filePath)),
   ).slice(0, 6);
   const summary = {
@@ -122,18 +154,22 @@ function summarizeSessionWithTopic(
     files_of_interest: filesOfInterest,
     next_step: normalizeSummaryLine(nextStep),
     project_learnings: uniquePreservingOrder(
-      (input.projectLearnings ?? []).map((learning) => learning.statement),
+      (input.projectLearnings ?? [])
+        .map((learning) => normalizeSummaryLine(learning.statement))
+        .filter((line) => isOperatorReadySummaryLine(line)),
     ),
     session_id: input.sourceSession.session_id,
     topic: topicInput.topic,
     topic_source: topicInput.topicSource,
     useful_commands: usefulCommands,
     user_learnings: uniquePreservingOrder(
-      (input.userLearnings ?? []).map((learning) => learning.statement),
+      (input.userLearnings ?? [])
+        .map((learning) => normalizeSummaryLine(learning.statement))
+        .filter((line) => isOperatorReadySummaryLine(line)),
     ),
     what_failed: failures,
     what_was_decided: decisions,
-    what_worked: fixes,
+    what_worked: whatWorked,
   } satisfies Summary;
 
   return summarySchema.parse(summary);
@@ -146,6 +182,10 @@ export function isLowSignalTopic(topic: string): boolean {
   }
 
   if (isHarnessOrBootLine(normalized) || isHarnessTopicLine(normalized)) {
+    return true;
+  }
+
+  if (looksLikeEmbeddedAgentPrompt(normalized)) {
     return true;
   }
 
@@ -169,6 +209,10 @@ export function isLowSignalTopic(topic: string): boolean {
     return true;
   }
 
+  if (looksLikeAgentLauncherInvocation(normalized)) {
+    return true;
+  }
+
   if (isTooShortOrGeneric(normalized)) {
     return true;
   }
@@ -189,7 +233,15 @@ export function isLowSignalTopic(topic: string): boolean {
     return true;
   }
 
-  return false;
+  if (looksLikeBacktickFragmentTopic(normalized)) {
+    return true;
+  }
+
+  return (
+    looksLikeWrapperPromptTopic(topic) ||
+    looksLikeContextDumpTopic(topic) ||
+    looksLikeTypoOnlyFixTopic(topic)
+  );
 }
 
 export function isWrapperLeakTopic(topic: string): boolean {
@@ -199,17 +251,90 @@ export function isWrapperLeakTopic(topic: string): boolean {
   }
 
   return (
+    looksLikeEmbeddedAgentPrompt(normalized) ||
     looksLikeBareSkillSlugTopic(normalized) ||
     looksLikeSkillHarnessLeak(normalized) ||
     looksLikeMarkdownSkillHeaderTopic(normalized) ||
     looksLikeSlashCommandTopic(normalized) ||
+    looksLikeBacktickFragmentTopic(normalized) ||
+    looksLikeWrapperPromptTopic(topic) ||
+    looksLikeContextDumpTopic(topic) ||
     /^Session summary for\b/i.test(normalized) ||
     /^Base directory for this skill\b/i.test(normalized)
   );
 }
 
+function looksLikeWrapperPromptTopic(topic: string): boolean {
+  const trimmed = topic.trim();
+  const prefixes = [
+    "User initiated a review task",
+    "Review the code changes against the base branch",
+    "see context:",
+    "resolve these:",
+    "Here's the full review output",
+    "Full review output",
+    "Tether phone steering reply received",
+    "Handled prompt:",
+    // Operator control-loop, continuation, and persona-header prompts. These recur
+    // across sessions (chief-of-staff heartbeats, agent-driver continuations) and
+    // carry no session-specific signal, so the deterministic topic deriver should
+    // not surface them.
+    "Heartbeat. Run one bounded operating loop",
+    "Continue with the next best set of actions",
+    "Role:",
+  ];
+
+  return prefixes.some((prefix) => trimmed.startsWith(prefix));
+}
+
+function looksLikeContextDumpTopic(topic: string): boolean {
+  const normalized = topic.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 90) {
+    return false;
+  }
+
+  const keywords = [
+    "AGENTS.md",
+    "SKILL.md",
+    "instructions",
+    "review output",
+    "context",
+    "base branch",
+    "findings",
+    "severity",
+    "json",
+    "tool",
+    "session",
+    "transcript",
+  ];
+  const matchCount = keywords.filter((keyword) =>
+    normalized.toLowerCase().includes(keyword.toLowerCase()),
+  ).length;
+
+  return matchCount >= 2;
+}
+
+function looksLikeTypoOnlyFixTopic(topic: string): boolean {
+  const normalized = topic.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!/^fix\b/i.test(normalized) && !/\bdebug\b/i.test(normalized)) {
+    return false;
+  }
+
+  if (/\bcausinf\b|\bhng\b/i.test(normalized)) {
+    return true;
+  }
+
+  const consonantOnlyWords = normalized.match(/\b[^aeiou\s\W]{4,}\b/g) ?? [];
+  return consonantOnlyWords.length >= 2;
+}
+
 function looksLikeMarkdownSkillHeaderTopic(topic: string): boolean {
-  return /^#\s+[A-Za-z][^\n`]{0,120}$/.test(topic.trim());
+  return /^#{1,6}\s+[A-Za-z][^\n`]{0,120}$/.test(topic.trim());
+}
+
+function looksLikeBacktickFragmentTopic(topic: string): boolean {
+  const trimmed = topic.trim();
+  return /^`[^`]+`$/.test(trimmed);
 }
 
 function looksLikeSlashCommandTopic(topic: string): boolean {
@@ -244,16 +369,17 @@ function isPositiveVerification(event: Event): boolean {
     /verified|confirmed|tests? pass(?:ed)?|build succeeded|all checks passed/i.test(event.summary)
   );
 }
-
 function summarizeWorkedOutcomes(events: readonly Event[]): string[] {
   const fixes = events
     .filter((event) => event.type === "fix")
-    .map((event) => summarizeOutcome(event));
+    .map((event) => summarizeOutcome(event))
+    .filter((line) => isOperatorReadySummaryLine(line));
   const completionOutcomes = events
     .filter((event) => event.type === "verification")
     .map((event) => summarizeCompletionOutcome(stripEventPrefix(event.summary)))
     .filter((outcome): outcome is string => outcome !== null)
-    .map((outcome) => normalizeSummaryLine(outcome));
+    .map((outcome) => normalizeSummaryLine(outcome))
+    .filter((line) => isOperatorReadySummaryLine(line));
 
   if (completionOutcomes.length > 0) {
     return uniquePreservingOrder([...fixes, ...completionOutcomes]);
@@ -262,7 +388,8 @@ function summarizeWorkedOutcomes(events: readonly Event[]): string[] {
   return uniquePreservingOrder(
     events
       .filter((event) => event.type === "fix" || isPositiveVerification(event))
-      .map((event) => summarizeOutcome(event)),
+      .map((event) => summarizeOutcome(event))
+      .filter((line) => isOperatorReadySummaryLine(line)),
   );
 }
 
@@ -338,9 +465,12 @@ function collectEventCommands(event: Event): string[] {
 }
 
 function collectEventFiles(event: Event): string[] {
-  return readPayloadStringArray(event, "command_strings").filter((value) =>
-    looksLikeSourcePath(value),
-  );
+  return [
+    ...readPayloadStringArray(event, "command_strings"),
+    ...readPayloadStringArray(event, "files_touched"),
+    ...readPayloadStringArray(event, "file_paths"),
+    ...readPayloadStringArray(event, "paths"),
+  ];
 }
 
 function stripEventPrefix(value: string): string {
@@ -421,9 +551,14 @@ function normalizeGeneratedTopic(topic: string): string {
 }
 
 function normalizeSummaryLine(value: string): string {
-  const sanitized = sanitizeHarnessLeakText(value);
+  const sanitized = sanitizeLearningStatement(sanitizeHarnessLeakText(value));
   const normalized = (sanitized.length > 0 ? sanitized : value).replace(/\s+/g, " ").trim();
   return truncateInline(normalized, 180);
+}
+
+function isOperatorReadySummaryLine(value: string): boolean {
+  const normalized = normalizeSummaryLine(value);
+  return normalized.length > 0 && !hasProcessChatter(normalized) && !hasWrapperTags(normalized);
 }
 
 function selectTopicLine(prompt: string): string {
@@ -451,6 +586,9 @@ function isHarnessTopicLine(line: string): boolean {
       line,
     ) ||
     /^turn_aborted$/i.test(line) ||
+    /^<!--/i.test(line) ||
+    /^A session-scoped \w+ hook is now active\b/i.test(line) ||
+    /^Base directory for this skill\b/i.test(line) ||
     /^Caveat:/i.test(line) ||
     /^\[Request interrupted by user\b/i.test(line) ||
     /^\[Image:[^\]]+\]$/i.test(line) ||
@@ -502,6 +640,13 @@ function looksLikeBareCommand(topic: string): boolean {
   return /^(?:cd|ls|cat|sed|awk|rg|grep|git|gh|npm|pnpm|bun|node|python3?|uv|just|make|cargo|go|swift|xcodebuild|docker|curl)\b(?:\s|$)/i.test(
     topic,
   );
+}
+
+function looksLikeAgentLauncherInvocation(topic: string): boolean {
+  // A bare agent-CLI launch with flags (e.g. "pi --no-extensions --no-skills ...")
+  // is the harness starting an agent, not a session topic. Require a flag so real
+  // topics like "claude code hooks not firing" are not swept up.
+  return /^(?:pi|codex|claude|cursor|kimi)\s+--/i.test(topic.trim());
 }
 
 function looksLikeBareSkillSlugTopic(topic: string): boolean {
@@ -575,11 +720,14 @@ function isUsefulCommand(command: string): boolean {
 function isUsefulFilePath(filePath: string): boolean {
   const normalized = filePath.trim();
 
-  if (/\/(?:\.codex\/worktrees|Code)\/[^/]+\/?$/.test(normalized)) {
+  if (/\/\.(?:codex)\/worktrees\/|\/Code\/[^/]+\/?$/.test(normalized)) {
     return false;
   }
 
-  return looksLikeSourcePath(normalized);
+  return (
+    looksLikeSourcePath(normalized) ||
+    /^(?:src|app|lib|docs|test|tests|scripts)(?:\/[A-Za-z0-9_.-]+)*$/.test(normalized)
+  );
 }
 
 function looksLikeSourcePath(value: string): boolean {

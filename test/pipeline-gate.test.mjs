@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { createLedger } from "../dist/db/ledger.js";
 import { learningFixture } from "../dist/models/canonical.js";
@@ -10,6 +12,20 @@ import { countPendingLlmReview } from "../dist/pipeline/pipeline-gate.js";
 import { getProjectKnowledgeSessionPath } from "../dist/writers/knowledge-writer.js";
 
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const testDir = dirname(fileURLToPath(import.meta.url));
+const projectRoot = dirname(testDir);
+const cliPath = join(projectRoot, "dist", "cli.js");
+
+function runCli(args, env = {}) {
+  return spawnSync(process.execPath, [cliPath, ...args], {
+    cwd: projectRoot,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ...env,
+    },
+  });
+}
 
 async function withRuntimeRoot(run) {
   const sandboxBase = await mkdtemp(join(tmpdir(), "asd-pipeline-gate-"));
@@ -112,4 +128,23 @@ test("assessPipelineGate skip-ingest avoids adapter discovery scans", async () =
       database.close();
     }
   });
+});
+
+test("pipeline gate --max-per overrides the default and reports the override", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-pipeline-gate-cli-"));
+  const runtimeRoot = join(sandbox, "runtime-root");
+
+  try {
+    const result = runCli(["pipeline", "gate", "--max-per", "10/24h", "--skip-ingest"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.llm_budget.max_per_window, "10/24h");
+    assert.equal(report.llm_budget.allowed, true);
+    assert.equal(report.usd_budget.max_usd_per_window, "1/24h");
+  } finally {
+    await rm(sandbox, { force: true, recursive: true });
+  }
 });

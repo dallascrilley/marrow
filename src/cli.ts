@@ -10,6 +10,7 @@ import { executeExportIndex } from "./commands/export-index.js";
 import { executeHooksInstall } from "./commands/hooks-install.js";
 import { executeIngestBackfill } from "./commands/ingest-backfill.js";
 import { executeIngestSync } from "./commands/ingest-sync.js";
+import { executeMcp } from "./commands/mcp.js";
 import { executeMemoryExportWiki } from "./commands/memory-export-wiki.js";
 import { executeMemoryPushWiki } from "./commands/memory-push-wiki.js";
 import { executeMigrateProjectIds } from "./commands/migrate-project-ids.js";
@@ -99,7 +100,7 @@ const commandTree: Record<string, CommandDefinition> = {
       },
       resummarize: {
         description:
-          "Regenerate summary topics for archived sessions without mutating manifests; optional --low-signal-only, --llm-topic, --max-per, --export-index, --dry-run.",
+          "Regenerate summary topics for archived sessions without mutating manifests; optional --low-signal-only, --over-extracted-only, --llm-topic, --max-per, --export-index, --dry-run.",
         execute: async (context) => withLedger(context, executeQualityResummarize),
       },
     },
@@ -200,6 +201,10 @@ const commandTree: Record<string, CommandDefinition> = {
         execute: async (context) => withLedger(context, executePipelineGate),
       },
     },
+  },
+  mcp: {
+    description: "Query distilled instincts through the capped ADR-0005 MCP surface.",
+    execute: async (context) => executeMcp(context),
   },
 };
 

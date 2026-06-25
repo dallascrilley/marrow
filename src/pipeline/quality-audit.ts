@@ -10,7 +10,15 @@ import {
   getUserKnowledgeSessionPath,
 } from "../writers/knowledge-writer.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
+import {
+  hasProcessChatter,
+  hasUsefulSummarySignal,
+  hasWrapperTags,
+  isLowSignalSummary,
+  looksLikeCompletedOutcome,
+} from "./artifact-heuristics.js";
 import { defaultUserScopeKey } from "./extract.js";
+import { countProjectLearnings } from "./learning-count.js";
 
 export type QualityIssueCode =
   | "summary_missing"
@@ -316,7 +324,7 @@ function collectSessionIssues(
     issues.push("process_chatter");
   }
 
-  if (/<(?:attached_files|code_selection|plugin_info|skill)\b/i.test(summaryText)) {
+  if (hasWrapperTags(summaryText)) {
     issues.push("wrapper_tags");
   }
 
@@ -349,35 +357,7 @@ async function readKnowledgeArtifactState(sourceSession: SourceSessionRow): Prom
     fileExists(getUserKnowledgeSessionPath(defaultUserScopeKey, sourceSession.session_id)),
   ]);
 
-  return {
-    project,
-    user,
-  };
-}
-
-function isLowSignalSummary(summary: Summary): boolean {
-  return (
-    !hasUsefulSummarySignal(summary) && summary.next_step === "No explicit next step recorded."
-  );
-}
-
-function hasUsefulSummarySignal(summary: Summary): boolean {
-  return (
-    summary.what_worked.length > 0 ||
-    summary.what_failed.length > 0 ||
-    summary.what_was_decided.length > 0 ||
-    summary.useful_commands.length > 0 ||
-    summary.files_of_interest.length > 0 ||
-    summary.project_learnings.length > 0 ||
-    summary.user_learnings.length > 0
-  );
-}
-
-function looksLikeCompletedOutcome(value: string): boolean {
-  return (
-    /\b(?:done|completed|implemented|fixed|resolved|merged|pushed)\b/i.test(value) &&
-    /\b(?:verified|tests? pass(?:ed)?|all checks passed|0 failures)\b/i.test(value)
-  );
+  return { project, user };
 }
 
 function hasProcessChatter(summaryText: string): boolean {
@@ -431,22 +411,6 @@ function createIssueCountMap(): Record<QualityIssueCode, number> {
     summary_missing: 0,
     wrapper_tags: 0,
   };
-}
-
-async function countProjectLearnings(sourceSession: SourceSessionRow): Promise<number> {
-  try {
-    const contents = await readFile(
-      getProjectKnowledgeSessionPath(sourceSession.project_key, sourceSession.session_id),
-      "utf8",
-    );
-    return contents.split(/\r?\n/).filter((line) => line.trim().length > 0).length;
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return 0;
-    }
-
-    throw error;
-  }
 }
 
 function buildLearningDistribution(sessions: readonly QualityAuditSession[]): LearningDistribution {
