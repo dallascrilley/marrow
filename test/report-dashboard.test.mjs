@@ -13,9 +13,23 @@ function makeSession(id, { turnBody, summaryTopic }) {
         topic_source: "deterministic",
         next_step: `next ${id}`,
         source_tool: "claude-code",
-        updated_at: `2026-06-2${id.length}T00:00:00.000Z`,
+        // Constant timestamp; buildDashboardData breaks ties on asd_session_id,
+        // so order stays deterministic without per-id date juggling.
+        updated_at: "2026-06-20T00:00:00.000Z",
       },
-      summary: { topic: summaryTopic, next_step: "n", what_worked: [] },
+      summary: {
+        topic: summaryTopic,
+        topic_source: "deterministic",
+        next_step: "n",
+        deletion_readiness: "retain",
+        what_worked: [],
+        what_failed: [],
+        what_was_decided: [],
+        useful_commands: [],
+        files_of_interest: [],
+        project_learnings: [],
+        user_learnings: [],
+      },
       reduced_turns: [
         {
           index: 0,

@@ -75,7 +75,9 @@ export function buildDashboardData(
 }
 
 function escapeScriptJson(value: unknown): string {
-  // `<` is the only character that can terminate a <script> block early.
+  // Escape `<` so `</script` and `<!--` cannot appear in the JSON data — the
+  // only sequences the HTML5 parser acts on inside a <script> block. Both
+  // start with `<`, so escaping it covers both; JSON.parse restores it on read.
   return JSON.stringify(value).replaceAll("<", "\\u003c");
 }
 
@@ -228,7 +230,9 @@ export function renderDashboardHtml(data: DashboardData): string {
     "        if (id === null || id === undefined) return { summary: null, reduced_turns: [] };",
     "        if (detailCache.has(id)) return detailCache.get(id);",
     "        const node = detailNodes.get(id);",
-    "        const parsed = node ? JSON.parse(node.textContent) : { summary: null, reduced_turns: [] };",
+    "        let parsed;",
+    "        try { parsed = node ? JSON.parse(node.textContent) : { summary: null, reduced_turns: [] }; }",
+    "        catch { parsed = { summary: null, reduced_turns: [] }; }",
     "        detailCache.set(id, parsed);",
     "        return parsed;",
     "      }",
