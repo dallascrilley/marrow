@@ -19,11 +19,13 @@ import {
 } from "./artifact-heuristics.js";
 import { defaultUserScopeKey } from "./extract.js";
 import { countProjectLearnings } from "./learning-count.js";
+import { isLowSignalTopic } from "./summarize.js";
 
 export type QualityIssueCode =
   | "summary_missing"
   | "summary_invalid"
   | "summary_low_signal"
+  | "low_signal_topic"
   | "completion_as_next_step"
   | "process_chatter"
   | "wrapper_tags"
@@ -227,6 +229,8 @@ function recommendationForIssue(issue: QualityIssueCode): string {
       return "Improve file extraction/ranking from event payloads, source refs, and project-relative paths.";
     case "summary_low_signal":
       return "Improve summary synthesis for short sessions or classify them as intentionally low-signal.";
+    case "low_signal_topic":
+      return "Improve topic derivation: reject chatter-shaped or low-signal prompts, or LLM-rescue the topic.";
     case "process_chatter":
       return "Suppress assistant process chatter before summary and learning promotion.";
     case "blocked_deletion":
@@ -302,8 +306,10 @@ function collectSessionIssues(
     return issues;
   }
 
-  const summaryText = [
-    summary.topic,
+  // The topic is the operator's own prompt wording; its quality is a distinct
+  // dimension (low_signal_topic) from assistant process-chatter that leaked into
+  // the durable summary body. Keep them separate so each metric stays accurate.
+  const bodyText = [
     ...summary.what_worked,
     ...summary.what_failed,
     ...summary.what_was_decided,
@@ -316,15 +322,19 @@ function collectSessionIssues(
     issues.push("summary_low_signal");
   }
 
+  if (isLowSignalTopic(summary.topic) || hasProcessChatter(summary.topic)) {
+    issues.push("low_signal_topic");
+  }
+
   if (looksLikeCompletedOutcome(summary.next_step)) {
     issues.push("completion_as_next_step");
   }
 
-  if (hasProcessChatter(summaryText)) {
+  if (hasProcessChatter(bodyText)) {
     issues.push("process_chatter");
   }
 
-  if (hasWrapperTags(summaryText)) {
+  if (hasWrapperTags([summary.topic, bodyText].join("\n"))) {
     issues.push("wrapper_tags");
   }
 
@@ -364,6 +374,7 @@ function createIssueCountMap(): Record<QualityIssueCode, number> {
   return {
     blocked_deletion: 0,
     completion_as_next_step: 0,
+    low_signal_topic: 0,
     no_files_of_interest: 0,
     no_project_learnings: 0,
     no_useful_commands: 0,

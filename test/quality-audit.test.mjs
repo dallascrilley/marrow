@@ -627,3 +627,57 @@ test("quality audit does not flag discovered sessions as summary_missing", async
     }
   });
 });
+
+test("low_signal_topic and process_chatter are distinct audit dimensions", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+
+    try {
+      upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "agent-session-distillery",
+        session_id: "topic-chatter",
+        source_hash: "sha256:topic-chatter",
+      });
+      upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "agent-session-distillery",
+        session_id: "body-chatter",
+        source_hash: "sha256:body-chatter",
+      });
+
+      // Chatter-shaped topic, clean body.
+      await writeSessionSummary({
+        ...summaryFixture,
+        session_id: "topic-chatter",
+        topic: "I'm getting the following error in my code:",
+        what_was_decided: ["Use worker threads instead of forks."],
+        what_worked: ["Repaired the retention regression."],
+      });
+      // Clean topic, chatter in the body.
+      await writeSessionSummary({
+        ...summaryFixture,
+        session_id: "body-chatter",
+        topic: "Retention regression fix",
+        what_was_decided: ["Let me check the logs now."],
+        what_worked: ["Repaired the retention regression."],
+      });
+
+      const report = await auditQuality(database);
+      const topicSession = report.sessions.find(
+        (session) => session.session_id === "topic-chatter",
+      );
+      const bodySession = report.sessions.find((session) => session.session_id === "body-chatter");
+
+      // Topic chatter is a topic-quality issue, NOT body process_chatter.
+      assert.ok(topicSession.issues.includes("low_signal_topic"));
+      assert.ok(!topicSession.issues.includes("process_chatter"));
+
+      // Body chatter is process_chatter; its clean topic is not flagged.
+      assert.ok(bodySession.issues.includes("process_chatter"));
+      assert.ok(!bodySession.issues.includes("low_signal_topic"));
+    } finally {
+      database.close();
+    }
+  });
+});
