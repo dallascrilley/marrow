@@ -132,10 +132,6 @@ async function loadScopedInstincts(projectId: string, scope: Scope[]): Promise<I
     }
     result.push(...(await loadAllInstincts(projectId)).values());
   }
-  if (scopes.has("global")) {
-    // Global instinct persistence is not wired yet; keep the contract without
-    // fabricating data.
-  }
   return dedupeInstincts(result);
 }
 
