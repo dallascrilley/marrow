@@ -237,6 +237,14 @@ export function isLowSignalTopic(topic: string): boolean {
     return true;
   }
 
+  if (looksLikeQuotedConfigFragmentTopic(normalized)) {
+    return true;
+  }
+
+  if (looksLikeStackTraceFragmentTopic(normalized)) {
+    return true;
+  }
+
   return (
     looksLikeWrapperPromptTopic(topic) ||
     looksLikeContextDumpTopic(topic) ||
@@ -257,6 +265,8 @@ export function isWrapperLeakTopic(topic: string): boolean {
     looksLikeMarkdownSkillHeaderTopic(normalized) ||
     looksLikeSlashCommandTopic(normalized) ||
     looksLikeBacktickFragmentTopic(normalized) ||
+    looksLikeQuotedConfigFragmentTopic(normalized) ||
+    looksLikeStackTraceFragmentTopic(normalized) ||
     looksLikeWrapperPromptTopic(topic) ||
     looksLikeContextDumpTopic(topic) ||
     /^Session summary for\b/i.test(normalized) ||
@@ -329,7 +339,11 @@ function looksLikeTypoOnlyFixTopic(topic: string): boolean {
 }
 
 function looksLikeMarkdownSkillHeaderTopic(topic: string): boolean {
-  return /^#{1,6}\s+[A-Za-z][^\n`]{0,120}$/.test(topic.trim());
+  const normalized = topic.trim();
+  return (
+    /^#{1,6}\s+[A-Za-z][^\n`]{0,120}$/.test(normalized) ||
+    /^#{1,6}\s+User Input\b/i.test(normalized)
+  );
 }
 
 function looksLikeBacktickFragmentTopic(topic: string): boolean {
@@ -338,15 +352,51 @@ function looksLikeBacktickFragmentTopic(topic: string): boolean {
 }
 
 function looksLikeSlashCommandTopic(topic: string): boolean {
-  return /^\$[a-z][a-z0-9-]*(?:\s|$)/i.test(topic.trim());
+  const normalized = topic.trim();
+  const match = /^(?:\/|\$)[a-z][a-z0-9-]*(?:\s+(.+))?$/i.exec(normalized);
+  if (match === null) {
+    return false;
+  }
+
+  const remainder = match[1]?.trim() ?? "";
+  if (remainder.length === 0) {
+    return true;
+  }
+
+  return false;
+}
+
+function looksLikeQuotedConfigFragmentTopic(topic: string): boolean {
+  const trimmed = topic.trim();
+  return (
+    /^"[A-Za-z0-9_.-]+"\s*:\s*/.test(trimmed) ||
+    /^"resource"\s*:\s*"(?:~\/|\/|[A-Za-z]:[\\/])/.test(trimmed)
+  );
+}
+
+function looksLikeStackTraceFragmentTopic(topic: string): boolean {
+  const normalized = topic.replace(/\s+/g, " ").trim();
+  return (
+    /^line \d+, in\b/i.test(normalized) ||
+    /^file "(?:~\/|\/|[A-Za-z]:[\\/]).*", line \d+\b/i.test(normalized)
+  );
 }
 
 function deriveTopic(sourceSession: SourceSession, turns: readonly Turn[]): string {
+  const assistantFallback = deriveAssistantSummaryTopic(turns);
   const substantive = firstSubstantivePromptFromTurns(turns);
 
   if (substantive !== null && substantive.length > 0) {
-    const topicLine = selectTopicLine(substantive);
-    return truncateInline(topicLine, 120);
+    const topicLine = truncateInline(selectTopicLine(substantive), 120);
+    if (!isLowSignalTopic(topicLine)) {
+      return topicLine;
+    }
+
+    if (assistantFallback !== null && shouldUseAssistantSummaryFallback(topicLine)) {
+      return assistantFallback;
+    }
+
+    return topicLine;
   }
 
   for (const turn of turns) {
@@ -356,11 +406,70 @@ function deriveTopic(sourceSession: SourceSession, turns: readonly Turn[]): stri
 
     const fallback = extractSubstantivePrompt(turn.user_prompt);
     if (fallback !== null && fallback.length > 0 && !isNoSignalPrompt(fallback)) {
-      return truncateInline(selectTopicLine(fallback), 120);
+      const topicLine = truncateInline(selectTopicLine(fallback), 120);
+      if (!isLowSignalTopic(topicLine)) {
+        return topicLine;
+      }
+
+      if (assistantFallback !== null && shouldUseAssistantSummaryFallback(topicLine)) {
+        return assistantFallback;
+      }
+
+      return topicLine;
     }
   }
 
+  if (assistantFallback !== null) {
+    return assistantFallback;
+  }
+
   return `Session summary for ${sourceSession.project_key}`;
+}
+
+function shouldUseAssistantSummaryFallback(topicLine: string): boolean {
+  return looksLikeSlashCommandTopic(topicLine);
+}
+
+function deriveAssistantSummaryTopic(turns: readonly Turn[]): string | null {
+  for (const turn of turns) {
+    const summary = normalizeSummaryLine(turn.assistant_summary);
+    if (summary.length === 0) {
+      continue;
+    }
+
+    const candidate = firstMeaningfulSentence(summary);
+    if (candidate === null) {
+      continue;
+    }
+
+    const normalizedCandidate = normalizeSummaryLine(candidate);
+    if (
+      normalizedCandidate.length === 0 ||
+      isLowSignalTopic(normalizedCandidate) ||
+      hasProcessChatter(normalizedCandidate) ||
+      hasWrapperTags(normalizedCandidate)
+    ) {
+      continue;
+    }
+
+    return truncateInline(normalizedCandidate, 120);
+  }
+
+  return null;
+}
+
+function firstMeaningfulSentence(summary: string): string | null {
+  const compact = summary.replace(/\s+/g, " ").trim();
+  if (compact.length === 0) {
+    return null;
+  }
+
+  const sentences = compact
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 0);
+
+  return sentences[0] ?? compact;
 }
 
 function isPositiveVerification(event: Event): boolean {
@@ -567,12 +676,34 @@ function selectTopicLine(prompt: string): string {
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
 
+  const candidateLines: string[] = [];
+
   for (const line of lines) {
     if (isPromptNoiseLine(line) || isHarnessTopicLine(line)) {
       continue;
     }
 
+    candidateLines.push(line);
+
+    if (isPromotableMarkdownTopicLine(line)) {
+      return line;
+    }
+
+    if (isLowSignalTopic(line)) {
+      continue;
+    }
+
     return line;
+  }
+
+  const fallbackCandidate = candidateLines.find((line) => !looksLikeMarkdownSkillHeaderTopic(line));
+  if (fallbackCandidate !== undefined) {
+    return fallbackCandidate;
+  }
+
+  const firstCandidate = candidateLines[0];
+  if (firstCandidate !== undefined) {
+    return firstCandidate;
   }
 
   return prompt;
@@ -594,6 +725,15 @@ function isHarnessTopicLine(line: string): boolean {
     /^\[Image:[^\]]+\]$/i.test(line) ||
     /^<\/?skill\b/i.test(line) ||
     /\/SKILL\.md\b/i.test(line)
+  );
+}
+
+function isPromotableMarkdownTopicLine(line: string): boolean {
+  const normalized = line.trim();
+  return (
+    /^#{1,6}\s+/.test(normalized) &&
+    !/^#\s*(?:AGENTS|CLAUDE)\.md\b/i.test(normalized) &&
+    !/^#{1,6}\s+User Input\b/i.test(normalized)
   );
 }
 

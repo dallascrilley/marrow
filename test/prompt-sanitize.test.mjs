@@ -106,4 +106,6 @@ test("isNoSignalPrompt treats embedded agent prompts as no-signal", () => {
     true,
   );
   assert.equal(isNoSignalPrompt("i want autocompletions for my git branches"), false);
+  assert.equal(isNoSignalPrompt("review open PRs"), false);
+  assert.equal(isNoSignalPrompt("review pull requests"), false);
 });

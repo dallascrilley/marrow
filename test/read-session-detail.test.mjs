@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { getSessionDetail, getSessionDetailForRecord } from "../dist/read/session-detail.js";
+import { getSessionManifestPathForRevision } from "../dist/writers/manifest-writer.js";
 
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
 
@@ -183,5 +184,115 @@ test("getSessionDetail returns empty reduced_turns when the reduced artifact is 
 
     assert.ok(detail);
     assert.deepEqual(detail.reduced_turns, []);
+  });
+});
+
+test("getSessionDetail falls back to rebuilt index when cached index is stale", async () => {
+  await withRuntime(async (runtimeRoot) => {
+    const staleSessionId = "stale-index-session";
+    const liveSessionId = "rebuilt-detail-session";
+    const sourcePath = join(runtimeRoot, "fixtures", `${liveSessionId}.jsonl`);
+    const summaryPath = join(runtimeRoot, "summaries", "by-session", liveSessionId, "summary.json");
+    const manifestPath = getSessionManifestPathForRevision(
+      liveSessionId,
+      "sha256:rebuiltindex1234",
+    );
+
+    await seedIndex(runtimeRoot, staleSessionId);
+    await mkdir(join(runtimeRoot, "fixtures"), { recursive: true });
+    await mkdir(join(runtimeRoot, "summaries", "by-session", liveSessionId), { recursive: true });
+    await mkdir(join(runtimeRoot, "sources", "manifests"), { recursive: true });
+    await mkdir(join(runtimeRoot, "staging", liveSessionId), { recursive: true });
+
+    await writeFile(sourcePath, '{"type":"session"}\n', "utf8");
+    await writeFile(
+      summaryPath,
+      `${JSON.stringify({
+        session_id: liveSessionId,
+        topic: "Recovered from rebuilt index",
+        topic_source: "deterministic",
+        what_worked: [],
+        what_failed: [],
+        what_was_decided: [],
+        useful_commands: [],
+        files_of_interest: [],
+        next_step: "Use the rebuilt index entry.",
+        project_learnings: [],
+        user_learnings: [],
+        deletion_readiness: "ready",
+      })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      join(runtimeRoot, "staging", liveSessionId, "reduced-session.json"),
+      `${JSON.stringify({
+        turns: [
+          {
+            assistant_summary: "Recovered session detail from rebuilt index.",
+            commands_seen: [],
+            ended_at: "2026-06-24T00:10:00.000Z",
+            files_touched: [],
+            index: 0,
+            session_id: liveSessionId,
+            started_at: "2026-06-24T00:09:00.000Z",
+            tool_stub_count: 0,
+            turn_id: `${liveSessionId}:turn-0000`,
+            user_prompt: "Inspect the survivor directly.",
+            verification_seen: false,
+          },
+        ],
+      })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      manifestPath,
+      `${JSON.stringify({
+        artifact_paths: {
+          project_knowledge_jsonl_path: null,
+          retention_receipt_path: join(runtimeRoot, "deletes", "receipts", `${liveSessionId}.json`),
+          summary_json_path: summaryPath,
+          summary_markdown_path: join(
+            runtimeRoot,
+            "summaries",
+            "by-session",
+            liveSessionId,
+            "summary.md",
+          ),
+          user_knowledge_jsonl_path: null,
+        },
+        generated_at: "2026-06-24T00:02:00.000Z",
+        session: {
+          conversation_id: `demo:${liveSessionId}`,
+          ingest_status: "discovered",
+          project_key: "demo",
+          retention_status: "kept",
+          session_id: liveSessionId,
+          source_format: "jsonl",
+          source_hash: "sha256:rebuiltindex1234",
+          source_path: sourcePath,
+          source_tool: "cursor",
+          started_at: "2026-06-24T00:00:00.000Z",
+          updated_at: "2026-06-24T00:01:00.000Z",
+          workspace_path: "Users-example-Code-demo",
+        },
+        source_span: {
+          event_count: 1,
+          first_turn_id: `${liveSessionId}:turn-0000`,
+          last_turn_id: `${liveSessionId}:turn-0000`,
+          line_end: 1,
+          line_start: 1,
+          turn_count: 1,
+        },
+        version: 1,
+      })}\n`,
+      "utf8",
+    );
+
+    const detail = await getSessionDetail(liveSessionId);
+
+    assert.ok(detail);
+    assert.equal(detail.index.asd_session_id, liveSessionId);
+    assert.equal(detail.summary?.topic, "Recovered from rebuilt index");
+    assert.equal(detail.reduced_turns.length, 1);
   });
 });
