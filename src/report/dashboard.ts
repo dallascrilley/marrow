@@ -89,17 +89,40 @@ function escapeHtmlAttr(value: string): string {
     .replaceAll(">", "&gt;");
 }
 
+// The aggregate sidebar panels only ever render these many entries; the rest
+// of each array exists only to compute totals, which we precompute instead of
+// shipping the full arrays. Kept in sync with the client renderers below.
+const KNOWLEDGE_PROJECTS_SHOWN = 6;
+const KNOWLEDGE_INSTINCTS_SHOWN = 8;
+const REVIEW_ITEMS_SHOWN = 12;
+
 export function renderDashboardHtml(data: DashboardData): string {
   // Split the payload so the page opens instantly regardless of corpus size:
   // the lightweight list is parsed eagerly, while each session's heavy detail
   // (summary + reduced timeline) ships as an inert <script type="application/json">
   // block that is JSON.parsed only on demand. Keeps a single offline file.
+  const knowledge = data.knowledge_snapshot;
   const listData = {
     generated_at: data.generated_at,
     harness_breakdown: data.harness_breakdown,
-    knowledge_snapshot: data.knowledge_snapshot,
+    // Ship only the displayed entries plus precomputed counts; the full
+    // projects/instincts arrays are multi-MB and never rendered past top-N.
+    knowledge_snapshot: {
+      total_learnings: knowledge.total_learnings,
+      total_instincts: knowledge.total_instincts,
+      projects_count: knowledge.projects.length,
+      projects: knowledge.projects.slice(0, KNOWLEDGE_PROJECTS_SHOWN),
+      instincts: knowledge.instincts.slice(0, KNOWLEDGE_INSTINCTS_SHOWN),
+    },
     pipeline_status: data.pipeline_status,
-    review_items: data.review_items,
+    // Review queue can hold thousands of entries; ship only the displayed
+    // slice plus precomputed totals the count card needs.
+    review_items: data.review_items.slice(0, REVIEW_ITEMS_SHOWN),
+    review_stats: {
+      total: data.review_items.length,
+      kinds: new Set(data.review_items.map((item) => item.review_kind)).size,
+      projects: new Set(data.review_items.map((item) => item.project_key)).size,
+    },
     sessions: data.sessions.map((session) => ({
       // Only the fields the sidebar list, filters, and search read — not the
       // full index record (its absolute paths / uuid never reach the client).
@@ -292,13 +315,13 @@ export function renderDashboardHtml(data: DashboardData): string {
     "      }",
     "      function renderKnowledgeView() {",
     "        const snapshot = data.knowledge_snapshot;",
-    "        const projects = snapshot.projects.slice(0, 6);",
-    "        const instincts = snapshot.instincts.slice(0, 8);",
+    `        const projects = snapshot.projects.slice(0, ${KNOWLEDGE_PROJECTS_SHOWN});`,
+    `        const instincts = snapshot.instincts.slice(0, ${KNOWLEDGE_INSTINCTS_SHOWN});`,
     "        knowledgeView.innerHTML = '<div class=\"kpi-grid\">' +",
     "          renderMetricCard('Knowledge totals', [",
     "            { label: 'Project learnings', value: String(snapshot.total_learnings) },",
     "            { label: 'Instincts', value: String(snapshot.total_instincts) },",
-    "            { label: 'Projects', value: String(snapshot.projects.length) },",
+    "            { label: 'Projects', value: String(snapshot.projects_count) },",
     "          ]) +",
     "          '</div>' +",
     "          '<div class=\"metric-grid\">' +",
@@ -330,14 +353,15 @@ export function renderDashboardHtml(data: DashboardData): string {
     "      }",
     "      function renderReviewQueueView() {",
     "        const items = data.review_items;",
+    "        const stats = data.review_stats;",
     "        reviewQueueView.innerHTML = '<div class=\"kpi-grid\">' +",
     "          renderMetricCard('Review queue totals', [",
-    "            { label: 'Entries', value: String(items.length) },",
-    "            { label: 'Kinds', value: String(new Set(items.map((item) => item.review_kind)).size) },",
-    "            { label: 'Projects', value: String(new Set(items.map((item) => item.project_key)).size) },",
+    "            { label: 'Entries', value: String(stats.total) },",
+    "            { label: 'Kinds', value: String(stats.kinds) },",
+    "            { label: 'Projects', value: String(stats.projects) },",
     "          ]) +",
     "          '</div>' +",
-    "          renderReviewQueueCard(items.slice(0, 12));",
+    `          renderReviewQueueCard(items.slice(0, ${REVIEW_ITEMS_SHOWN}));`,
     "      }",
     "      function renderSessionList(sessions) {",
     "        sessionList.innerHTML = '';",
