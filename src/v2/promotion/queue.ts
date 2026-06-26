@@ -1,8 +1,10 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import { z } from "zod";
+
 import { getRuntimePath, getRuntimeRoot } from "../../config/paths.js";
-import type { Instinct, Maturity } from "../instinct/schema.js";
+import { domainSchema, type Instinct, type Maturity, maturitySchema } from "../instinct/schema.js";
 import { loadAllInstincts } from "../instinct/store.js";
 import { maturityStateFrom, proposedMaturity } from "../math/decay.js";
 
@@ -39,6 +41,36 @@ export type PromotionQueueEntry = {
     min_age_days: number;
   };
 };
+
+// Validates the persisted promote-queue.json at the read boundary. The shape
+// mirrors PromotionQueueEntry; unknown keys are stripped (forward-compatible).
+const promotionProjectEvidenceSchema = z.object({
+  project_id: z.string(),
+  confidence: z.number(),
+  maturity: maturitySchema,
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+const promotionQueueEntrySchema = z.object({
+  instinct_id: z.string(),
+  trigger: z.string(),
+  finding: z.string(),
+  domain: domainSchema,
+  detected_at: z.string(),
+  avg_confidence: z.number(),
+  project_count: z.number(),
+  projects: z.array(promotionProjectEvidenceSchema),
+  thresholds: z.object({
+    min_projects: z.number(),
+    min_avg_confidence: z.number(),
+    min_age_days: z.number(),
+  }),
+});
+
+const promotionQueueFileSchema = z.object({
+  entries: z.array(promotionQueueEntrySchema).default([]),
+});
 
 export function getPromotionQueuePath(): string {
   return join(getRuntimeRoot(), PROMOTION_QUEUE_FILENAME);
@@ -102,8 +134,8 @@ export async function readPromotionQueue(
 ): Promise<PromotionQueueEntry[]> {
   try {
     const contents = await readFile(path, "utf8");
-    const parsed = JSON.parse(contents) as { entries?: PromotionQueueEntry[] };
-    return Array.isArray(parsed.entries) ? parsed.entries : [];
+    const parsed = promotionQueueFileSchema.safeParse(JSON.parse(contents));
+    return parsed.success ? parsed.data.entries : [];
   } catch {
     return [];
   }
