@@ -1040,3 +1040,37 @@ test("deriveTopic skips an HTML-comment header to reach the real title line", ()
 
   assert.equal(summary.topic, "# ce-work — execute the plan, close the loop");
 });
+
+test("deriveTopic skips the '# Instructions (read first)' prompt-wrapper header", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "agent-session-distillery",
+    session_id: "instructions-wrapper-topic",
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Did the work.",
+      commands_seen: [],
+      ended_at: "2026-05-03T23:10:01.000Z",
+      files_touched: [],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-05-03T23:10:00.000Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: [
+        "# Instructions (read first)",
+        "Refactor the auth module to use the shared validator.",
+      ].join("\n"),
+      verification_seen: false,
+    }),
+  ];
+
+  const summary = summarizeSession({
+    events: [],
+    sourceSession,
+    turns,
+  });
+
+  assert.equal(summary.topic, "Refactor the auth module to use the shared validator.");
+});

@@ -713,6 +713,11 @@ function isHarnessTopicLine(line: string): boolean {
   return (
     /^#\s*(?:AGENTS|CLAUDE)\.md\b/i.test(line) ||
     /^(?:AGENTS|CLAUDE)\.md\s+instructions\s+for\b/i.test(line) ||
+    // Prompt-wrapper boilerplate header — never a real task topic (29 sessions
+    // in the corpus had this leak as their topic). The "(read first)" idiom is
+    // the unambiguous wrapper tell; legit "# Instructions for X" topics are not
+    // matched.
+    /^#{1,6}\s+Instructions\s*\(read first\)/i.test(line) ||
     /^(?:system[-_]reminder|environment_context|command-message|command-name|command-args|task-notification|local-command-(?:stdout|stderr)|user-prompt-submit-hook|bash-(?:input|stdout|stderr))\b/i.test(
       line,
     ) ||
