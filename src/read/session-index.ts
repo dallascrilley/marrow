@@ -1,9 +1,11 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, extname, isAbsolute, join } from "node:path";
 
+import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 
 import { getRuntimePath } from "../config/paths.js";
+import { listSourceSessionsByLifecycle } from "../db/ledger.js";
 import { sourceSessionSchema, summarySchema } from "../models/canonical.js";
 
 export const sessionIndexSchemaVersion = 1;
@@ -46,6 +48,18 @@ export type BuildSessionIndexOptions = {
   excludeSessionIds?: ReadonlySet<string>;
 };
 
+export function deletedSessionIdsFromLedger(database: DatabaseSync): ReadonlySet<string> {
+  return new Set(
+    listSourceSessionsByLifecycle(database, ["deleted"]).map((session) => session.session_id),
+  );
+}
+
+export async function buildSearchableSessionIndex(
+  database: DatabaseSync,
+): Promise<SessionIndexRecord[]> {
+  return buildSessionIndex({ excludeSessionIds: deletedSessionIdsFromLedger(database) });
+}
+
 export function getSessionIndexPath(): string {
   return join(getRuntimePath("index"), "session-index.jsonl");
 }
@@ -72,9 +86,9 @@ export async function readSessionIndexFile(
 }
 
 export async function loadSessionIndexRecords(
-  options: { fallbackToBuild?: boolean } = {},
+  options: { database?: DatabaseSync; fallbackToBuild?: boolean } = {},
 ): Promise<SessionIndexRecord[]> {
-  const { fallbackToBuild = false } = options;
+  const { database, fallbackToBuild = false } = options;
 
   if (!fallbackToBuild) {
     return readSessionIndexFile();
@@ -83,7 +97,7 @@ export async function loadSessionIndexRecords(
   try {
     return await readSessionIndexFile();
   } catch {
-    return buildSessionIndex();
+    return database === undefined ? buildSessionIndex() : buildSearchableSessionIndex(database);
   }
 }
 
@@ -99,7 +113,7 @@ export async function buildSessionIndex(
 
   for (const manifestPath of manifestPaths) {
     const manifest = sessionManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
-    if (excludeSessionIds?.has(manifest.session.session_id) === true) {
+    if (excludeSessionIds?.has(manifest.session.session_id)) {
       continue;
     }
     const summary = summarySchema.parse(

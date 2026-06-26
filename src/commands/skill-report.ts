@@ -18,7 +18,7 @@ import { readSkillMetadata, resolveSkillPath } from "../skill/resolve-skill.js";
 
 export async function executeSkillReport(
   context: CommandContext,
-  _database: DatabaseSync,
+  database: DatabaseSync,
 ): Promise<number> {
   const options = parseSkillCommandOptions(context.args, "report");
   const skillPath = await resolveSkillPath(options.skillId, {
@@ -35,7 +35,7 @@ export async function executeSkillReport(
   const skillContents = await readFile(skillPath, "utf8");
   const skill = await readSkillMetadata(skillPath);
   const checklist = parseSkillChecklist(skillContents);
-  const records = await loadSessionIndexRecords({ fallbackToBuild: true });
+  const records = await loadSessionIndexRecords({ database, fallbackToBuild: true });
   const sessions: SessionAdherenceScore[] = [];
 
   for (const record of records) {

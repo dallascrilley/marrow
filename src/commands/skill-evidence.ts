@@ -15,7 +15,7 @@ import {
 
 export async function executeSkillEvidence(
   context: CommandContext,
-  _database: DatabaseSync,
+  database: DatabaseSync,
 ): Promise<number> {
   const options = parseSkillCommandOptions(context.args, "evidence");
   const skillPath = await resolveSkillPath(options.skillId, {
@@ -30,7 +30,7 @@ export async function executeSkillEvidence(
   }
 
   const skill = await readSkillMetadata(skillPath);
-  const records = await loadSessionIndexRecords({ fallbackToBuild: true });
+  const records = await loadSessionIndexRecords({ database, fallbackToBuild: true });
   const matches: SkillEvidenceMatch[] = [];
 
   for (const record of records) {

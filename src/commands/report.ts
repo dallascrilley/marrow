@@ -86,7 +86,7 @@ function parseReportArgs(args: readonly string[]): ReportOptions {
 
 async function loadDashboardSessions(database: DatabaseSync): Promise<DashboardSession[]> {
   const indexBySessionId = new Map(
-    (await loadSessionIndexRecords({ fallbackToBuild: true })).map((record) => [
+    (await loadSessionIndexRecords({ database, fallbackToBuild: true })).map((record) => [
       record.asd_session_id,
       record,
     ]),
