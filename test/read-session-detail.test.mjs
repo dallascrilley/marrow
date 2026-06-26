@@ -296,3 +296,111 @@ test("getSessionDetail falls back to rebuilt index when cached index is stale", 
     assert.equal(detail.reduced_turns.length, 1);
   });
 });
+
+test("getSessionDetail builds the index from manifests when no index file exists", async () => {
+  await withRuntime(async (runtimeRoot) => {
+    // No seedIndex(): the on-disk session-index.jsonl is absent, so the read
+    // throws and getSessionDetail must build once from the manifest — and that
+    // single build is authoritative (no redundant second build).
+    const sessionId = "no-index-file-session";
+    const sourcePath = join(runtimeRoot, "fixtures", `${sessionId}.jsonl`);
+    const summaryPath = join(runtimeRoot, "summaries", "by-session", sessionId, "summary.json");
+    const manifestPath = getSessionManifestPathForRevision(sessionId, "sha256:noindexfile12345");
+
+    await mkdir(join(runtimeRoot, "fixtures"), { recursive: true });
+    await mkdir(join(runtimeRoot, "summaries", "by-session", sessionId), { recursive: true });
+    await mkdir(join(runtimeRoot, "sources", "manifests"), { recursive: true });
+    await mkdir(join(runtimeRoot, "staging", sessionId), { recursive: true });
+
+    await writeFile(sourcePath, '{"type":"session"}\n', "utf8");
+    await writeFile(
+      summaryPath,
+      `${JSON.stringify({
+        session_id: sessionId,
+        topic: "Built from manifest without an index file",
+        topic_source: "deterministic",
+        what_worked: [],
+        what_failed: [],
+        what_was_decided: [],
+        useful_commands: [],
+        files_of_interest: [],
+        next_step: "Resolve via the freshly built index.",
+        project_learnings: [],
+        user_learnings: [],
+        deletion_readiness: "ready",
+      })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      join(runtimeRoot, "staging", sessionId, "reduced-session.json"),
+      `${JSON.stringify({
+        turns: [
+          {
+            assistant_summary: "Resolved detail without a persisted index file.",
+            commands_seen: [],
+            ended_at: "2026-06-24T00:10:00.000Z",
+            files_touched: [],
+            index: 0,
+            session_id: sessionId,
+            started_at: "2026-06-24T00:09:00.000Z",
+            tool_stub_count: 0,
+            turn_id: `${sessionId}:turn-0000`,
+            user_prompt: "Inspect without an index.",
+            verification_seen: false,
+          },
+        ],
+      })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      manifestPath,
+      `${JSON.stringify({
+        artifact_paths: {
+          project_knowledge_jsonl_path: null,
+          retention_receipt_path: join(runtimeRoot, "deletes", "receipts", `${sessionId}.json`),
+          summary_json_path: summaryPath,
+          summary_markdown_path: join(
+            runtimeRoot,
+            "summaries",
+            "by-session",
+            sessionId,
+            "summary.md",
+          ),
+          user_knowledge_jsonl_path: null,
+        },
+        generated_at: "2026-06-24T00:02:00.000Z",
+        session: {
+          conversation_id: `demo:${sessionId}`,
+          ingest_status: "discovered",
+          project_key: "demo",
+          retention_status: "kept",
+          session_id: sessionId,
+          source_format: "jsonl",
+          source_hash: "sha256:noindexfile12345",
+          source_path: sourcePath,
+          source_tool: "cursor",
+          started_at: "2026-06-24T00:00:00.000Z",
+          updated_at: "2026-06-24T00:01:00.000Z",
+          workspace_path: "Users-example-Code-demo",
+        },
+        source_span: {
+          event_count: 1,
+          first_turn_id: `${sessionId}:turn-0000`,
+          last_turn_id: `${sessionId}:turn-0000`,
+          line_end: 1,
+          line_start: 1,
+          turn_count: 1,
+        },
+        version: 1,
+      })}\n`,
+      "utf8",
+    );
+
+    const detail = await getSessionDetail(sessionId);
+
+    assert.ok(detail);
+    assert.equal(detail.index.asd_session_id, sessionId);
+    assert.equal(detail.summary?.topic, "Built from manifest without an index file");
+    assert.equal(detail.reduced_turns.length, 1);
+  });
+});
