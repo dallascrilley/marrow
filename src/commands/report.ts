@@ -7,12 +7,14 @@ import type { CommandContext } from "../cli.js";
 import { ensureRuntimePath } from "../config/paths.js";
 import { listSourceSessions } from "../db/ledger.js";
 import type { ReviewQueueEntryRow } from "../db/queries.js";
+import { auditQuality } from "../pipeline/quality-audit.js";
 import { listKnowledgeSnapshot } from "../read/knowledge.js";
 import { listHarnessComparison, listPipelineStatus, listReviewItems } from "../read/operations.js";
 import { getSessionDetailForRecord } from "../read/session-detail.js";
 import { loadSessionIndexRecords } from "../read/session-index.js";
 import {
   buildDashboardData,
+  buildDashboardQualityAudit,
   type DashboardReviewItem,
   type DashboardSession,
   renderDashboardHtml,
@@ -28,6 +30,8 @@ export async function executeReport(
     throw new Error("report currently requires --html");
   }
   const sessions = await loadDashboardSessions(database);
+  const sessionIds = sessions.map((session) => session.detail.index.asd_session_id);
+  const qualityAuditBundle = buildDashboardQualityAudit(await auditQuality(database), sessionIds);
   const outputPath = options.outPath ?? join(await ensureRuntimePath("reports"), "dashboard.html");
   const dashboard = renderDashboardHtml(
     buildDashboardData(
@@ -36,6 +40,7 @@ export async function executeReport(
       await listKnowledgeSnapshot(database),
       await listHarnessComparison(database),
       listReviewItems(database).map(mapReviewItem),
+      qualityAuditBundle,
     ),
   );
 
@@ -84,7 +89,9 @@ function parseReportArgs(args: readonly string[]): ReportOptions {
   return { html, outPath };
 }
 
-async function loadDashboardSessions(database: DatabaseSync): Promise<DashboardSession[]> {
+async function loadDashboardSessions(
+  database: DatabaseSync,
+): Promise<Omit<DashboardSession, "quality_audit">[]> {
   const indexBySessionId = new Map(
     (await loadSessionIndexRecords({ database, fallbackToBuild: true })).map((record) => [
       record.asd_session_id,
@@ -106,7 +113,9 @@ async function loadDashboardSessions(database: DatabaseSync): Promise<DashboardS
     }),
   );
 
-  return sessions.filter((session): session is DashboardSession => session !== null);
+  return sessions.filter(
+    (session): session is Omit<DashboardSession, "quality_audit"> => session !== null,
+  );
 }
 
 function mapReviewItem(item: ReviewQueueEntryRow): DashboardReviewItem {
