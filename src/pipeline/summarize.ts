@@ -709,6 +709,18 @@ function selectTopicLine(prompt: string): string {
   return prompt;
 }
 
+export function isAmbiguousWrapperHeadingTopic(topic: string): boolean {
+  const normalized = topic.replace(/\s+/g, " ").trim();
+  if (normalized.length === 0) {
+    return false;
+  }
+
+  // Advisory-only: corpus-validated markdown headings that may be harness noise
+  // or a legitimate user-chosen task title. Quality-audit flags these; derivation
+  // does not silently drop them (contrast isHarnessTopicLine).
+  return /^#{1,6}\s+Prompt Optimizer\b/i.test(normalized);
+}
+
 export function isHarnessTopicLine(line: string): boolean {
   return (
     /^#\s*(?:AGENTS|CLAUDE)\.md\b/i.test(line) ||
@@ -718,6 +730,9 @@ export function isHarnessTopicLine(line: string): boolean {
     // the unambiguous wrapper tell; legit "# Instructions for X" topics are not
     // matched.
     /^#{1,6}\s+Instructions\s*\(read first\)/i.test(line) ||
+    /^#{1,6}\s+TASK\b/i.test(line) ||
+    /^#{1,6}\s+Context Usage\b/i.test(line) ||
+    /^#{1,6}\s+Handoff\b/i.test(line) ||
     /^(?:system[-_]reminder|environment_context|command-message|command-name|command-args|task-notification|local-command-(?:stdout|stderr)|user-prompt-submit-hook|bash-(?:input|stdout|stderr))\b/i.test(
       line,
     ) ||

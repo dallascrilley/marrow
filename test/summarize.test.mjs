@@ -1074,3 +1074,42 @@ test("deriveTopic skips the '# Instructions (read first)' prompt-wrapper header"
 
   assert.equal(summary.topic, "Refactor the auth module to use the shared validator.");
 });
+
+test("deriveTopic skips corpus-validated structural wrapper headers", () => {
+  const cases = [
+    { header: "# TASK", body: "Ship the dashboard audit panel." },
+    { header: "## Context Usage", body: "Reduce eager payload size for dashboard." },
+    { header: "# Handoff", body: "Continue ingestion quality fixes next session." },
+  ];
+
+  for (const { header, body } of cases) {
+    const sourceSession = {
+      ...sourceSessionFixture,
+      project_key: "agent-session-distillery",
+      session_id: `wrapper-${header.replace(/\W+/g, "-").toLowerCase()}`,
+    };
+    const turns = [
+      turnSchema.parse({
+        assistant_summary: "Did the work.",
+        commands_seen: [],
+        ended_at: "2026-05-03T23:10:01.000Z",
+        files_touched: [],
+        index: 0,
+        session_id: sourceSession.session_id,
+        started_at: "2026-05-03T23:10:00.000Z",
+        tool_stub_count: 0,
+        turn_id: `${sourceSession.session_id}:turn-0000`,
+        user_prompt: [header, body].join("\n"),
+        verification_seen: false,
+      }),
+    ];
+
+    const summary = summarizeSession({
+      events: [],
+      sourceSession,
+      turns,
+    });
+
+    assert.equal(summary.topic, body, `expected real task after ${header}`);
+  }
+});

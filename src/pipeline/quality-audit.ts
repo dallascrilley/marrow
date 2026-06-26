@@ -19,12 +19,14 @@ import {
 } from "./artifact-heuristics.js";
 import { defaultUserScopeKey } from "./extract.js";
 import { countProjectLearnings } from "./learning-count.js";
+import { isAmbiguousWrapperHeadingTopic } from "./summarize.js";
 
 export type QualityIssueCode =
   | "summary_missing"
   | "summary_invalid"
   | "summary_low_signal"
   | "topic_process_chatter"
+  | "topic_wrapper_heading"
   | "completion_as_next_step"
   | "process_chatter"
   | "wrapper_tags"
@@ -230,6 +232,8 @@ function recommendationForIssue(issue: QualityIssueCode): string {
       return "Improve summary synthesis for short sessions or classify them as intentionally low-signal.";
     case "topic_process_chatter":
       return "Improve topic derivation: reject chatter-shaped prompts as topics, or LLM-rescue the topic.";
+    case "topic_wrapper_heading":
+      return "Review whether the topic is a harness wrapper heading or a legitimate markdown task title; reextract or resummarize if noise.";
     case "process_chatter":
       return "Suppress assistant process chatter before summary and learning promotion.";
     case "blocked_deletion":
@@ -326,6 +330,10 @@ function collectSessionIssues(
     issues.push("topic_process_chatter");
   }
 
+  if (isAmbiguousWrapperHeadingTopic(summary.topic)) {
+    issues.push("topic_wrapper_heading");
+  }
+
   if (looksLikeCompletedOutcome(summary.next_step)) {
     issues.push("completion_as_next_step");
   }
@@ -382,6 +390,7 @@ function createIssueCountMap(): Record<QualityIssueCode, number> {
     summary_low_signal: 0,
     summary_missing: 0,
     topic_process_chatter: 0,
+    topic_wrapper_heading: 0,
     wrapper_tags: 0,
   };
 }

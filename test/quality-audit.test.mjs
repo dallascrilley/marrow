@@ -681,3 +681,51 @@ test("topic_process_chatter and process_chatter are distinct audit dimensions", 
     }
   });
 });
+
+test("topic_wrapper_heading flags ambiguous markdown headings without dropping legit topics", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+
+    try {
+      upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "agent-session-distillery",
+        session_id: "ambiguous-wrapper-topic",
+        source_hash: "sha256:ambiguous-wrapper-topic",
+      });
+      upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        project_key: "agent-session-distillery",
+        session_id: "legit-markdown-topic",
+        source_hash: "sha256:legit-markdown-topic",
+      });
+
+      await writeSessionSummary({
+        ...summaryFixture,
+        session_id: "ambiguous-wrapper-topic",
+        topic: "# Prompt Optimizer",
+        what_worked: ["Tuned the prompt template."],
+      });
+      await writeSessionSummary({
+        ...summaryFixture,
+        session_id: "legit-markdown-topic",
+        topic: "# ce-work — execute the plan, close the loop",
+        what_worked: ["Closed the loop on the plan."],
+      });
+
+      const report = await auditQuality(database);
+      const ambiguous = report.sessions.find(
+        (session) => session.session_id === "ambiguous-wrapper-topic",
+      );
+      const legit = report.sessions.find(
+        (session) => session.session_id === "legit-markdown-topic",
+      );
+
+      assert.ok(ambiguous?.issues.includes("topic_wrapper_heading"));
+      assert.ok(!legit?.issues.includes("topic_wrapper_heading"));
+      assert.equal(report.issue_counts.topic_wrapper_heading, 1);
+    } finally {
+      database.close();
+    }
+  });
+});
