@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { listSourceSessions } from "../db/ledger.js";
 import type { SourceSession } from "../models/canonical.js";
-import { loadParsedSessionManifests, type ParsedSessionManifest } from "../read/session-index.js";
+import { loadParsedSessionManifests } from "../read/session-index.js";
 
 export type SessionIntegrityFindingCode =
   | "duplicate_ledger_session_id"
@@ -34,8 +34,9 @@ export type SessionIntegrityReport = {
  * - Immutable revision-addressed manifests per source hash (ADR-0008)
  *
  * This check catches drift they do not prevent: duplicate asd_session_id across
- * manifests, duplicate session_id rows under different source identities, and
- * manifests with no matching ledger row.
+ * distinct source identities, duplicate session_id rows under different source
+ * identities, and manifests with no matching ledger row. Multiple revision
+ * manifests for the same source identity (ADR-0008) are expected and ignored.
  */
 export async function assessSessionIntegrity(
   database: DatabaseSync,
@@ -66,22 +67,28 @@ export async function assessSessionIntegrity(
     }
   }
 
-  const manifestsByAsdId = new Map<string, ParsedSessionManifest[]>();
+  const manifestsByAsdId = new Map<string, Set<string>>();
+  const manifestPathsByAsdId = new Map<string, string[]>();
   for (const manifest of manifests) {
-    const group = manifestsByAsdId.get(manifest.asdSessionId) ?? [];
-    group.push(manifest);
-    manifestsByAsdId.set(manifest.asdSessionId, group);
+    const identityKey = ledgerIdentityKey(manifest.session);
+    const identities = manifestsByAsdId.get(manifest.asdSessionId) ?? new Set<string>();
+    identities.add(identityKey);
+    manifestsByAsdId.set(manifest.asdSessionId, identities);
+
+    const paths = manifestPathsByAsdId.get(manifest.asdSessionId) ?? [];
+    paths.push(manifest.manifestPath);
+    manifestPathsByAsdId.set(manifest.asdSessionId, paths);
   }
 
-  for (const [asdSessionId, group] of manifestsByAsdId) {
-    if (group.length <= 1) {
+  for (const [asdSessionId, identities] of manifestsByAsdId) {
+    if (identities.size <= 1) {
       continue;
     }
 
     findings.push({
       code: "duplicate_asd_session_id",
-      details: `${group.length} manifests share asd_session_id from summary.json`,
-      manifest_paths: group.map((entry) => entry.manifestPath),
+      details: `${identities.size} distinct source identities share asd_session_id from summary.json`,
+      manifest_paths: manifestPathsByAsdId.get(asdSessionId) ?? [],
       session_id: asdSessionId,
     });
   }
