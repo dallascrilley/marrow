@@ -20,6 +20,7 @@ import {
 import { runParsePhase } from "./parse.js";
 import { getReducedArtifactPath, type ReducedArtifact, runReducePhase } from "./reduce.js";
 import {
+  isHarnessTopicLine,
   isLowSignalTopic,
   type LlmTopicGenerator,
   type LlmUsageSink,
@@ -27,7 +28,11 @@ import {
 } from "./summarize.js";
 import { runSummarizePhase } from "./summarize-phase.js";
 
-export type ResummarizeSkipReason = "high_signal_topic" | "missing_manifest" | "not_over_extracted";
+export type ResummarizeSkipReason =
+  | "clean_topic"
+  | "high_signal_topic"
+  | "missing_manifest"
+  | "not_over_extracted";
 
 export type ResummarizeSkip = {
   reason: ResummarizeSkipReason;
@@ -40,6 +45,7 @@ export type ResummarizeOptions = {
   generateTopic?: LlmTopicGenerator;
   limit?: number;
   llmTopic?: boolean;
+  leakedTopicOnly?: boolean;
   lowSignalOnly?: boolean;
   maxPer?: string;
   onUsage?: LlmUsageSink;
@@ -91,9 +97,17 @@ export async function resummarizeSessions(
   const overExtractionCap = options.overExtractedOnly === true ? getProjectLearningCap() : 0;
 
   for (const sourceSession of candidates) {
-    if (options.lowSignalOnly === true) {
+    if (options.lowSignalOnly === true || options.leakedTopicOnly === true) {
       const existingTopic = await readExistingTopic(sourceSession.session_id);
-      if (existingTopic === null || !isLowSignalTopic(existingTopic)) {
+      if (options.leakedTopicOnly === true) {
+        if (existingTopic === null || !isHarnessTopicLine(existingTopic)) {
+          skipped.push({
+            reason: "clean_topic",
+            session_id: sourceSession.session_id,
+          });
+          continue;
+        }
+      } else if (existingTopic === null || !isLowSignalTopic(existingTopic)) {
         skipped.push({
           reason: "high_signal_topic",
           session_id: sourceSession.session_id,
