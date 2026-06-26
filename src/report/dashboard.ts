@@ -1,4 +1,5 @@
 import type { LifecycleState } from "../db/queries.js";
+import type { QualityAuditReport, QualityIssueCode } from "../pipeline/quality-audit.js";
 import type { HarnessBreakdownSnapshot } from "../read/harness-breakdown.js";
 import type { KnowledgeSnapshot } from "../read/knowledge.js";
 import type { PipelineStatus } from "../read/operations.js";
@@ -7,7 +8,55 @@ import type { SessionDetail } from "../read/session-detail.js";
 export type DashboardSession = {
   detail: SessionDetail;
   lifecycle_state: LifecycleState;
+  quality_audit: {
+    issue_count: number;
+    issues: QualityIssueCode[];
+  } | null;
 };
+
+export type DashboardQualityAudit = {
+  deletion_readiness: QualityAuditReport["deletion_readiness"];
+  issue_counts: Partial<Record<QualityIssueCode, number>>;
+  totals: QualityAuditReport["totals"];
+};
+
+export function buildDashboardQualityAudit(
+  report: QualityAuditReport,
+  sessionIds: readonly string[],
+): {
+  audit: DashboardQualityAudit;
+  by_session_id: Record<string, DashboardSession["quality_audit"]>;
+} {
+  const wanted = new Set(sessionIds);
+  const bySessionId: Record<string, DashboardSession["quality_audit"]> = {};
+  for (const session of report.sessions) {
+    if (!wanted.has(session.session_id) || session.issues.length === 0) {
+      continue;
+    }
+    bySessionId[session.session_id] = {
+      issue_count: session.issue_count,
+      issues: session.issues,
+    };
+  }
+
+  const issue_counts: Partial<Record<QualityIssueCode, number>> = {};
+  for (const [code, count] of Object.entries(report.issue_counts) as Array<
+    [QualityIssueCode, number]
+  >) {
+    if (count > 0) {
+      issue_counts[code] = count;
+    }
+  }
+
+  return {
+    audit: {
+      deletion_readiness: report.deletion_readiness,
+      issue_counts,
+      totals: report.totals,
+    },
+    by_session_id: bySessionId,
+  };
+}
 
 export type DashboardReviewItem = {
   current_lifecycle_state: LifecycleState;
@@ -25,6 +74,7 @@ export type DashboardData = {
   harness_breakdown: HarnessBreakdownSnapshot;
   knowledge_snapshot: KnowledgeSnapshot;
   pipeline_status: PipelineStatus;
+  quality_audit: DashboardQualityAudit;
   review_items: DashboardReviewItem[];
   sessions: DashboardSession[];
   stats: {
@@ -35,16 +85,23 @@ export type DashboardData = {
 };
 
 export function buildDashboardData(
-  sessions: readonly DashboardSession[],
+  sessions: readonly Omit<DashboardSession, "quality_audit">[],
   pipelineStatus: PipelineStatus,
   knowledgeSnapshot: KnowledgeSnapshot,
   harnessBreakdown: HarnessBreakdownSnapshot,
   reviewItems: readonly DashboardReviewItem[],
+  qualityAudit: DashboardQualityAudit,
+  qualityAuditBySessionId: Record<string, DashboardSession["quality_audit"]>,
 ): DashboardData {
   const sourceTools: Record<string, number> = {};
   const topicSources: Record<string, number> = {};
 
-  for (const session of sessions) {
+  const enrichedSessions: DashboardSession[] = sessions.map((session) => ({
+    ...session,
+    quality_audit: qualityAuditBySessionId[session.detail.index.asd_session_id] ?? null,
+  }));
+
+  for (const session of enrichedSessions) {
     sourceTools[session.detail.index.source_tool] =
       (sourceTools[session.detail.index.source_tool] ?? 0) + 1;
     topicSources[session.detail.index.topic_source] =
@@ -56,11 +113,12 @@ export function buildDashboardData(
     harness_breakdown: harnessBreakdown,
     knowledge_snapshot: knowledgeSnapshot,
     pipeline_status: pipelineStatus,
+    quality_audit: qualityAudit,
     review_items: [...reviewItems].sort((left, right) => {
       const byTime = right.updated_at.localeCompare(left.updated_at);
       return byTime !== 0 ? byTime : left.session_id.localeCompare(right.session_id);
     }),
-    sessions: [...sessions].sort((left, right) => {
+    sessions: [...enrichedSessions].sort((left, right) => {
       const byTime = right.detail.index.updated_at.localeCompare(left.detail.index.updated_at);
       return byTime !== 0
         ? byTime
@@ -69,7 +127,7 @@ export function buildDashboardData(
     stats: {
       source_tools: sourceTools,
       topic_sources: topicSources,
-      total_sessions: sessions.length,
+      total_sessions: enrichedSessions.length,
     },
   };
 }
@@ -123,6 +181,7 @@ export function renderDashboardHtml(data: DashboardData): string {
       kinds: new Set(data.review_items.map((item) => item.review_kind)).size,
       projects: new Set(data.review_items.map((item) => item.project_key)).size,
     },
+    quality_audit: data.quality_audit,
     sessions: data.sessions.map((session) => ({
       // Only the fields the sidebar list, filters, and search read — not the
       // full index record (its absolute paths / uuid never reach the client).
@@ -136,6 +195,7 @@ export function renderDashboardHtml(data: DashboardData): string {
       },
       lifecycle_state: session.lifecycle_state,
       summary_topic: session.detail.summary ? session.detail.summary.topic : null,
+      quality_issues: session.quality_audit?.issues ?? [],
     })),
     stats: data.stats,
   };
@@ -218,6 +278,11 @@ export function renderDashboardHtml(data: DashboardData): string {
     '          <div class="section-stack" id="pipeline-health"></div>',
     "        </div>",
     '        <div class="panel">',
+    "          <h2>Quality audit</h2>",
+    '          <p class="muted">Corpus rollup from quality-audit heuristics; per-session badges in the list.</p>',
+    '          <div class="section-stack" id="quality-audit-view"></div>',
+    "        </div>",
+    '        <div class="panel">',
     "          <h2>Knowledge & instincts</h2>",
     '          <p class="muted">Merged project learnings and project instinct store snapshots with source back-links.</p>',
     '          <div class="section-stack" id="knowledge-view"></div>',
@@ -262,6 +327,7 @@ export function renderDashboardHtml(data: DashboardData): string {
     "      const sessionList = document.getElementById('session-list');",
     "      const detail = document.getElementById('detail');",
     "      const pipelineHealth = document.getElementById('pipeline-health');",
+    "      const qualityAuditView = document.getElementById('quality-audit-view');",
     "      const knowledgeView = document.getElementById('knowledge-view');",
     "      const harnessView = document.getElementById('harness-view');",
     "      const reviewQueueView = document.getElementById('review-queue-view');",
@@ -275,6 +341,7 @@ export function renderDashboardHtml(data: DashboardData): string {
     "      hydrateSelect(sourceToolSelect, 'All source tools', uniqueValues(data.sessions.map((session) => session.index.source_tool)));",
     "      hydrateSelect(lifecycleStateSelect, 'All lifecycle states', uniqueValues(data.sessions.map((session) => session.lifecycle_state)));",
     "      renderPipelineHealth();",
+    "      renderQualityAuditView();",
     "      renderKnowledgeView();",
     "      renderHarnessView();",
     "      renderReviewQueueView();",
@@ -312,6 +379,19 @@ export function renderDashboardHtml(data: DashboardData): string {
     "          renderMetricCard('Sessions by lifecycle', metricEntries(status.sessionsByLifecycle)) +",
     "          renderMetricCard('Blocked deletion reasons', metricEntries(status.blockedReasons)) +",
     "          '</div>';",
+    "      }",
+    "      function renderQualityAuditView() {",
+    "        const audit = data.quality_audit;",
+    "        const issueEntries = Object.entries(audit.issue_counts).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));",
+    "        qualityAuditView.innerHTML = '<div class=\"kpi-grid\">' +",
+    "          renderMetricCard('Audit totals', [",
+    "            { label: 'Indexed sessions', value: String(data.stats.total_sessions) },",
+    "            { label: 'Ledger audited', value: String(audit.totals.audited) },",
+    "            { label: 'With issues', value: String(audit.totals.with_issues) },",
+    "          ]) +",
+    "          renderMetricCard('Deletion readiness', metricEntries(audit.deletion_readiness)) +",
+    "          '</div>' +",
+    "          renderMetricCard('Issue codes (corpus)', issueEntries.map(([label, value]) => ({ label, value: String(value) })));",
     "      }",
     "      function renderKnowledgeView() {",
     "        const snapshot = data.knowledge_snapshot;",
@@ -383,6 +463,7 @@ export function renderDashboardHtml(data: DashboardData): string {
     "            '<span class=\"chip\">' + escapeHtml(record.source_tool) + '</span>' +",
     "            '<span class=\"chip\">' + escapeHtml(session.lifecycle_state) + '</span>' +",
     "            '<span class=\"chip\">' + escapeHtml(record.topic_source) + '</span>' +",
+    "            renderQualityIssueChips(session.quality_issues) +",
     "            '</div>' +",
     "            '<p class=\"muted\">' + escapeHtml(record.asd_session_id) + '</p>' +",
     "            '<p>' + escapeHtml(record.next_step) + '</p>';",
@@ -400,9 +481,14 @@ export function renderDashboardHtml(data: DashboardData): string {
     "          '<span class=\"chip\">' + escapeHtml(record.source_tool) + '</span>' +",
     "          '<span class=\"chip\">' + escapeHtml(session.lifecycle_state) + '</span>' +",
     "          '<span class=\"chip\">updated ' + escapeHtml(record.updated_at) + '</span>' +",
+    "          renderQualityIssueChips(session.quality_issues) +",
     "          '</div>' +",
     "          '<div class=\"panel\"><h3>Summary</h3>' + (summary ? renderSummary(summary) : '<p class=\"empty\">Summary artifact missing.</p>') + '</div>' +",
     "          '<div class=\"panel\"><h3>Reduced timeline</h3>' + (turns.length === 0 ? '<p class=\"empty\">Reduced artifact missing or empty.</p>' : turns.map(renderTurn).join('')) + '</div>';",
+    "      }",
+    "      function renderQualityIssueChips(issues) {",
+    "        if (!issues || issues.length === 0) return '';",
+    "        return issues.map((issue) => '<span class=\"chip\">' + escapeHtml(issue) + '</span>').join('');",
     "      }",
     "      function renderSummary(summary) {",
     "        return '<p><strong>Topic source:</strong> ' + escapeHtml(summary.topic_source) + '</p>' +",

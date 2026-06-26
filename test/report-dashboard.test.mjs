@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildDashboardData, renderDashboardHtml } from "../dist/report/dashboard.js";
+import {
+  buildDashboardData,
+  buildDashboardQualityAudit,
+  renderDashboardHtml,
+} from "../dist/report/dashboard.js";
 
 function makeSession(id, { turnBody, summaryTopic }) {
   return {
@@ -58,9 +62,77 @@ const emptyHarness = {
   totals: { sessions: 0, project_learnings: 0, total_cost_usd: 0 },
 };
 
-function render(sessions, { knowledge = emptyKnowledge, reviewItems = [] } = {}) {
+const emptyQualityAudit = {
+  issue_counts: {},
+  deletion_readiness: {
+    blocked: 0,
+    discardable_no_signal: 0,
+    missing_candidate: 0,
+    ready: 0,
+  },
+  totals: { audited: 0, with_issues: 0 },
+};
+
+function render(
+  sessions,
+  { knowledge = emptyKnowledge, reviewItems = [], qualityAudit = emptyQualityAudit } = {},
+) {
+  const sessionIds = sessions.map((session) => session.detail.index.asd_session_id);
+  const qualityAuditBundle = buildDashboardQualityAudit(
+    {
+      blocked_reasons: {},
+      deletion_readiness: qualityAudit.deletion_readiness,
+      issue_counts: {
+        blocked_deletion: 0,
+        completion_as_next_step: 0,
+        no_files_of_interest: 0,
+        no_project_learnings: 0,
+        no_useful_commands: 0,
+        process_chatter: qualityAudit.issue_counts.process_chatter ?? 0,
+        summary_invalid: 0,
+        summary_low_signal: 0,
+        summary_missing: 0,
+        topic_process_chatter: 0,
+        topic_wrapper_heading: 0,
+        wrapper_tags: qualityAudit.issue_counts.wrapper_tags ?? 0,
+      },
+      learning_distribution: {
+        buckets: { gt_10: 0, gt_25: 0, gt_50: 0, gte_10: 0, gte_25: 0, gte_50: 0 },
+        max_project_learnings: 0,
+        percentiles: { p50: 0, p75: 0, p90: 0, p95: 0, p99: 0 },
+        sessions_with_project_learnings: 0,
+        top_sessions: [],
+        total_project_learnings: 0,
+      },
+      recommendations: [],
+      sessions: sessionIds.map((sessionId) => ({
+        blocked_reason: null,
+        candidate_state: null,
+        issue_count: (qualityAudit.by_session?.[sessionId]?.issues ?? []).length,
+        issues: qualityAudit.by_session?.[sessionId]?.issues ?? [],
+        knowledge_artifacts: { project: false, user: false },
+        project_key: "demo",
+        project_learning_count: 0,
+        safe_to_delete: null,
+        session_id: sessionId,
+        topic: null,
+      })),
+      totals: qualityAudit.totals,
+      worst_sessions: [],
+    },
+    sessionIds,
+  );
+
   return renderDashboardHtml(
-    buildDashboardData(sessions, emptyPipeline, knowledge, emptyHarness, reviewItems),
+    buildDashboardData(
+      sessions,
+      emptyPipeline,
+      knowledge,
+      emptyHarness,
+      reviewItems,
+      qualityAuditBundle.audit,
+      qualityAuditBundle.by_session_id,
+    ),
   );
 }
 
@@ -184,4 +256,31 @@ test("script-terminating sequences in data are neutralized", () => {
   const openers = (html.match(/<script/g) ?? []).length;
   assert.equal(closers, openers, "unbalanced script tags — data broke out of a block");
   assert.ok(html.includes("\\u003c/script>"), "expected `<` in data to be escaped to \\u003c");
+});
+
+test("quality audit rollup and per-session issue badges flow through the eager payload", () => {
+  const html = render([makeSession("s1", { turnBody: "b", summaryTopic: "t" })], {
+    qualityAudit: {
+      issue_counts: { process_chatter: 2, wrapper_tags: 1 },
+      deletion_readiness: {
+        blocked: 1,
+        discardable_no_signal: 0,
+        missing_candidate: 0,
+        ready: 3,
+      },
+      totals: { audited: 5, with_issues: 2 },
+      by_session: {
+        s1: { issues: ["process_chatter", "wrapper_tags"] },
+      },
+    },
+  });
+  const data = parseEagerPayload(html);
+
+  assert.equal(data.quality_audit.totals.with_issues, 2);
+  assert.equal(data.quality_audit.issue_counts.process_chatter, 2);
+  assert.equal(data.quality_audit.deletion_readiness.ready, 3);
+  assert.deepEqual(data.sessions[0].quality_issues, ["process_chatter", "wrapper_tags"]);
+  assert.match(html, /Quality audit/);
+  assert.match(html, /process_chatter/);
+  assert.match(html, /wrapper_tags/);
 });
