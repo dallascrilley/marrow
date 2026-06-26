@@ -709,7 +709,7 @@ function selectTopicLine(prompt: string): string {
   return prompt;
 }
 
-function isHarnessTopicLine(line: string): boolean {
+export function isHarnessTopicLine(line: string): boolean {
   return (
     /^#\s*(?:AGENTS|CLAUDE)\.md\b/i.test(line) ||
     /^(?:AGENTS|CLAUDE)\.md\s+instructions\s+for\b/i.test(line) ||
