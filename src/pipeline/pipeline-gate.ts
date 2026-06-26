@@ -14,10 +14,21 @@ import {
   type LlmBudgetStatus,
   type LlmUsdBudgetStatus,
 } from "./llm-budget.js";
+import {
+  assessSessionIntegrity,
+  type SessionIntegrityFindingCode,
+  type SessionIntegrityReport,
+} from "./session-integrity.js";
 
 export type IngestGateSource = {
   discovered_count: number;
   pending_count: number;
+};
+
+export type PipelineGateSessionIntegrity = {
+  findings_by_code: Record<SessionIntegrityFindingCode, number>;
+  ok: boolean;
+  total_findings: number;
 };
 
 export type PipelineGateReport = {
@@ -32,9 +43,12 @@ export type PipelineGateReport = {
     pending_learnings: number;
     pending_sessions: number;
   };
+  session_integrity: PipelineGateSessionIntegrity;
   recommendations: {
+    run_check: boolean;
     run_ingest: boolean;
     run_review_learnings: boolean;
+    skip_check_reason: string | null;
     skip_review_learnings_reason: string | null;
   };
 };
@@ -72,6 +86,7 @@ export async function assessPipelineGate(
   const llmReview = await countPendingLlmReview();
   const llmBudget = await assessLlmBudget(maxPer);
   const usdBudget = await assessUsdBudget(maxUsd);
+  const sessionIntegrity = await assessSessionIntegrity(database);
 
   let skipReviewReason: string | null = null;
   if (llmReview.pending_learnings === 0) {
@@ -82,6 +97,8 @@ export async function assessPipelineGate(
     skipReviewReason = "llm_usd_budget_exhausted";
   }
 
+  const skipCheckReason = sessionIntegrity.ok ? null : "session_integrity_violations";
+
   return {
     ingest: {
       by_source: bySource,
@@ -91,11 +108,32 @@ export async function assessPipelineGate(
     llm_budget: llmBudget,
     usd_budget: usdBudget,
     llm_review: llmReview,
+    session_integrity: summarizeSessionIntegrity(sessionIntegrity),
     recommendations: {
+      run_check: !sessionIntegrity.ok,
       run_ingest: pendingSessions > 0,
       run_review_learnings: skipReviewReason === null,
+      skip_check_reason: skipCheckReason,
       skip_review_learnings_reason: skipReviewReason,
     },
+  };
+}
+
+function summarizeSessionIntegrity(report: SessionIntegrityReport): PipelineGateSessionIntegrity {
+  const findingsByCode: Record<SessionIntegrityFindingCode, number> = {
+    duplicate_asd_session_id: 0,
+    duplicate_ledger_session_id: 0,
+    orphan_manifest: 0,
+  };
+
+  for (const finding of report.findings) {
+    findingsByCode[finding.code] += 1;
+  }
+
+  return {
+    findings_by_code: findingsByCode,
+    ok: report.ok,
+    total_findings: report.findings.length,
   };
 }
 
