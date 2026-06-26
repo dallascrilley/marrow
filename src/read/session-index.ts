@@ -41,6 +41,11 @@ export const sessionIndexRecordSchema = z.object({
 
 export type SessionIndexRecord = z.infer<typeof sessionIndexRecordSchema>;
 
+export type BuildSessionIndexOptions = {
+  /** Omit ledger-deleted sessions from the exported searchable index. */
+  excludeSessionIds?: ReadonlySet<string>;
+};
+
 export function getSessionIndexPath(): string {
   return join(getRuntimePath("index"), "session-index.jsonl");
 }
@@ -82,15 +87,21 @@ export async function loadSessionIndexRecords(
   }
 }
 
-export async function buildSessionIndex(): Promise<SessionIndexRecord[]> {
+export async function buildSessionIndex(
+  options: BuildSessionIndexOptions = {},
+): Promise<SessionIndexRecord[]> {
   const manifestPaths = await listManifestPaths();
   const recordsByIdentity = new Map<
     string,
     { generatedAt: string; manifestPath: string; record: SessionIndexRecord }
   >();
+  const excludeSessionIds = options.excludeSessionIds;
 
   for (const manifestPath of manifestPaths) {
     const manifest = sessionManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
+    if (excludeSessionIds?.has(manifest.session.session_id) === true) {
+      continue;
+    }
     const summary = summarySchema.parse(
       JSON.parse(await readFile(manifest.artifact_paths.summary_json_path, "utf8")),
     );

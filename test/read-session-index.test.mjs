@@ -174,3 +174,78 @@ test("loadSessionIndexRecords falls back to buildSessionIndex when index is miss
     assert.equal(records[0].source_uuid, "019e516f-5f85-7550-a1b9-adcbab812b33");
   });
 });
+
+test("buildSessionIndex excludes sessions listed in excludeSessionIds", async () => {
+  await withRuntime(async (runtimeRoot) => {
+    async function writeManifest(sessionId, topic, sourcePath) {
+      const summaryPath = join(runtimeRoot, "summaries", "by-session", sessionId, "summary.json");
+      const manifestPath = join(runtimeRoot, "sources", "manifests", `${sessionId}.json`);
+
+      await mkdir(join(runtimeRoot, "summaries", "by-session", sessionId), { recursive: true });
+      await mkdir(join(runtimeRoot, "sources", "manifests"), { recursive: true });
+      await writeFile(
+        summaryPath,
+        `${JSON.stringify({
+          session_id: sessionId,
+          topic,
+          topic_source: "deterministic",
+          what_worked: [],
+          what_failed: [],
+          what_was_decided: [],
+          useful_commands: [],
+          files_of_interest: [],
+          next_step: "Keep shipping.",
+          project_learnings: [],
+          user_learnings: [],
+          deletion_readiness: "ready",
+        })}\n`,
+        "utf8",
+      );
+      await writeFile(
+        manifestPath,
+        `${JSON.stringify({
+          artifact_paths: {
+            summary_json_path: summaryPath,
+          },
+          generated_at: "2026-06-24T00:02:00.000Z",
+          session: {
+            conversation_id: `demo:${sessionId}`,
+            ingest_status: "archived",
+            project_key: "demo",
+            retention_status: "kept",
+            session_id: sessionId,
+            source_format: "jsonl",
+            source_hash: `sha256:${sessionId}`,
+            source_path: sourcePath,
+            source_tool: "cursor",
+            started_at: "2026-06-24T00:00:00.000Z",
+            updated_at: "2026-06-24T00:01:00.000Z",
+            workspace_path: "/Users/example/Code/demo",
+          },
+          version: 1,
+        })}\n`,
+        "utf8",
+      );
+    }
+
+    await writeManifest(
+      "active-session",
+      "Active topic",
+      join(runtimeRoot, "fixtures", "active.jsonl"),
+    );
+    await writeManifest(
+      "deleted-session",
+      "# Instructions (read first)",
+      join(runtimeRoot, "fixtures", "deleted.jsonl"),
+    );
+
+    const allRecords = await buildSessionIndex();
+    assert.equal(allRecords.length, 2);
+
+    const filtered = await buildSessionIndex({
+      excludeSessionIds: new Set(["deleted-session"]),
+    });
+    assert.equal(filtered.length, 1);
+    assert.equal(filtered[0].asd_session_id, "active-session");
+  });
+});

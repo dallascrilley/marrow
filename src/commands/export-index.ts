@@ -5,13 +5,17 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
 import { ensureRuntimePath } from "../config/paths.js";
+import { listSourceSessionsByLifecycle } from "../db/ledger.js";
 import { buildSessionIndex } from "../read/session-index.js";
 
 export async function executeExportIndex(
   context: CommandContext,
-  _database: DatabaseSync,
+  database: DatabaseSync,
 ): Promise<number> {
-  const records = await buildSessionIndex();
+  const deletedSessionIds = new Set(
+    listSourceSessionsByLifecycle(database, ["deleted"]).map((session) => session.session_id),
+  );
+  const records = await buildSessionIndex({ excludeSessionIds: deletedSessionIds });
   const indexDir = await ensureRuntimePath("index");
   const exportPath = join(indexDir, "session-index.jsonl");
   const contents =
