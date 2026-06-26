@@ -5,7 +5,7 @@ import { summarySchema, turnSchema } from "../models/canonical.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
 import type { SessionIndexRecord } from "./session-index.js";
-import { buildSessionIndex, loadSessionIndexRecords } from "./session-index.js";
+import { buildSessionIndex, readSessionIndexFile } from "./session-index.js";
 
 export type ArtifactReadResult<T> = { found: true; value: T } | { found: false; value: null };
 
@@ -66,10 +66,25 @@ export async function readReducedTurns(sessionId: string): Promise<ArtifactReadR
 }
 
 export async function getSessionDetail(asdSessionId: string): Promise<SessionDetail | null> {
-  const cachedRecords = await loadSessionIndexRecords({ fallbackToBuild: true });
-  const record =
-    cachedRecords.find((entry) => entry.asd_session_id === asdSessionId) ??
-    (await buildSessionIndex()).find((entry) => entry.asd_session_id === asdSessionId);
+  // Read the persisted index if present. When it is missing we build once, and
+  // that fresh build is authoritative — no second build is warranted.
+  let records: SessionIndexRecord[];
+  let builtFromScratch = false;
+  try {
+    records = await readSessionIndexFile();
+  } catch {
+    records = await buildSessionIndex();
+    builtFromScratch = true;
+  }
+
+  let record = records.find((entry) => entry.asd_session_id === asdSessionId);
+
+  // The on-disk index can be present but stale (missing a genuinely new
+  // session). Rebuild once to catch that — but skip it when we already built
+  // from scratch above, so getSessionDetail never builds the index twice.
+  if (!record && !builtFromScratch) {
+    record = (await buildSessionIndex()).find((entry) => entry.asd_session_id === asdSessionId);
+  }
 
   if (!record) {
     return null;
