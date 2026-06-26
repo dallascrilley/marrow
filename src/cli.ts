@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { executeArchiveRun } from "./commands/archive-run.js";
 import { executeDeleteApply } from "./commands/delete-apply.js";
 import { executeDeleteCandidates } from "./commands/delete-candidates.js";
+import { executeDoctorProvider } from "./commands/doctor-provider.js";
 import { executeExplain } from "./commands/explain.js";
 import { executeExportIndex } from "./commands/export-index.js";
 import { executeHooksInstall } from "./commands/hooks-install.js";
@@ -127,6 +128,16 @@ const commandTree: Record<string, CommandDefinition> = {
       apply: {
         description: "Dry-run deletion apply by default; pass --apply to mark candidates deleted.",
         execute: async (context) => withLedger(context, executeDeleteApply),
+      },
+    },
+  },
+  doctor: {
+    description: "Preflight checks for operator diagnostics.",
+    subcommands: {
+      provider: {
+        description:
+          "Check OpenRouter credential resolution, model catalog, route/data-policy, and LLM budget headroom.",
+        execute: async (context) => executeDoctorProvider(context),
       },
     },
   },
