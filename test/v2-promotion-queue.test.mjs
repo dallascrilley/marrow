@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -9,6 +9,7 @@ import { saveInstinct } from "../dist/v2/instinct/store.js";
 import { syncReviewedLearningsToInstinctStore } from "../dist/v2/learning/sync-reviewed.js";
 import {
   detectPromotionCandidates,
+  getPromotionQueuePath,
   readPromotionQueue,
   refreshPromotionQueue,
 } from "../dist/v2/promotion/queue.js";
@@ -194,5 +195,53 @@ test("syncReviewedLearningsToInstinctStore refreshes the promotion queue as a si
     const queue = await readPromotionQueue();
     assert.equal(queue.length, 1);
     assert.equal(queue[0].instinct_id, "prefer-pnpm-aaaaaaaa");
+  });
+});
+
+test("readPromotionQueue round-trips a schema-valid file", async () => {
+  await withRuntime(async () => {
+    await saveInstinct("proj-alpha001", makeInstinct("proj-alpha001", { confidence: 0.85 }));
+    await saveInstinct("proj-beta0002", makeInstinct("proj-beta0002", { confidence: 0.87 }));
+
+    const written = await refreshPromotionQueue(fixedNow);
+    assert.deepEqual(await readPromotionQueue(), written);
+  });
+});
+
+test("readPromotionQueue falls back to [] for malformed JSON", async () => {
+  await withRuntime(async () => {
+    await writeFile(getPromotionQueuePath(), "{ not valid json", "utf8");
+    assert.deepEqual(await readPromotionQueue(), []);
+  });
+});
+
+test("readPromotionQueue falls back to [] when an entry violates the schema", async () => {
+  await withRuntime(async () => {
+    // Well-formed JSON, but `domain` is not a known enum value and
+    // numeric fields are the wrong type — zod must reject the whole queue.
+    const corrupt = {
+      entries: [
+        {
+          instinct_id: "x",
+          trigger: "t",
+          finding: "f",
+          domain: "not-a-real-domain",
+          detected_at: "2026-06-25T00:00:00.000Z",
+          avg_confidence: "high",
+          project_count: 2,
+          projects: [],
+          thresholds: { min_projects: 2, min_avg_confidence: 0.8, min_age_days: 14 },
+        },
+      ],
+    };
+    await writeFile(getPromotionQueuePath(), JSON.stringify(corrupt), "utf8");
+    assert.deepEqual(await readPromotionQueue(), []);
+  });
+});
+
+test("readPromotionQueue treats a missing entries key as an empty queue", async () => {
+  await withRuntime(async () => {
+    await writeFile(getPromotionQueuePath(), JSON.stringify({}), "utf8");
+    assert.deepEqual(await readPromotionQueue(), []);
   });
 });
