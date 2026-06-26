@@ -150,6 +150,15 @@ function parseEagerPayload(html) {
   );
 }
 
+function parseLazyAggregate(html, kind) {
+  const pattern = new RegExp(
+    `<script type="application/json" class="asd-aggregate" data-aggregate="${kind}">([^<]*)</script>`,
+  );
+  const match = html.match(pattern);
+  assert.ok(match, `expected lazy aggregate block for ${kind}`);
+  return JSON.parse(match[1]);
+}
+
 function makeProject(i) {
   return {
     project_id: `proj-${i}`,
@@ -239,16 +248,25 @@ test("aggregate panels ship only displayed entries plus precomputed counts", () 
   assert.equal(data.knowledge_snapshot.projects_count, 30);
   assert.equal(data.knowledge_snapshot.total_learnings, 123);
   assert.equal(data.knowledge_snapshot.total_instincts, 456);
-  // The full arrays must NOT have been inlined.
-  assert.ok(!html.includes("proj-29"), "untrimmed project leaked into payload");
-  assert.ok(!html.includes("finding 39"), "untrimmed instinct leaked into payload");
+  // The full arrays must NOT have been inlined into the eager payload.
+  assert.ok(
+    !eagerPayloadLine(html).includes("proj-29"),
+    "untrimmed project leaked into eager payload",
+  );
+  assert.ok(
+    !eagerPayloadLine(html).includes("finding 39"),
+    "untrimmed instinct leaked into eager payload",
+  );
 
   // Review: only top-12 inlined; stats computed over the full set.
   assert.equal(data.review_items.length, 12);
   assert.equal(data.review_stats.total, 50);
   assert.equal(data.review_stats.kinds, 2); // summary + learning
   assert.equal(data.review_stats.projects, 3); // project-0/1/2
-  assert.ok(!html.includes("reason 49"), "untrimmed review item leaked into payload");
+  assert.ok(
+    !eagerPayloadLine(html).includes("reason 49"),
+    "untrimmed review item leaked into eager payload",
+  );
 });
 
 test("script-terminating sequences in data are neutralized", () => {
@@ -300,4 +318,38 @@ test("quality issue codes are included in sidebar search text", () => {
     },
   });
   assert.match(html, /session\.quality_issues/);
+});
+
+test("full aggregate lists are lazy-loaded outside the eager payload", () => {
+  const knowledge = {
+    projects: Array.from({ length: 30 }, (_, i) => makeProject(i)),
+    instincts: Array.from({ length: 40 }, (_, i) => makeInstinct(i)),
+    total_learnings: 123,
+    total_instincts: 456,
+  };
+  const reviewItems = Array.from({ length: 50 }, (_, i) => makeReviewItem(i));
+  const html = render([makeSession("s1", { turnBody: "b", summaryTopic: "t" })], {
+    knowledge,
+    reviewItems,
+  });
+  const data = parseEagerPayload(html);
+
+  assert.equal(data.lazy_aggregates.knowledge_projects, true);
+  assert.equal(data.lazy_aggregates.knowledge_instincts, true);
+  assert.equal(data.lazy_aggregates.review_items, true);
+  assert.ok(!eagerPayloadLine(html).includes("proj-29"));
+  assert.ok(!eagerPayloadLine(html).includes("finding 39"));
+  assert.ok(!eagerPayloadLine(html).includes("reason 49"));
+
+  const projects = parseLazyAggregate(html, "knowledge-projects");
+  const instincts = parseLazyAggregate(html, "knowledge-instincts");
+  const reviews = parseLazyAggregate(html, "review-items");
+  assert.equal(projects.length, 30);
+  assert.equal(projects[29].project_id, "proj-29");
+  assert.equal(instincts.length, 40);
+  assert.equal(instincts[39].finding, "finding 39");
+  assert.equal(reviews.length, 50);
+  assert.equal(reviews[49].reason, "reason 49");
+  assert.match(html, /getAggregate\('knowledge-projects'\)/);
+  assert.match(html, /bindDrilldownButtons/);
 });
