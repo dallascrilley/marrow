@@ -6,7 +6,11 @@ import test from "node:test";
 import { createLedger, listSourceSessions, upsertSourceSession } from "../dist/db/ledger.js";
 import { sourceSessionFixture, turnSchema } from "../dist/models/canonical.js";
 import { resummarizeSessions } from "../dist/pipeline/resummarize.js";
-import { isLowSignalTopic, summarizeSession } from "../dist/pipeline/summarize.js";
+import {
+  isHarnessTopicLine,
+  isLowSignalTopic,
+  summarizeSession,
+} from "../dist/pipeline/summarize.js";
 import { buildSessionIndex } from "../dist/read/session-index.js";
 import { getProjectKnowledgeSessionPath } from "../dist/writers/knowledge-writer.js";
 import { writeSessionManifest } from "../dist/writers/manifest-writer.js";
@@ -18,6 +22,11 @@ test("isLowSignalTopic flags bare skill slugs and wrapper-only topics", () => {
   assert.equal(isLowSignalTopic("brainstorming"), true);
   assert.equal(isLowSignalTopic("whats-next"), true);
   assert.equal(isLowSignalTopic("Fix export-index contract topic provenance"), false);
+});
+
+test("isHarnessTopicLine flags wrapper-header topic leaks", () => {
+  assert.equal(isHarnessTopicLine("# Instructions (read first)"), true);
+  assert.equal(isHarnessTopicLine("Fix export-index contract topic provenance"), false);
 });
 
 test("summarizeSession skips skill-wrapper-only user prompts for topic", () => {
@@ -281,6 +290,11 @@ async function seedResummarizeFixture({
   return { summary, sourcePath, upserted };
 }
 
+test("isHarnessTopicLine flags wrapper-header topic leaks", () => {
+  assert.equal(isHarnessTopicLine("# Instructions (read first)"), true);
+  assert.equal(isHarnessTopicLine("Fix export-index contract topic provenance"), false);
+});
+
 test("resummarizeSessions --low-signal-only skips high-signal topics", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-filter-"));
   const runtimeRoot = join(sandbox, "runtime");
@@ -314,6 +328,46 @@ test("resummarizeSessions --low-signal-only skips high-signal topics", async () 
     assert.equal(result.skipped[0]?.reason, "high_signal_topic");
     assert.equal(result.skipped[0]?.session_id, "high-signal-session");
     assert.equal(result.sessions[0]?.session_id, "low-signal-session");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("resummarizeSessions --leaked-topic-only targets harness wrapper topics", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-leaked-"));
+  const runtimeRoot = join(sandbox, "runtime");
+  process.env[runtimeOverrideEnvVar] = runtimeRoot;
+
+  try {
+    const database = await createLedger();
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId: "leaked-topic-session",
+      topic: "# Instructions (read first)",
+      userPrompt: "Add export-index command for Tether session search.",
+    });
+    await seedResummarizeFixture({
+      database,
+      runtimeRoot,
+      sandbox,
+      sessionId: "clean-topic-session",
+      topic: "Fix export-index contract topic provenance",
+      userPrompt: "Fix export-index contract topic provenance",
+    });
+
+    const result = await resummarizeSessions(database, {
+      leakedTopicOnly: true,
+    });
+
+    assert.equal(result.processed_count, 1);
+    assert.equal(result.skipped_count, 1);
+    assert.equal(result.skipped[0]?.reason, "clean_topic");
+    assert.equal(result.skipped[0]?.session_id, "clean-topic-session");
+    assert.equal(result.sessions[0]?.session_id, "leaked-topic-session");
+    assert.equal(result.sessions[0]?.topic, "Add export-index command for Tether session search.");
   } finally {
     delete process.env[runtimeOverrideEnvVar];
     await rm(sandbox, { force: true, recursive: true });

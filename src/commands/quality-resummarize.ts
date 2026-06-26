@@ -42,6 +42,7 @@ function parseResummarizeOptions(args: readonly string[]): {
   exportIndex?: boolean;
   limit?: number;
   llmTopic?: boolean;
+  leakedTopicOnly?: boolean;
   lowSignalOnly?: boolean;
   maxPer?: string;
   overExtractedOnly?: boolean;
@@ -51,6 +52,7 @@ function parseResummarizeOptions(args: readonly string[]): {
   let dryRun = false;
   let exportIndex = false;
   let llmTopic = false;
+  let leakedTopicOnly = false;
   let lowSignalOnly = false;
   let overExtractedOnly = false;
   let limit: number | undefined;
@@ -79,6 +81,11 @@ function parseResummarizeOptions(args: readonly string[]): {
     if (arg === "--max-per") {
       maxPer = requireOptionValue("--max-per", args[index + 1]);
       index += 1;
+      continue;
+    }
+
+    if (arg === "--leaked-topic-only") {
+      leakedTopicOnly = true;
       continue;
     }
 
@@ -117,10 +124,15 @@ function parseResummarizeOptions(args: readonly string[]): {
     throw new Error(`Unknown resummarize option: ${arg}`);
   }
 
+  if (leakedTopicOnly && lowSignalOnly) {
+    throw new Error("Use only one of --leaked-topic-only or --low-signal-only");
+  }
+
   return {
     ...(dryRun ? { dryRun: true } : {}),
     ...(exportIndex ? { exportIndex: true } : {}),
     ...(llmTopic ? { llmTopic: true } : {}),
+    ...(leakedTopicOnly ? { leakedTopicOnly: true } : {}),
     ...(lowSignalOnly ? { lowSignalOnly: true } : {}),
     ...(overExtractedOnly ? { overExtractedOnly: true } : {}),
     ...(maxPer === undefined ? {} : { maxPer }),
