@@ -56,9 +56,23 @@ your … data policy").
    ```
    A non-404 result with `total_reviewed_learnings: 1` confirms the route is open.
 
+## Model swap does NOT help — the restriction is account-wide
+A direct 1-token `chat/completions` probe across six models and four providers
+(`openai/gpt-5-nano`, `openai/gpt-5.4-nano`, `openai/gpt-5.4-mini`,
+`google/gemini-2.5-flash`, `anthropic/claude-haiku-4.5`,
+`meta-llama/llama-3.3-70b-instruct`) returned the **same data-policy 404 for
+every one**. So the guardrail applies to the whole account, not a single model —
+changing `OPENROUTER_MODEL` / `defaultOpenRouterLearningReviewModel` cannot work
+around it. The only fix is the account privacy setting above.
+
 ## Notes
 - Diagnosis is cheap and safe: a single `--max-total-learnings 1` run makes at
   most one real call, and the `$1/24h` USD ceiling caps any scaled trial.
-- If changing account policy is undesirable, the alternative is to pin a model
-  whose endpoints already satisfy the current policy — but that is a per-account
-  routing question, so verify with the one-call probe above rather than guessing.
+- Fast isolation probe (bypasses the slow session scan):
+  ```bash
+  curl -s https://openrouter.ai/api/v1/chat/completions \
+    -H "Authorization: Bearer $OPENROUTER_API_KEY" -H "Content-Type: application/json" \
+    -d '{"model":"openai/gpt-5-nano","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}'
+  ```
+  A `200` with a `finish_reason` means the route is open; a `404` mentioning
+  "data policy" means the account guardrail still blocks it.

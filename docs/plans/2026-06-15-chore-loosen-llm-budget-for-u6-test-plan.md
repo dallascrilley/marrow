@@ -8,6 +8,19 @@ td_epic: td-85e202
 
 **Summary:** The default `5/24h` sliding-window cap is blocking U6 (`quality review-learnings` on 770 low-signal / 9,203 pending learnings). The USD budget is healthy and the code already supports explicit per-run override via `--max-per` and `ASD_LLM_MAX_PER`. This plan uses those existing controls to run a small trial, measure real cost per learning, then do a bounded sweep while keeping the hard USD ceiling in place.
 
+> **Update 2026-06-25 — default ratified at `50/24h` (supersedes R1/R5).**
+> This plan assumed the hardcoded default would stay `5/24h` and only loosen
+> per-run. In practice PR #63 (`8699a1e`, 2026-06-23) changed
+> `defaultMaxPer` to `50/24h` with a documented rationale (see
+> `src/pipeline/llm-budget.ts`): the **USD ceiling (`ASD_LLM_MAX_USD`, default
+> `1/24h`) is the financial guardrail**, so the call-count cap only smooths
+> bursts and can be set generously to let the backlog drain at the cost pace
+> rather than an artificial count. Since the USD ceiling bounds spend either
+> way, `50/24h` serves the backlog-drain goal with no cost downside. We ratify
+> `50/24h` as the intentional default; acceptance criterion 5 ("default remains
+> `5/24h`") is **superseded** — the binding guard is the USD ceiling, not the
+> count cap. Per-run `--max-per` still overrides for trials/sweeps.
+
 ## Requirements
 
 - **R1.** Use the existing per-call budget override (`--max-per` / `ASD_LLM_MAX_PER`) instead of changing the hardcoded default.
