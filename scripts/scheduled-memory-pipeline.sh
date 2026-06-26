@@ -15,6 +15,9 @@ for adapter in "${ADAPTERS[@]}"; do
   "${CLI[@]}" ingest sync --resume --source "$adapter"
 done
 
+echo "[asd] check (session integrity; fails fast before audit/LLM steps)"
+"${CLI[@]}" check
+
 echo "[asd] pipeline gate (--skip-ingest; ingest already ran above)"
 "${CLI[@]}" pipeline gate --skip-ingest --max-per "${ASD_LLM_MAX_PER:-5/24h}"
 

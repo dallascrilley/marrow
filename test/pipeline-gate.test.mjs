@@ -103,6 +103,10 @@ test("assessPipelineGate reports budget and review recommendations", async () =>
       assert.equal(report.llm_budget.max_per_window, "3/24h");
       assert.equal(typeof report.llm_review.pending_learnings, "number");
       assert.equal(typeof report.recommendations.run_review_learnings, "boolean");
+      assert.equal(report.session_integrity.ok, true);
+      assert.equal(report.session_integrity.total_findings, 0);
+      assert.equal(report.recommendations.run_check, false);
+      assert.equal(report.recommendations.skip_check_reason, null);
     } finally {
       database.close();
     }
