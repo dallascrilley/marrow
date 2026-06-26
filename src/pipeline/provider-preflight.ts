@@ -74,6 +74,16 @@ export async function assessProviderPreflight(
       message: `${openRouterApiKeyEnvVar} is not set`,
       status: "fail",
     });
+    checks.push({
+      id: "model_catalog",
+      message: "Skipped model catalog check (missing credential)",
+      status: "warn",
+    });
+    checks.push({
+      id: "route",
+      message: "Skipped route probe (missing credential)",
+      status: "warn",
+    });
   } else {
     checks.push({
       id: "credential",
@@ -81,6 +91,8 @@ export async function assessProviderPreflight(
       status: "pass",
       detail: { source: options.apiKey === undefined ? "environment" : "option" },
     });
+    checks.push(await checkModelCatalog(fetchImpl, apiKey, model));
+    checks.push(await checkRoute(fetchImpl, apiKey, model));
   }
 
   const llmBudget = await assessLlmBudget(maxPer);
@@ -110,23 +122,6 @@ export async function assessProviderPreflight(
       spent_usd: usdBudget.spent_usd,
     },
   });
-
-  if (apiKey !== undefined && apiKey.trim().length > 0) {
-    const catalogCheck = await checkModelCatalog(fetchImpl, apiKey, model);
-    checks.push(catalogCheck);
-    checks.push(await checkRoute(fetchImpl, apiKey, model));
-  } else {
-    checks.push({
-      id: "model_catalog",
-      message: "Skipped model catalog check (missing credential)",
-      status: "warn",
-    });
-    checks.push({
-      id: "route",
-      message: "Skipped route probe (missing credential)",
-      status: "warn",
-    });
-  }
 
   const routeBlocked = checks.some(
     (check) => check.id === "route" && check.detail?.data_policy_block === true,
@@ -241,7 +236,7 @@ async function checkRoute(
       message: dataPolicyBlock
         ? "OpenRouter account data-policy guardrail blocks all routes for this model"
         : `OpenRouter route probe failed (${response.status})`,
-      status: dataPolicyBlock ? "fail" : "fail",
+      status: "fail",
       detail: {
         data_policy_block: dataPolicyBlock,
         error: errorMessage,

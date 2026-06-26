@@ -17,7 +17,6 @@ export async function executeDoctorProvider(context: CommandContext): Promise<nu
     context.output.info(JSON.stringify(report, null, 2));
   } else {
     context.output.info(report.summary);
-    context.output.info(JSON.stringify(report, null, 2));
   }
 
   return providerPreflightExitCode(report);

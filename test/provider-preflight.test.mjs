@@ -72,6 +72,41 @@ test("assessProviderPreflight exit code 2 for data-policy route block", async ()
   assert.match(report.summary, /settings\/privacy/);
 });
 
+test("assessProviderPreflight uses exit code 1 for non-policy route failures", async () => {
+  const report = await assessProviderPreflight({
+    apiKey: "test-key",
+    fetchImpl: createMockFetch({
+      catalogIds: ["openai/gpt-5-nano"],
+      routeError: "Invalid API key",
+      routeStatus: 401,
+    }),
+    maxPer: "999/24h",
+    maxUsd: "999/24h",
+    model: "openai/gpt-5-nano",
+  });
+
+  assert.equal(report.route_blocked_by_data_policy, false);
+  assert.equal(providerPreflightExitCode(report), 1);
+});
+
+test("assessProviderPreflight reports checks in credential → catalog → route → budget order", async () => {
+  const report = await assessProviderPreflight({
+    apiKey: "test-key",
+    fetchImpl: createMockFetch({
+      catalogIds: ["openai/gpt-5-nano"],
+      routeStatus: 200,
+    }),
+    maxPer: "999/24h",
+    maxUsd: "999/24h",
+    model: "openai/gpt-5-nano",
+  });
+
+  assert.deepEqual(
+    report.checks.map((check) => check.id),
+    ["credential", "model_catalog", "route", "count_budget", "usd_budget"],
+  );
+});
+
 function notReachableFetch() {
   throw new Error("fetch should not be called when credential is missing");
 }
