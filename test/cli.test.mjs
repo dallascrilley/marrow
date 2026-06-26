@@ -40,6 +40,7 @@ test("asd --help lists every Task 1 command", () => {
     "quality apply-learning-review",
     "quality resummarize",
     "pipeline gate",
+    "doctor provider",
     "review queue",
     "review show",
     "archive run",
@@ -1301,5 +1302,26 @@ test("quality resummarize --dry-run reports would_process_count via CLI", async 
   } finally {
     delete process.env[runtimeOverrideEnvVar];
     await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("doctor provider exits 1 when OPENROUTER_API_KEY is unset", () => {
+  const previous = process.env.OPENROUTER_API_KEY;
+  delete process.env.OPENROUTER_API_KEY;
+
+  try {
+    const result = runCli(["doctor", "provider"], {
+      OPENROUTER_API_KEY: "",
+    });
+
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    assert.match(result.stdout, /OPENROUTER_API_KEY is not set/);
+    assert.doesNotMatch(result.stdout, /^\s*\{/m);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.OPENROUTER_API_KEY;
+    } else {
+      process.env.OPENROUTER_API_KEY = previous;
+    }
   }
 });
