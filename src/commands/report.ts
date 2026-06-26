@@ -40,8 +40,7 @@ export async function executeReport(
       await listKnowledgeSnapshot(database),
       await listHarnessComparison(database),
       listReviewItems(database).map(mapReviewItem),
-      qualityAuditBundle.audit,
-      qualityAuditBundle.by_session_id,
+      qualityAuditBundle,
     ),
   );
 
@@ -114,7 +113,9 @@ async function loadDashboardSessions(
     }),
   );
 
-  return sessions.filter((session): session is DashboardSession => session !== null);
+  return sessions.filter(
+    (session): session is Omit<DashboardSession, "quality_audit"> => session !== null,
+  );
 }
 
 function mapReviewItem(item: ReviewQueueEntryRow): DashboardReviewItem {

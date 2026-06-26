@@ -16,17 +16,20 @@ export type DashboardSession = {
 
 export type DashboardQualityAudit = {
   deletion_readiness: QualityAuditReport["deletion_readiness"];
+  indexed_with_issues: number;
   issue_counts: Partial<Record<QualityIssueCode, number>>;
   totals: QualityAuditReport["totals"];
+};
+
+export type DashboardQualityAuditBundle = {
+  audit: DashboardQualityAudit;
+  by_session_id: Record<string, DashboardSession["quality_audit"]>;
 };
 
 export function buildDashboardQualityAudit(
   report: QualityAuditReport,
   sessionIds: readonly string[],
-): {
-  audit: DashboardQualityAudit;
-  by_session_id: Record<string, DashboardSession["quality_audit"]>;
-} {
+): DashboardQualityAuditBundle {
   const wanted = new Set(sessionIds);
   const bySessionId: Record<string, DashboardSession["quality_audit"]> = {};
   for (const session of report.sessions) {
@@ -51,6 +54,7 @@ export function buildDashboardQualityAudit(
   return {
     audit: {
       deletion_readiness: report.deletion_readiness,
+      indexed_with_issues: 0,
       issue_counts,
       totals: report.totals,
     },
@@ -90,16 +94,21 @@ export function buildDashboardData(
   knowledgeSnapshot: KnowledgeSnapshot,
   harnessBreakdown: HarnessBreakdownSnapshot,
   reviewItems: readonly DashboardReviewItem[],
-  qualityAudit: DashboardQualityAudit,
-  qualityAuditBySessionId: Record<string, DashboardSession["quality_audit"]>,
+  qualityAuditBundle: DashboardQualityAuditBundle,
 ): DashboardData {
   const sourceTools: Record<string, number> = {};
   const topicSources: Record<string, number> = {};
 
   const enrichedSessions: DashboardSession[] = sessions.map((session) => ({
     ...session,
-    quality_audit: qualityAuditBySessionId[session.detail.index.asd_session_id] ?? null,
+    quality_audit: qualityAuditBundle.by_session_id[session.detail.index.asd_session_id] ?? null,
   }));
+
+  const quality_audit: DashboardQualityAudit = {
+    ...qualityAuditBundle.audit,
+    indexed_with_issues: enrichedSessions.filter((session) => session.quality_audit !== null)
+      .length,
+  };
 
   for (const session of enrichedSessions) {
     sourceTools[session.detail.index.source_tool] =
@@ -113,7 +122,7 @@ export function buildDashboardData(
     harness_breakdown: harnessBreakdown,
     knowledge_snapshot: knowledgeSnapshot,
     pipeline_status: pipelineStatus,
-    quality_audit: qualityAudit,
+    quality_audit: quality_audit,
     review_items: [...reviewItems].sort((left, right) => {
       const byTime = right.updated_at.localeCompare(left.updated_at);
       return byTime !== 0 ? byTime : left.session_id.localeCompare(right.session_id);
@@ -364,7 +373,7 @@ export function renderDashboardHtml(data: DashboardData): string {
     "          if (tool && session.index.source_tool !== tool) return false;",
     "          if (lifecycle && session.lifecycle_state !== lifecycle) return false;",
     "          if (!needle) return true;",
-    "          const text = [session.index.asd_session_id, session.index.topic, session.index.next_step, session.lifecycle_state, session.summary_topic || ''].join('\\n').toLowerCase();",
+    "          const text = [session.index.asd_session_id, session.index.topic, session.index.next_step, session.lifecycle_state, session.summary_topic || '', ...(session.quality_issues || [])].join('\\n').toLowerCase();",
     "          return text.includes(needle);",
     "        });",
     "      }",
@@ -387,7 +396,8 @@ export function renderDashboardHtml(data: DashboardData): string {
     "          renderMetricCard('Audit totals', [",
     "            { label: 'Indexed sessions', value: String(data.stats.total_sessions) },",
     "            { label: 'Ledger audited', value: String(audit.totals.audited) },",
-    "            { label: 'With issues', value: String(audit.totals.with_issues) },",
+    "            { label: 'Indexed with issues', value: String(audit.indexed_with_issues) },",
+    "            { label: 'Ledger with issues', value: String(audit.totals.with_issues) },",
     "          ]) +",
     "          renderMetricCard('Deletion readiness', metricEntries(audit.deletion_readiness)) +",
     "          '</div>' +",
