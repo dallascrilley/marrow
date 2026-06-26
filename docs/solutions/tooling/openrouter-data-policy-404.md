@@ -61,9 +61,21 @@ A direct 1-token `chat/completions` probe across six models and four providers
 (`openai/gpt-5-nano`, `openai/gpt-5.4-nano`, `openai/gpt-5.4-mini`,
 `google/gemini-2.5-flash`, `anthropic/claude-haiku-4.5`,
 `meta-llama/llama-3.3-70b-instruct`) returned the **same data-policy 404 for
-every one**. So the guardrail applies to the whole account, not a single model —
-changing `OPENROUTER_MODEL` / `defaultOpenRouterLearningReviewModel` cannot work
-around it. The only fix is the account privacy setting above.
+every one**. So the guardrail applies to the whole account for fixed model ids.
+
+**Exception (2026-06-26):** `openrouter/auto` succeeds because OpenRouter picks a
+compliant endpoint dynamically. Use it for review-learnings until privacy settings
+are relaxed:
+
+```bash
+export OPENROUTER_MODEL=openrouter/auto
+# or per run:
+node dist/cli.js doctor provider --model openrouter/auto
+node dist/cli.js quality review-learnings --model openrouter/auto --max-total-learnings 1
+```
+
+Fixed-id swaps (`OPENROUTER_MODEL=openai/gpt-5-nano`, etc.) still 404; only
+`openrouter/auto` (or changing account privacy) unblocks the route.
 
 ## Notes
 - Diagnosis is cheap and safe: a single `--max-total-learnings 1` run makes at
