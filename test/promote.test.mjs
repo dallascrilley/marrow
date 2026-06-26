@@ -74,6 +74,7 @@ test("promote review lists queued cross-project promotion candidates", async () 
 
     assert.equal(result.status, 0, result.stderr);
     const payload = JSON.parse(result.stdout);
+    assert.equal(payload.summary, "1 instinct(s) queued for cross-project promotion.");
     assert.equal(payload.entries.length, 1);
     assert.equal(payload.entries[0].instinct_id, "prefer-pnpm-aaaaaaaa");
     assert.equal(payload.entries[0].trigger, "When installing packages");
