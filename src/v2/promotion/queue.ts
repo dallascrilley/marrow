@@ -87,6 +87,9 @@ export async function refreshPromotionQueue(
 export async function detectPromotionCandidates(
   now = new Date().toISOString(),
 ): Promise<PromotionQueueEntry[]> {
+  // TODO(perf): full scan — loads every instinct of every project on each run.
+  // Fine at current scale; revisit with an incremental/indexed pass if the
+  // instinct store grows large enough for this to dominate refresh latency.
   const buckets = new Map<
     string,
     {
@@ -211,6 +214,10 @@ function dedupeProjects(projects: PromotionProjectSnapshot[]): PromotionProjectS
   return [...map.values()];
 }
 
+// Age is measured from when the project FIRST reached *any* eligible maturity
+// (established/proven), not from instinct creation — so a long-established
+// instinct qualifies as soon as it has held an eligible maturity for
+// PROMOTION_MIN_AGE_DAYS, regardless of when it was originally created.
 function isAgeEligible(project: PromotionProjectSnapshot, now: string): boolean {
   const reachedEligibleMaturityAt = eligibleMaturityReachedAt(project);
   if (reachedEligibleMaturityAt === null) {
