@@ -26,6 +26,9 @@ test("isLowSignalTopic flags bare skill slugs and wrapper-only topics", () => {
 
 test("isHarnessTopicLine flags wrapper-header topic leaks", () => {
   assert.equal(isHarnessTopicLine("# Instructions (read first)"), true);
+  assert.equal(isHarnessTopicLine("# TASK"), true);
+  assert.equal(isHarnessTopicLine("## Context Usage"), true);
+  assert.equal(isHarnessTopicLine("# Handoff"), true);
   assert.equal(isHarnessTopicLine("Fix export-index contract topic provenance"), false);
 });
 
@@ -289,11 +292,6 @@ async function seedResummarizeFixture({
 
   return { summary, sourcePath, upserted };
 }
-
-test("isHarnessTopicLine flags wrapper-header topic leaks", () => {
-  assert.equal(isHarnessTopicLine("# Instructions (read first)"), true);
-  assert.equal(isHarnessTopicLine("Fix export-index contract topic provenance"), false);
-});
 
 test("resummarizeSessions --low-signal-only skips high-signal topics", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-filter-"));

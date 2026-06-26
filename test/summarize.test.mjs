@@ -3,6 +3,8 @@ import test from "node:test";
 
 import { eventSchema, sourceSessionFixture, turnSchema } from "../dist/models/canonical.js";
 import {
+  isAmbiguousWrapperHeadingTopic,
+  isHarnessTopicLine,
   isLowSignalTopic,
   summarizeSession,
   summarizeSessionWithOptionalLlmTopic,
@@ -1041,6 +1043,25 @@ test("deriveTopic skips an HTML-comment header to reach the real title line", ()
   assert.equal(summary.topic, "# ce-work — execute the plan, close the loop");
 });
 
+test("isAmbiguousWrapperHeadingTopic flags Prompt Optimizer but not structural harness headings", () => {
+  assert.equal(isAmbiguousWrapperHeadingTopic("# Prompt Optimizer"), true);
+  assert.equal(
+    isAmbiguousWrapperHeadingTopic("# ce-work — execute the plan, close the loop"),
+    false,
+  );
+  assert.equal(isAmbiguousWrapperHeadingTopic("# TASK"), false);
+  assert.equal(isAmbiguousWrapperHeadingTopic("# Instructions (read first)"), false);
+});
+
+test("isHarnessTopicLine flags corpus-validated structural wrapper headers", () => {
+  assert.equal(isHarnessTopicLine("# Instructions (read first)"), true);
+  assert.equal(isHarnessTopicLine("# TASK"), true);
+  assert.equal(isHarnessTopicLine("## Context Usage"), true);
+  assert.equal(isHarnessTopicLine("# Handoff"), true);
+  assert.equal(isHarnessTopicLine("# Prompt Optimizer"), false);
+  assert.equal(isHarnessTopicLine("# ce-work — execute the plan, close the loop"), false);
+});
+
 test("deriveTopic skips the '# Instructions (read first)' prompt-wrapper header", () => {
   const sourceSession = {
     ...sourceSessionFixture,
@@ -1073,4 +1094,43 @@ test("deriveTopic skips the '# Instructions (read first)' prompt-wrapper header"
   });
 
   assert.equal(summary.topic, "Refactor the auth module to use the shared validator.");
+});
+
+test("deriveTopic skips corpus-validated structural wrapper headers", () => {
+  const cases = [
+    { header: "# TASK", body: "Ship the dashboard audit panel." },
+    { header: "## Context Usage", body: "Reduce eager payload size for dashboard." },
+    { header: "# Handoff", body: "Continue ingestion quality fixes next session." },
+  ];
+
+  for (const { header, body } of cases) {
+    const sourceSession = {
+      ...sourceSessionFixture,
+      project_key: "agent-session-distillery",
+      session_id: `wrapper-${header.replace(/\W+/g, "-").toLowerCase()}`,
+    };
+    const turns = [
+      turnSchema.parse({
+        assistant_summary: "Did the work.",
+        commands_seen: [],
+        ended_at: "2026-05-03T23:10:01.000Z",
+        files_touched: [],
+        index: 0,
+        session_id: sourceSession.session_id,
+        started_at: "2026-05-03T23:10:00.000Z",
+        tool_stub_count: 0,
+        turn_id: `${sourceSession.session_id}:turn-0000`,
+        user_prompt: [header, body].join("\n"),
+        verification_seen: false,
+      }),
+    ];
+
+    const summary = summarizeSession({
+      events: [],
+      sourceSession,
+      turns,
+    });
+
+    assert.equal(summary.topic, body, `expected real task after ${header}`);
+  }
 });
