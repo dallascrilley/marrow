@@ -6,8 +6,11 @@ import {
   providerPreflightExitCode,
   resolveOpenRouterReviewModel,
 } from "../dist/pipeline/provider-preflight.js";
+import { withRuntimeRoot } from "./helpers/with-runtime-root.mjs";
 
-test("resolveOpenRouterReviewModel prefers explicit model then env default", () => {
+test("resolveOpenRouterReviewModel prefers explicit model then env default", {
+  concurrency: false,
+}, () => {
   const previous = process.env.OPENROUTER_MODEL;
   process.env.OPENROUTER_MODEL = "custom/model";
 
@@ -24,87 +27,97 @@ test("resolveOpenRouterReviewModel prefers explicit model then env default", () 
 });
 
 test("assessProviderPreflight reports missing credential and skips remote checks", async () => {
-  const report = await assessProviderPreflight({
-    apiKey: "",
-    fetchImpl: notReachableFetch,
-  });
+  await withRuntimeRoot(async () => {
+    const report = await assessProviderPreflight({
+      apiKey: "",
+      fetchImpl: notReachableFetch,
+    });
 
-  assert.equal(report.ok, false);
-  assert.equal(report.checks.find((check) => check.id === "credential")?.status, "fail");
-  assert.equal(report.checks.find((check) => check.id === "model_catalog")?.status, "warn");
-  assert.equal(providerPreflightExitCode(report), 1);
+    assert.equal(report.ok, false);
+    assert.equal(report.checks.find((check) => check.id === "credential")?.status, "fail");
+    assert.equal(report.checks.find((check) => check.id === "model_catalog")?.status, "warn");
+    assert.equal(providerPreflightExitCode(report), 1);
+  });
 });
 
 test("assessProviderPreflight passes when catalog and route succeed", async () => {
-  const report = await assessProviderPreflight({
-    apiKey: "test-key",
-    fetchImpl: createMockFetch({
-      catalogIds: ["openai/gpt-5-nano"],
-      routeStatus: 200,
-    }),
-    maxPer: "999/24h",
-    maxUsd: "999/24h",
-    model: "openai/gpt-5-nano",
-  });
+  await withRuntimeRoot(async () => {
+    const report = await assessProviderPreflight({
+      apiKey: "test-key",
+      fetchImpl: createMockFetch({
+        catalogIds: ["openai/gpt-5-nano"],
+        routeStatus: 200,
+      }),
+      maxPer: "999/24h",
+      maxUsd: "999/24h",
+      model: "openai/gpt-5-nano",
+    });
 
-  assert.equal(report.ok, true);
-  assert.equal(report.route_blocked_by_data_policy, false);
-  assert.equal(providerPreflightExitCode(report), 0);
+    assert.equal(report.ok, true);
+    assert.equal(report.route_blocked_by_data_policy, false);
+    assert.equal(providerPreflightExitCode(report), 0);
+  });
 });
 
 test("assessProviderPreflight exit code 2 for data-policy route block", async () => {
-  const report = await assessProviderPreflight({
-    apiKey: "test-key",
-    fetchImpl: createMockFetch({
-      catalogIds: ["openai/gpt-5-nano"],
-      routeError:
-        "No endpoints available matching your guardrail restrictions and data policy. Configure: https://openrouter.ai/settings/privacy",
-      routeStatus: 404,
-    }),
-    maxPer: "999/24h",
-    maxUsd: "999/24h",
-    model: "openai/gpt-5-nano",
-  });
+  await withRuntimeRoot(async () => {
+    const report = await assessProviderPreflight({
+      apiKey: "test-key",
+      fetchImpl: createMockFetch({
+        catalogIds: ["openai/gpt-5-nano"],
+        routeError:
+          "No endpoints available matching your guardrail restrictions and data policy. Configure: https://openrouter.ai/settings/privacy",
+        routeStatus: 404,
+      }),
+      maxPer: "999/24h",
+      maxUsd: "999/24h",
+      model: "openai/gpt-5-nano",
+    });
 
-  assert.equal(report.ok, false);
-  assert.equal(report.route_blocked_by_data_policy, true);
-  assert.equal(providerPreflightExitCode(report), 2);
-  assert.match(report.summary, /settings\/privacy/);
+    assert.equal(report.ok, false);
+    assert.equal(report.route_blocked_by_data_policy, true);
+    assert.equal(providerPreflightExitCode(report), 2);
+    assert.match(report.summary, /settings\/privacy/);
+  });
 });
 
 test("assessProviderPreflight uses exit code 1 for non-policy route failures", async () => {
-  const report = await assessProviderPreflight({
-    apiKey: "test-key",
-    fetchImpl: createMockFetch({
-      catalogIds: ["openai/gpt-5-nano"],
-      routeError: "Invalid API key",
-      routeStatus: 401,
-    }),
-    maxPer: "999/24h",
-    maxUsd: "999/24h",
-    model: "openai/gpt-5-nano",
-  });
+  await withRuntimeRoot(async () => {
+    const report = await assessProviderPreflight({
+      apiKey: "test-key",
+      fetchImpl: createMockFetch({
+        catalogIds: ["openai/gpt-5-nano"],
+        routeError: "Invalid API key",
+        routeStatus: 401,
+      }),
+      maxPer: "999/24h",
+      maxUsd: "999/24h",
+      model: "openai/gpt-5-nano",
+    });
 
-  assert.equal(report.route_blocked_by_data_policy, false);
-  assert.equal(providerPreflightExitCode(report), 1);
+    assert.equal(report.route_blocked_by_data_policy, false);
+    assert.equal(providerPreflightExitCode(report), 1);
+  });
 });
 
 test("assessProviderPreflight reports checks in credential → catalog → route → budget order", async () => {
-  const report = await assessProviderPreflight({
-    apiKey: "test-key",
-    fetchImpl: createMockFetch({
-      catalogIds: ["openai/gpt-5-nano"],
-      routeStatus: 200,
-    }),
-    maxPer: "999/24h",
-    maxUsd: "999/24h",
-    model: "openai/gpt-5-nano",
-  });
+  await withRuntimeRoot(async () => {
+    const report = await assessProviderPreflight({
+      apiKey: "test-key",
+      fetchImpl: createMockFetch({
+        catalogIds: ["openai/gpt-5-nano"],
+        routeStatus: 200,
+      }),
+      maxPer: "999/24h",
+      maxUsd: "999/24h",
+      model: "openai/gpt-5-nano",
+    });
 
-  assert.deepEqual(
-    report.checks.map((check) => check.id),
-    ["credential", "model_catalog", "route", "count_budget", "usd_budget"],
-  );
+    assert.deepEqual(
+      report.checks.map((check) => check.id),
+      ["credential", "model_catalog", "route", "count_budget", "usd_budget"],
+    );
+  });
 });
 
 function notReachableFetch() {
