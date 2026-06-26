@@ -274,6 +274,49 @@ export function isWrapperLeakTopic(topic: string): boolean {
   );
 }
 
+export function isHarnessTopicLine(line: string): boolean {
+  return (
+    /^#\s*(?:AGENTS|CLAUDE)\.md\b/i.test(line) ||
+    /^(?:AGENTS|CLAUDE)\.md\s+instructions\s+for\b/i.test(line) ||
+    // Prompt-wrapper boilerplate header — never a real task topic (29 sessions
+    // in the corpus had this leak as their topic). The "(read first)" idiom is
+    // the unambiguous wrapper tell; legit "# Instructions for X" topics are not
+    // matched.
+    /^#{1,6}\s+Instructions\s*\(read first\)/i.test(line) ||
+    /^#{1,6}\s+TASK\b/i.test(line) ||
+    /^#{1,6}\s+Context Usage\b/i.test(line) ||
+    /^#{1,6}\s+Handoff\b/i.test(line) ||
+    /^(?:system[-_]reminder|environment_context|command-message|command-name|command-args|task-notification|local-command-(?:stdout|stderr)|user-prompt-submit-hook|bash-(?:input|stdout|stderr))\b/i.test(
+      line,
+    ) ||
+    /^turn_aborted$/i.test(line) ||
+    /^<!--/i.test(line) ||
+    /^A session-scoped \w+ hook is now active\b/i.test(line) ||
+    /^Base directory for this skill\b/i.test(line) ||
+    /^Caveat:/i.test(line) ||
+    /^\[Request interrupted by user\b/i.test(line) ||
+    /^\[Image:[^\]]+\]$/i.test(line) ||
+    /^<\/?skill\b/i.test(line) ||
+    /\/SKILL\.md\b/i.test(line)
+  );
+}
+
+export function isAmbiguousWrapperHeadingTopic(topic: string): boolean {
+  const normalized = topic.replace(/\s+/g, " ").trim();
+  if (normalized.length === 0) {
+    return false;
+  }
+
+  // Advisory-only: corpus-validated markdown headings that may be harness noise
+  // or a legitimate user-chosen task title. Quality-audit flags these; derivation
+  // does not silently drop them (contrast isHarnessTopicLine).
+  if (isHarnessTopicLine(normalized)) {
+    return false;
+  }
+
+  return /^#{1,6}\s+Prompt Optimizer\b/i.test(normalized);
+}
+
 function looksLikeWrapperPromptTopic(topic: string): boolean {
   const trimmed = topic.trim();
   const prefixes = [
@@ -709,50 +752,11 @@ function selectTopicLine(prompt: string): string {
   return prompt;
 }
 
-export function isAmbiguousWrapperHeadingTopic(topic: string): boolean {
-  const normalized = topic.replace(/\s+/g, " ").trim();
-  if (normalized.length === 0) {
-    return false;
-  }
-
-  // Advisory-only: corpus-validated markdown headings that may be harness noise
-  // or a legitimate user-chosen task title. Quality-audit flags these; derivation
-  // does not silently drop them (contrast isHarnessTopicLine).
-  return /^#{1,6}\s+Prompt Optimizer\b/i.test(normalized);
-}
-
-export function isHarnessTopicLine(line: string): boolean {
-  return (
-    /^#\s*(?:AGENTS|CLAUDE)\.md\b/i.test(line) ||
-    /^(?:AGENTS|CLAUDE)\.md\s+instructions\s+for\b/i.test(line) ||
-    // Prompt-wrapper boilerplate header — never a real task topic (29 sessions
-    // in the corpus had this leak as their topic). The "(read first)" idiom is
-    // the unambiguous wrapper tell; legit "# Instructions for X" topics are not
-    // matched.
-    /^#{1,6}\s+Instructions\s*\(read first\)/i.test(line) ||
-    /^#{1,6}\s+TASK\b/i.test(line) ||
-    /^#{1,6}\s+Context Usage\b/i.test(line) ||
-    /^#{1,6}\s+Handoff\b/i.test(line) ||
-    /^(?:system[-_]reminder|environment_context|command-message|command-name|command-args|task-notification|local-command-(?:stdout|stderr)|user-prompt-submit-hook|bash-(?:input|stdout|stderr))\b/i.test(
-      line,
-    ) ||
-    /^turn_aborted$/i.test(line) ||
-    /^<!--/i.test(line) ||
-    /^A session-scoped \w+ hook is now active\b/i.test(line) ||
-    /^Base directory for this skill\b/i.test(line) ||
-    /^Caveat:/i.test(line) ||
-    /^\[Request interrupted by user\b/i.test(line) ||
-    /^\[Image:[^\]]+\]$/i.test(line) ||
-    /^<\/?skill\b/i.test(line) ||
-    /\/SKILL\.md\b/i.test(line)
-  );
-}
-
 function isPromotableMarkdownTopicLine(line: string): boolean {
   const normalized = line.trim();
   return (
     /^#{1,6}\s+/.test(normalized) &&
-    !/^#\s*(?:AGENTS|CLAUDE)\.md\b/i.test(normalized) &&
+    !isHarnessTopicLine(normalized) &&
     !/^#{1,6}\s+User Input\b/i.test(normalized)
   );
 }

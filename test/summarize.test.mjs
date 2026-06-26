@@ -3,6 +3,8 @@ import test from "node:test";
 
 import { eventSchema, sourceSessionFixture, turnSchema } from "../dist/models/canonical.js";
 import {
+  isAmbiguousWrapperHeadingTopic,
+  isHarnessTopicLine,
   isLowSignalTopic,
   summarizeSession,
   summarizeSessionWithOptionalLlmTopic,
@@ -1039,6 +1041,25 @@ test("deriveTopic skips an HTML-comment header to reach the real title line", ()
   });
 
   assert.equal(summary.topic, "# ce-work — execute the plan, close the loop");
+});
+
+test("isAmbiguousWrapperHeadingTopic flags Prompt Optimizer but not structural harness headings", () => {
+  assert.equal(isAmbiguousWrapperHeadingTopic("# Prompt Optimizer"), true);
+  assert.equal(
+    isAmbiguousWrapperHeadingTopic("# ce-work — execute the plan, close the loop"),
+    false,
+  );
+  assert.equal(isAmbiguousWrapperHeadingTopic("# TASK"), false);
+  assert.equal(isAmbiguousWrapperHeadingTopic("# Instructions (read first)"), false);
+});
+
+test("isHarnessTopicLine flags corpus-validated structural wrapper headers", () => {
+  assert.equal(isHarnessTopicLine("# Instructions (read first)"), true);
+  assert.equal(isHarnessTopicLine("# TASK"), true);
+  assert.equal(isHarnessTopicLine("## Context Usage"), true);
+  assert.equal(isHarnessTopicLine("# Handoff"), true);
+  assert.equal(isHarnessTopicLine("# Prompt Optimizer"), false);
+  assert.equal(isHarnessTopicLine("# ce-work — execute the plan, close the loop"), false);
 });
 
 test("deriveTopic skips the '# Instructions (read first)' prompt-wrapper header", () => {

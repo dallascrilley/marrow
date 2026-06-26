@@ -723,6 +723,7 @@ test("topic_wrapper_heading flags ambiguous markdown headings without dropping l
 
       assert.ok(ambiguous?.issues.includes("topic_wrapper_heading"));
       assert.ok(!legit?.issues.includes("topic_wrapper_heading"));
+      assert.ok(!ambiguous?.issues.includes("summary_low_signal"));
       assert.equal(report.issue_counts.topic_wrapper_heading, 1);
     } finally {
       database.close();
