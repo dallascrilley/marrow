@@ -158,6 +158,35 @@ export async function buildSessionIndex(
   });
 }
 
+export async function listSessionManifestPaths(): Promise<string[]> {
+  return listManifestPaths();
+}
+
+export type ParsedSessionManifest = {
+  asdSessionId: string;
+  manifestPath: string;
+  session: z.infer<typeof sessionManifestSchema>["session"];
+};
+
+export async function loadParsedSessionManifests(): Promise<ParsedSessionManifest[]> {
+  const manifestPaths = await listManifestPaths();
+  const manifests: ParsedSessionManifest[] = [];
+
+  for (const manifestPath of manifestPaths) {
+    const manifest = sessionManifestSchema.parse(JSON.parse(await readFile(manifestPath, "utf8")));
+    const summary = summarySchema.parse(
+      JSON.parse(await readFile(manifest.artifact_paths.summary_json_path, "utf8")),
+    );
+    manifests.push({
+      asdSessionId: summary.session_id,
+      manifestPath,
+      session: manifest.session,
+    });
+  }
+
+  return manifests;
+}
+
 async function listManifestPaths(): Promise<string[]> {
   const manifestDir = getRuntimePath("manifests");
   let entries: string[];
