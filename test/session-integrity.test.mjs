@@ -38,9 +38,17 @@ async function withRuntimeRoot(run) {
   }
 }
 
-async function writeManifest(runtimeRoot, { sessionId, asdSessionId, sourcePath, sourceTool }) {
+async function writeManifest(
+  runtimeRoot,
+  { sessionId, asdSessionId, sourcePath, sourceTool, manifestFileName, sourceHash },
+) {
   const summaryPath = join(runtimeRoot, "summaries", "by-session", sessionId, "summary.json");
-  const manifestPath = join(runtimeRoot, "sources", "manifests", `${sessionId}.json`);
+  const manifestPath = join(
+    runtimeRoot,
+    "sources",
+    "manifests",
+    manifestFileName ?? `${sessionId}.json`,
+  );
 
   await mkdir(join(runtimeRoot, "summaries", "by-session", sessionId), { recursive: true });
   await mkdir(join(runtimeRoot, "sources", "manifests"), { recursive: true });
@@ -76,7 +84,7 @@ async function writeManifest(runtimeRoot, { sessionId, asdSessionId, sourcePath,
         retention_status: "kept",
         session_id: sessionId,
         source_format: "jsonl",
-        source_hash: `sha256:${sessionId}`,
+        source_hash: sourceHash ?? `sha256:${sessionId}`,
         source_path: sourcePath,
         source_tool: sourceTool,
         started_at: "2026-06-24T00:00:00.000Z",
@@ -177,6 +185,50 @@ test("assessSessionIntegrity flags orphan manifests and duplicate asd_session_id
       assert.ok(
         report.findings.some((finding) => finding.code === "duplicate_asd_session_id"),
         "expected duplicate asd_session_id finding",
+      );
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("assessSessionIntegrity ignores ADR-0008 revision manifests for one source identity", async () => {
+  await withRuntimeRoot(async (runtimeRoot) => {
+    const database = await createLedger();
+    try {
+      const sourcePath = join(runtimeRoot, "fixtures", "revision.jsonl");
+      await mkdir(join(runtimeRoot, "fixtures"), { recursive: true });
+      await writeFile(sourcePath, '{"type":"session"}\n', "utf8");
+
+      upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        session_id: "revision-session",
+        source_path: sourcePath,
+        source_hash: "sha256:revision-new",
+      });
+
+      await writeManifest(runtimeRoot, {
+        sessionId: "revision-session",
+        asdSessionId: "revision-session",
+        sourcePath,
+        sourceTool: "cursor",
+        manifestFileName: "revision-session.legacyhash.json",
+        sourceHash: "sha256:revision-old",
+      });
+      await writeManifest(runtimeRoot, {
+        sessionId: "revision-session",
+        asdSessionId: "revision-session",
+        sourcePath,
+        sourceTool: "cursor",
+        manifestFileName: "revision-session.newhash.json",
+        sourceHash: "sha256:revision-new",
+      });
+
+      const report = await assessSessionIntegrity(database);
+      assert.equal(report.ok, true);
+      assert.equal(
+        report.findings.some((finding) => finding.code === "duplicate_asd_session_id"),
+        false,
       );
     } finally {
       database.close();
