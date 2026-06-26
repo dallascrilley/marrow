@@ -8,7 +8,8 @@ Uses the v1 CLI surface today; v2 instinct sync happens inside
 
 ```text
 ingest sync --resume --source <adapter>
-  → pipeline gate --skip-ingest --max-per 5/24h   # after ingest; LLM + budget only
+  → check                                  # read-only integrity; exit non-zero on violations
+  → pipeline gate --skip-ingest --max-per 5/24h   # after ingest; LLM + budget + integrity rollup
   → quality audit --limit 100
   → [optional] quality review-learnings --if-new --max-per 5/24h   # requires OPENROUTER_API_KEY
   → quality apply-learning-review         # writes projects-reviewed + v2 instincts
@@ -122,6 +123,7 @@ non-zero on the first failure so cron/launchd can surface regressions.
 
 ## Failure handling
 
+- **Integrity check fails:** `check` exits non-zero on duplicate/orphan findings; the scheduled wrapper stops before audit/LLM steps. Inspect with `asd check` (human output) or `asd check --json`. `pipeline gate` also surfaces `session_integrity` and sets `recommendations.run_check` when violations exist.
 - **Ingest fails:** later steps still see stale data; check adapter paths and `ingest sync` logs.
 - **review-learnings skipped:** `apply-learning-review` only promotes rows already in `reports/llm-learning-review.jsonl` or existing reviewed sidecars.
 - **Vault missing:** `memory push-wiki` exits 0 with a notice; export JSONL still updates under the runtime root.
