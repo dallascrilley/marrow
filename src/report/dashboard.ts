@@ -163,6 +163,16 @@ const KNOWLEDGE_PROJECTS_SHOWN = 6;
 const KNOWLEDGE_INSTINCTS_SHOWN = 8;
 const REVIEW_ITEMS_SHOWN = 12;
 
+function renderLazyAggregateBlock(kind: string, value: unknown): string {
+  return (
+    '<script type="application/json" class="asd-aggregate" data-aggregate="' +
+    escapeHtmlAttr(kind) +
+    '">' +
+    escapeScriptJson(value) +
+    "</script>"
+  );
+}
+
 export function renderDashboardHtml(data: DashboardData): string {
   // Split the payload so the page opens instantly regardless of corpus size:
   // the lightweight list is parsed eagerly, while each session's heavy detail
@@ -191,6 +201,11 @@ export function renderDashboardHtml(data: DashboardData): string {
       projects: new Set(data.review_items.map((item) => item.project_key)).size,
     },
     quality_audit: data.quality_audit,
+    lazy_aggregates: {
+      knowledge_instincts: knowledge.instincts.length > KNOWLEDGE_INSTINCTS_SHOWN,
+      knowledge_projects: knowledge.projects.length > KNOWLEDGE_PROJECTS_SHOWN,
+      review_items: data.review_items.length > REVIEW_ITEMS_SHOWN,
+    },
     sessions: data.sessions.map((session) => ({
       // Only the fields the sidebar list, filters, and search read — not the
       // full index record (its absolute paths / uuid never reach the client).
@@ -221,6 +236,19 @@ export function renderDashboardHtml(data: DashboardData): string {
         }) +
         "</script>",
     )
+    .join("\n");
+  const aggregateBlocks = [
+    knowledge.projects.length > KNOWLEDGE_PROJECTS_SHOWN
+      ? renderLazyAggregateBlock("knowledge-projects", knowledge.projects)
+      : "",
+    knowledge.instincts.length > KNOWLEDGE_INSTINCTS_SHOWN
+      ? renderLazyAggregateBlock("knowledge-instincts", knowledge.instincts)
+      : "",
+    data.review_items.length > REVIEW_ITEMS_SHOWN
+      ? renderLazyAggregateBlock("review-items", data.review_items)
+      : "",
+  ]
+    .filter((block) => block.length > 0)
     .join("\n");
 
   return [
@@ -266,6 +294,8 @@ export function renderDashboardHtml(data: DashboardData): string {
     "      .turn:first-child { border-top: 0; padding-top: 0; }",
     "      pre { white-space: pre-wrap; word-break: break-word; background: #09101d; border: 1px solid var(--border); border-radius: 10px; padding: 12px; }",
     "      .empty { color: var(--muted); font-style: italic; }",
+    "      .drilldown-btn { background: var(--panel-alt); color: var(--accent); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; cursor: pointer; margin-top: 8px; }",
+    "      .drilldown-btn:hover { background: var(--chip); }",
     "      @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid var(--border); } .session-list { max-height: none; } }",
     "    </style>",
     "  </head>",
@@ -318,6 +348,7 @@ export function renderDashboardHtml(data: DashboardData): string {
     "      </main>",
     "    </div>",
     detailBlocks,
+    aggregateBlocks,
     "    <script>",
     `      const data = ${payload};`,
     "      const detailNodes = new Map();",
@@ -333,6 +364,21 @@ export function renderDashboardHtml(data: DashboardData): string {
     "        detailCache.set(id, parsed);",
     "        return parsed;",
     "      }",
+    "      const aggregateNodes = new Map();",
+    "      for (const node of document.querySelectorAll('script.asd-aggregate')) { aggregateNodes.set(node.getAttribute('data-aggregate'), node); }",
+    "      const aggregateCache = new Map();",
+    "      function getAggregate(kind) {",
+    "        if (aggregateCache.has(kind)) return aggregateCache.get(kind);",
+    "        const node = aggregateNodes.get(kind);",
+    "        let parsed;",
+    "        try { parsed = node ? JSON.parse(node.textContent) : null; }",
+    "        catch { parsed = null; }",
+    "        aggregateCache.set(kind, parsed);",
+    "        return parsed;",
+    "      }",
+    "      let knowledgeProjectsExpanded = false;",
+    "      let knowledgeInstinctsExpanded = false;",
+    "      let reviewItemsExpanded = false;",
     "      const sessionList = document.getElementById('session-list');",
     "      const detail = document.getElementById('detail');",
     "      const pipelineHealth = document.getElementById('pipeline-health');",
@@ -405,8 +451,8 @@ export function renderDashboardHtml(data: DashboardData): string {
     "      }",
     "      function renderKnowledgeView() {",
     "        const snapshot = data.knowledge_snapshot;",
-    `        const projects = snapshot.projects.slice(0, ${KNOWLEDGE_PROJECTS_SHOWN});`,
-    `        const instincts = snapshot.instincts.slice(0, ${KNOWLEDGE_INSTINCTS_SHOWN});`,
+    "        const projects = knowledgeProjectsExpanded ? (getAggregate('knowledge-projects') || snapshot.projects) : snapshot.projects;",
+    "        const instincts = knowledgeInstinctsExpanded ? (getAggregate('knowledge-instincts') || snapshot.instincts) : snapshot.instincts;",
     "        knowledgeView.innerHTML = '<div class=\"kpi-grid\">' +",
     "          renderMetricCard('Knowledge totals', [",
     "            { label: 'Project learnings', value: String(snapshot.total_learnings) },",
@@ -421,13 +467,16 @@ export function renderDashboardHtml(data: DashboardData): string {
     "            chips: [project.source, project.learnings.length + ' learnings'],",
     "            links: project.learnings.slice(0, 2).map((learning) => learning.statement),",
     "          }))) +",
+    `          renderDrilldownButton('knowledge-projects', knowledgeProjectsExpanded, snapshot.projects_count, ${KNOWLEDGE_PROJECTS_SHOWN}) +`,
     "          renderKnowledgeCard('Recent instincts', instincts.map((instinct) => ({",
     "            title: instinct.finding,",
     "            body: instinct.trigger,",
     "            chips: [instinct.domain, instinct.maturity, 'confidence ' + instinct.confidence],",
     "            links: instinct.source.source_refs.map((ref) => ref.path + ' (' + ref.session + ')').slice(0, 3),",
     "          }))) +",
+    `          renderDrilldownButton('knowledge-instincts', knowledgeInstinctsExpanded, snapshot.total_instincts, ${KNOWLEDGE_INSTINCTS_SHOWN}) +`,
     "          '</div>';",
+    "        bindDrilldownButtons(knowledgeView);",
     "      }",
     "      function renderHarnessView() {",
     "        const breakdown = data.harness_breakdown;",
@@ -442,7 +491,7 @@ export function renderDashboardHtml(data: DashboardData): string {
     "          renderHarnessCard(breakdown.by_source_tool);",
     "      }",
     "      function renderReviewQueueView() {",
-    "        const items = data.review_items;",
+    "        const items = reviewItemsExpanded ? (getAggregate('review-items') || data.review_items) : data.review_items;",
     "        const stats = data.review_stats;",
     "        reviewQueueView.innerHTML = '<div class=\"kpi-grid\">' +",
     "          renderMetricCard('Review queue totals', [",
@@ -451,7 +500,9 @@ export function renderDashboardHtml(data: DashboardData): string {
     "            { label: 'Projects', value: String(stats.projects) },",
     "          ]) +",
     "          '</div>' +",
-    `          renderReviewQueueCard(items.slice(0, ${REVIEW_ITEMS_SHOWN}));`,
+    "          renderReviewQueueCard(items) +",
+    `          renderDrilldownButton('review-items', reviewItemsExpanded, stats.total, ${REVIEW_ITEMS_SHOWN});`,
+    "        bindDrilldownButtons(reviewQueueView);",
     "      }",
     "      function renderSessionList(sessions) {",
     "        sessionList.innerHTML = '';",
@@ -553,6 +604,23 @@ export function renderDashboardHtml(data: DashboardData): string {
     "      function renderInlineLinks(values) {",
     "        if (!values || values.length === 0) return '<p class=\"empty\">No back-links.</p>';",
     "        return '<ul>' + values.map((value) => '<li>' + escapeHtml(String(value)) + '</li>').join('') + '</ul>';",
+    "      }",
+    "      function renderDrilldownButton(kind, expanded, total, shown) {",
+    "        const lazyKey = kind === 'knowledge-projects' ? 'knowledge_projects' : kind === 'knowledge-instincts' ? 'knowledge_instincts' : 'review_items';",
+    "        if (expanded || total <= shown || !data.lazy_aggregates[lazyKey]) return '';",
+    "        return '<button type=\"button\" class=\"drilldown-btn\" data-drilldown=\"' + escapeHtml(kind) + '\">Show all ' + escapeHtml(String(total)) + '</button>';",
+    "      }",
+    "      function bindDrilldownButtons(container) {",
+    "        for (const button of container.querySelectorAll('[data-drilldown]')) {",
+    "          button.addEventListener('click', () => {",
+    "            const kind = button.getAttribute('data-drilldown');",
+    "            if (kind === 'knowledge-projects') knowledgeProjectsExpanded = true;",
+    "            if (kind === 'knowledge-instincts') knowledgeInstinctsExpanded = true;",
+    "            if (kind === 'review-items') reviewItemsExpanded = true;",
+    "            if (kind === 'knowledge-projects' || kind === 'knowledge-instincts') renderKnowledgeView();",
+    "            if (kind === 'review-items') renderReviewQueueView();",
+    "          });",
+    "        }",
     "      }",
     "      function formatUsd(value) { return '$' + Number(value ?? 0).toFixed(6); }",
     "      function hydrateSelect(select, label, values) {",
