@@ -3,6 +3,7 @@
 import { fileURLToPath } from "node:url";
 
 import { executeArchiveRun } from "./commands/archive-run.js";
+import { executeCheckSessions } from "./commands/check-sessions.js";
 import { executeDeleteApply } from "./commands/delete-apply.js";
 import { executeDeleteCandidates } from "./commands/delete-candidates.js";
 import { executeDoctorProvider } from "./commands/doctor-provider.js";
@@ -108,6 +109,11 @@ const commandTree: Record<string, CommandDefinition> = {
         execute: async (context) => withLedger(context, executeQualityResummarize),
       },
     },
+  },
+  check: {
+    description:
+      "Read-only session integrity report: duplicate asd_session_id, duplicate ledger session_id, orphan manifests.",
+    execute: async (context) => withLedger(context, executeCheckSessions),
   },
   archive: {
     description: "Move accepted sessions into archive storage.",
