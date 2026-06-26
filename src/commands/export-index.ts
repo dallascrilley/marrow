@@ -5,13 +5,13 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
 import { ensureRuntimePath } from "../config/paths.js";
-import { buildSessionIndex } from "../read/session-index.js";
+import { buildSearchableSessionIndex } from "../read/session-index.js";
 
 export async function executeExportIndex(
   context: CommandContext,
-  _database: DatabaseSync,
+  database: DatabaseSync,
 ): Promise<number> {
-  const records = await buildSessionIndex();
+  const records = await buildSearchableSessionIndex(database);
   const indexDir = await ensureRuntimePath("index");
   const exportPath = join(indexDir, "session-index.jsonl");
   const contents =

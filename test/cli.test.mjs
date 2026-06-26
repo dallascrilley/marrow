@@ -851,6 +851,119 @@ test("export-index dedupes legacy and revision manifests by identity keeping new
   }
 });
 
+test("export-index omits ledger-deleted sessions even when manifests remain on disk", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-session-index-deleted-"));
+  const runtimeRoot = join(sandbox, "runtime-root");
+  const { createLedger, upsertSourceSession } = await import("../dist/db/ledger.js");
+
+  try {
+    async function writeFixture(sessionId, topic, sourcePath) {
+      const summaryPath = join(runtimeRoot, "summaries", "by-session", sessionId, "summary.json");
+      const manifestPath = join(runtimeRoot, "sources", "manifests", `${sessionId}.json`);
+
+      await mkdir(dirname(sourcePath), { recursive: true });
+      await mkdir(join(runtimeRoot, "summaries", "by-session", sessionId), { recursive: true });
+      await mkdir(join(runtimeRoot, "sources", "manifests"), { recursive: true });
+      await writeFile(sourcePath, '{"type":"session"}\n', "utf8");
+      await writeFile(
+        summaryPath,
+        `${JSON.stringify({
+          session_id: sessionId,
+          topic,
+          topic_source: "deterministic",
+          what_worked: [],
+          what_failed: [],
+          what_was_decided: [],
+          useful_commands: [],
+          files_of_interest: [],
+          next_step: "Keep shipping.",
+          project_learnings: [],
+          user_learnings: [],
+          deletion_readiness: "ready",
+        })}\n`,
+        "utf8",
+      );
+      await writeFile(
+        manifestPath,
+        `${JSON.stringify({
+          artifact_paths: {
+            summary_json_path: summaryPath,
+          },
+          generated_at: "2026-06-24T00:02:00.000Z",
+          session: {
+            conversation_id: `demo:${sessionId}`,
+            ingest_status: "archived",
+            project_key: "demo",
+            retention_status: "kept",
+            session_id: sessionId,
+            source_format: "jsonl",
+            source_hash: `sha256:${sessionId}`,
+            source_path: sourcePath,
+            source_tool: "cursor",
+            started_at: "2026-06-24T00:00:00.000Z",
+            updated_at: "2026-06-24T00:01:00.000Z",
+            workspace_path: "/Users/example/Code/demo",
+          },
+          version: 1,
+        })}\n`,
+        "utf8",
+      );
+    }
+
+    const activeSourcePath = join(runtimeRoot, "fixtures", "active.jsonl");
+    const deletedSourcePath = join(runtimeRoot, "fixtures", "deleted.jsonl");
+    await writeFixture("active-session", "Active topic", activeSourcePath);
+    await writeFixture("deleted-session", "# Instructions (read first)", deletedSourcePath);
+
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const database = await createLedger();
+    for (const [sessionId, sourcePath] of [
+      ["active-session", activeSourcePath],
+      ["deleted-session", deletedSourcePath],
+    ]) {
+      upsertSourceSession(database, {
+        conversation_id: `demo:${sessionId}`,
+        ingest_status: "archived",
+        project_key: "demo",
+        retention_status: "kept",
+        session_id: sessionId,
+        source_format: "jsonl",
+        source_hash: `sha256:${sessionId}`,
+        source_path: sourcePath,
+        source_tool: "cursor",
+        started_at: "2026-06-24T00:00:00.000Z",
+        updated_at: "2026-06-24T00:01:00.000Z",
+        workspace_path: "/Users/example/Code/demo",
+      });
+    }
+    database
+      .prepare(
+        "UPDATE source_sessions SET current_lifecycle_state = 'deleted' WHERE session_id = ?",
+      )
+      .run("deleted-session");
+    database.close();
+
+    const result = runCli(["export-index"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Exported 1 session index record/);
+
+    const exportPath = join(runtimeRoot, "index", "session-index.jsonl");
+    const records = (await readFile(exportPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    assert.equal(records.length, 1);
+    assert.equal(records[0].asd_session_id, "active-session");
+    assert.equal(records[0].topic, "Active topic");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
 test("quality resummarize upgrades a low-signal topic via CLI", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-cli-"));
   const runtimeRoot = join(sandbox, "runtime-root");
