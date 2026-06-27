@@ -23,8 +23,10 @@ export type SessionIntegrityReport = {
     ledger_sessions: number;
     manifests: number;
     orphan_manifests: number;
+    warning_findings: number;
   };
   findings: SessionIntegrityFinding[];
+  /** True when there are no blocking findings (currently: orphan manifests only). */
   ok: boolean;
 };
 
@@ -37,6 +39,9 @@ export type SessionIntegrityReport = {
  * distinct source identities, duplicate session_id rows under different source
  * identities, and manifests with no matching ledger row. Multiple revision
  * manifests for the same source identity (ADR-0008) are expected and ignored.
+ *
+ * Duplicate ledger session_id / cross-path asd_session_id rows are reported as
+ * warnings (common for Cursor main+subagent paths). Only orphan manifests block.
  */
 export async function assessSessionIntegrity(
   database: DatabaseSync,
@@ -93,24 +98,24 @@ export async function assessSessionIntegrity(
     });
   }
 
-  const duplicateLedgerSessionIds = findings.filter(
-    (finding) => finding.code === "duplicate_ledger_session_id",
-  ).length;
-  const duplicateAsdSessionIds = findings.filter(
-    (finding) => finding.code === "duplicate_asd_session_id",
-  ).length;
-  const orphanManifests = findings.filter((finding) => finding.code === "orphan_manifest").length;
+  const blockingFindings = findings.filter((finding) => finding.code === "orphan_manifest");
+  const warningFindings = findings.filter((finding) => finding.code !== "orphan_manifest");
 
   return {
     counts: {
-      duplicate_asd_session_ids: duplicateAsdSessionIds,
-      duplicate_ledger_session_ids: duplicateLedgerSessionIds,
+      duplicate_asd_session_ids: findings.filter(
+        (finding) => finding.code === "duplicate_asd_session_id",
+      ).length,
+      duplicate_ledger_session_ids: findings.filter(
+        (finding) => finding.code === "duplicate_ledger_session_id",
+      ).length,
       ledger_sessions: ledgerSessions.length,
       manifests: manifests.length,
-      orphan_manifests: orphanManifests,
+      orphan_manifests: blockingFindings.length,
+      warning_findings: warningFindings.length,
     },
     findings,
-    ok: findings.length === 0,
+    ok: blockingFindings.length === 0,
   };
 }
 
@@ -119,18 +124,25 @@ export function sessionIntegrityExitCode(report: SessionIntegrityReport): number
 }
 
 export function formatSessionIntegritySummary(report: SessionIntegrityReport): string {
+  const warningCount = report.counts.warning_findings;
+  const blockingCount = report.findings.length - warningCount;
+
   if (report.ok) {
-    return `Session integrity OK (${report.counts.manifests} manifests, ${report.counts.ledger_sessions} ledger sessions).`;
+    const warningSuffix = warningCount > 0 ? ` ${warningCount} non-blocking warning(s)` : "";
+    return `Session integrity OK (${report.counts.manifests} manifests, ${report.counts.ledger_sessions} ledger sessions).${warningSuffix}`;
   }
 
   const lines = [
-    `Session integrity FAILED (${report.findings.length} finding(s); ${report.counts.manifests} manifests, ${report.counts.ledger_sessions} ledger sessions).`,
+    `Session integrity FAILED (${blockingCount} blocking finding(s), ${warningCount} warning(s); ${report.counts.manifests} manifests, ${report.counts.ledger_sessions} ledger sessions).`,
   ];
 
   for (const finding of report.findings) {
     const manifestHint =
       finding.manifest_paths.length > 0 ? ` manifests=${finding.manifest_paths.join(", ")}` : "";
-    lines.push(`- ${finding.code}: ${finding.session_id} — ${finding.details}${manifestHint}`);
+    const label = finding.code === "orphan_manifest" ? "BLOCKING" : "warning";
+    lines.push(
+      `- [${label}] ${finding.code}: ${finding.session_id} — ${finding.details}${manifestHint}`,
+    );
   }
 
   return lines.join("\n");
