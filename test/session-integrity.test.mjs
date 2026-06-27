@@ -176,8 +176,9 @@ test("assessSessionIntegrity flags orphan manifests and duplicate asd_session_id
       });
 
       const report = await assessSessionIntegrity(database);
-      assert.equal(report.ok, false);
+      assert.equal(report.ok, false, "orphan manifest should be blocking");
       assert.equal(sessionIntegrityExitCode(report), 1);
+      assert.equal(report.counts.warning_findings, 1, "duplicate should be warning, not blocking");
       assert.ok(
         report.findings.some((finding) => finding.code === "orphan_manifest"),
         "expected orphan manifest finding",
@@ -229,6 +230,57 @@ test("assessSessionIntegrity ignores ADR-0008 revision manifests for one source 
       assert.equal(
         report.findings.some((finding) => finding.code === "duplicate_asd_session_id"),
         false,
+      );
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("assessSessionIntegrity treats duplicates as warnings (ok=true, exit 0) when no orphans exist", async () => {
+  await withRuntimeRoot(async (runtimeRoot) => {
+    const database = await createLedger();
+    try {
+      const firstPath = join(runtimeRoot, "fixtures", "first.jsonl");
+      const secondPath = join(runtimeRoot, "fixtures", "second.jsonl");
+      await mkdir(join(runtimeRoot, "fixtures"), { recursive: true });
+      await writeFile(firstPath, '{"type":"session"}\n', "utf8");
+      await writeFile(secondPath, '{"type":"session"}\n', "utf8");
+
+      upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        session_id: "ledger-one",
+        source_path: firstPath,
+        source_hash: "sha256:ledger-one",
+      });
+      upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        session_id: "ledger-two",
+        source_path: secondPath,
+        source_hash: "sha256:ledger-two",
+      });
+
+      await writeManifest(runtimeRoot, {
+        sessionId: "ledger-one",
+        asdSessionId: "shared-asd-id",
+        sourcePath: firstPath,
+        sourceTool: "cursor",
+      });
+      await writeManifest(runtimeRoot, {
+        sessionId: "ledger-two",
+        asdSessionId: "shared-asd-id",
+        sourcePath: secondPath,
+        sourceTool: "cursor",
+      });
+
+      const report = await assessSessionIntegrity(database);
+      assert.equal(report.ok, true, "dupes-only should be ok");
+      assert.equal(sessionIntegrityExitCode(report), 0);
+      assert.equal(report.counts.warning_findings, 1, "one duplicate finding");
+      assert.equal(report.counts.orphan_manifests, 0, "no orphans");
+      assert.ok(
+        report.findings.some((finding) => finding.code === "duplicate_asd_session_id"),
+        "expected duplicate finding",
       );
     } finally {
       database.close();
