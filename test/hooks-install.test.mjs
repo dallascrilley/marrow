@@ -43,6 +43,46 @@ test("mergeSessionEndHook is idempotent for existing asd hook", () => {
   assert.deepEqual(after, before);
 });
 
+test("hooks install --events start registers SessionStart recall hook", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-hooks-start-"));
+  const { spawnSync } = await import("node:child_process");
+  const { dirname } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+
+  const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+  const cliPath = join(projectRoot, "dist", "cli.js");
+
+  try {
+    const run = () =>
+      spawnSync(process.execPath, [cliPath, "hooks", "install", "--events", "start"], {
+        cwd: sandbox,
+        encoding: "utf8",
+        env: process.env,
+      });
+
+    const result = run();
+    assert.equal(result.status, 0, result.stderr);
+
+    const hookPath = join(sandbox, ".claude", "hooks", "asd-session-start-recall.sh");
+    await access(hookPath);
+
+    const settingsPath = resolveSettingsPath(sandbox, false);
+    const settings = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.ok(Array.isArray(settings.hooks?.SessionStart));
+    assert.equal(settings.hooks.SessionStart.length, 1);
+    // SessionEnd must not be installed when only start is requested.
+    assert.equal(settings.hooks?.SessionEnd, undefined);
+
+    // Idempotent: a second run leaves the SessionStart array length at 1.
+    const second = run();
+    assert.equal(second.status, 0, second.stderr);
+    const reread = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.equal(reread.hooks.SessionStart.length, 1);
+  } finally {
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
 test("hooks install writes project hook script and settings", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "asd-hooks-install-"));
   const { spawnSync } = await import("node:child_process");
