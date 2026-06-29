@@ -23,7 +23,7 @@ export type ReachabilitySnapshot = {
   projects_total: number;
   /** Projects with at least one reachable instinct. */
   projects_with_reachable: number;
-  /** Global-scope instincts produced (surfaced in every project's rollup). */
+  /** Global-scope instincts produced (rendered to the `_global` rollup). */
   global_produced: number;
   /** Global-scope instincts passing the predicate. */
   global_reachable: number;
