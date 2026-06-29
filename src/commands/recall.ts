@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import type { CommandContext } from "../cli.js";
 import { vaultProjectPath } from "../config/vault-paths.js";
+import { appendRecallEvent } from "../v2/metrics/recall-events.js";
 import { resolveProjectId } from "../v2/project/resolve.js";
 
 const DEFAULT_MAX_BYTES = 4000;
@@ -57,11 +58,25 @@ export async function executeRecall(context: CommandContext): Promise<number> {
   }
 
   if (sections.length === 0) {
+    await appendRecallEvent({
+      ts: new Date().toISOString(),
+      project_id: projectId,
+      delivered: false,
+      bytes: 0,
+      sections: 0,
+    });
     return 0;
   }
 
   const block = capToBytes(sections.join("\n\n"), options.maxBytes);
   context.output.info(block);
+  await appendRecallEvent({
+    ts: new Date().toISOString(),
+    project_id: projectId,
+    delivered: true,
+    bytes: Buffer.byteLength(block, "utf8"),
+    sections: sections.length,
+  });
   return 0;
 }
 
