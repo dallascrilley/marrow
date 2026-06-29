@@ -39,18 +39,38 @@ into a session. After this plan:
 
 ## Progress
 
-- [ ] U1. SessionStart read-back: `asd recall` + hook installer
+- [x] (2026-06-29) U1. SessionStart read-back: `asd recall` + hook installer — PR #95, 438 tests green, smoke-tested against the live vault
 - [ ] U2. Register `asd mcp serve` + fix global-scope-never-loaded
 - [ ] U3. Fix epoch-0 `generated_at` in MEMORY.md renderer
 - [ ] U4. Persist instinct confidence floor (stop discarding `initial_confidence`)
 - [ ] U5. Cross-session reinforcement via canonical-key merge (core fix)
 - [ ] U6. Trigger backfill for the 1,570 trigger-less instincts (budget-gated)
 - [ ] U7. Global rollup render + read-back (`wiki/projects/_global/MEMORY.md`)
-- [ ] U8. Delivered-and-consumed metric in `asd stats`
+- [x] (2026-06-29) U8. Delivered-and-consumed metric in `asd stats` — PR #95; live runtime reads 1,065 produced / 2 reachable (0.19%)
 - [ ] U9. ADR-0010 + README/docs for the new reinforcement + read-back contract
 
 ## Surprises & Discoveries
 
+- Observation (U8, 2026-06-29): the live `reachable` count is exactly **2** —
+  the diagnosis's headline confirmed by an in-tree metric, not a one-off manual
+  count. Evidence: `asd stats` reports `reachability.produced=1065`,
+  `reachable=2`, `reachable_ratio=0.0019` over 259 projects (only 2 with any
+  reachable instinct). Note `produced` via bundle-replay is 1,065, not the
+  2,009 quoted from the raw instinct-yaml store — replay folds merges/supersedes,
+  so 1,065 is the *current* instinct population and aligns with the diagnosis's
+  "1,065 candidate" maturity bucket. The 2,009 figure double-counts superseded
+  records; future reporting should prefer the replay count.
+- Observation (U8, 2026-06-29): recall is already firing in the real runtime —
+  `recall.total_fires=4, fires_delivered=3` after U1's smoke tests — so the
+  read-back loop is observably live, not just unit-tested.
+- Observation (U1, 2026-06-29): after wiring read-back, this repo's own
+  per-project `MEMORY.md` is still effectively empty — only the boilerplate
+  curated header renders, no instinct bullets. Evidence: `asd recall` against
+  the live vault for this project printed the header and stripped frontmatter
+  but no findings. This is the diagnosis made concrete from the consumer side:
+  read-back now works end-to-end, but there is nothing mature to read until the
+  upstream confidence/reinforcement fixes (U4/U5) land. Confirms U1 alone is
+  necessary but not sufficient; the milestone ordering holds.
 - Observation: the read-back path was never an oversight — `memory-push-wiki.ts:137`
   already prints "Add @import for MEMORY.md in the consuming repo CLAUDE.md if
   ambient context is desired." Evidence: that string is a manual suggestion with
