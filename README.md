@@ -367,6 +367,13 @@ node dist/cli.js recall --cwd /path/to/project
 files from that project's carve-out, strips frontmatter, caps the payload at
 4000 bytes, and **fails open** — a missing vault prints nothing and exits 0.
 
+It also leads with the **cross-project global rollup**
+(`wiki/projects/_global/MEMORY.md`): instincts promoted to `scope: global` render
+once to that reserved `_global` project rather than being duplicated into every
+per-project file, and `recall` prepends them so cross-cutting instincts reach
+every session. The global section is only injected when it holds at least one
+instinct; an empty rollup is dropped.
+
 ### SessionStart delivery
 
 Read-back is wired into the agent harness through a hub-managed SessionStart
