@@ -40,7 +40,7 @@ into a session. After this plan:
 ## Progress
 
 - [x] (2026-06-29) U1. SessionStart read-back: `asd recall` + hook installer — PR #95, 438 tests green, smoke-tested against the live vault
-- [ ] U2. Register `asd mcp serve` + fix global-scope-never-loaded
+- [~] U2. In-repo half **done** (2026-06-29, PR #95 commit dd40ab0): `query.ts` now loads global-scope instincts (the requested-but-never-loaded branch), reusing the render/reachability `loadGlobalInstincts`; tested. **Deferred:** `asd mcp serve` registration in `~/.claude.json` (mutates the live global env — needs explicit operator opt-in).
 - [x] (2026-06-29) U3. Fix epoch-0 `generated_at` in MEMORY.md renderer — PR #95 commit 5983390; renderer omits epoch seed / stamps real clock
 - [x] (2026-06-29) U4. Persist instinct confidence floor — PR #95 commit 088895e; `confidence_floor` persisted, recompute starts from the create-time signal instead of the 0.5 floor
 - [x] (2026-06-29) U5. Canonical-key reinforcement — **spike null result**: PR #95 commits 8ad425e (floor-threading review fixes) + 4eade4a (canonicalKey + U5a spike). Spike proved zero merge opportunity at every granularity; merge path NOT wired (see Surprises/Decision Log). Reframes the epic toward extraction quality.
@@ -110,8 +110,45 @@ into a session. After this plan:
   the maturity/promotion contract — NOT through better dedup. See the new
   Decision Log entry and Open Questions.
 
+- **Major finding (post-U4, 2026-06-29): U4 alone moved per-project reachability
+  from 2 → 259, across 105 of 259 projects.** The `reachable=2` figure above was
+  measured at U8 time, *before* U4's `confidence_floor` persistence propagated
+  through bundle-replay. Re-running `asd stats` against the U4-aware build now
+  reports `reachability.reachable=259`, `projects_with_reachable=105`,
+  `reachable_ratio=0.2432` (produced=1065). The two reachability gates are
+  distinct and only one was ever starved:
+  - **Per-project rollup** (`shouldIncludeInRollup`: candidate + conf ≥ 0.6):
+    was starved by the confidence-reset bug, **now satisfied** — high-floor
+    (0.7) instincts recompute to ~0.74 and clear the bar. This is the win.
+  - **Cross-project promotion** (ADR-0006 `min_projects ≥ 2`): still starved
+    (U5a's 0-overlap finding stands). Genuinely unsatisfiable on this corpus.
+  Quality check (read-only dump of all 259 reachable findings): they are NOT the
+  "mostly trivial" noise the operator feared — that worry was about the full
+  2,009-row store; the reachable slice is the high-confidence subset. Examples:
+  *"Avoid using 'status' as a variable name in zsh (read-only shell variable)"*
+  (recurs across two projects), *"Always pipe input to jq when parsing JSON in
+  shell scripts"*, *"Write all logs to stderr so stdout stays valid JSON for
+  Tauri"*. **Implication:** the loop is closeable *now* with the units already
+  shipped — the gap is that the live vault was rendered pre-U4 (empty files). The
+  fix is to ship U4 to main so the installed 6h pipeline re-renders with real
+  content. Rendering from the feat branch first would be clobbered by the next
+  main-build pipeline run, so merge precedes re-render.
+
 ## Decision Log
 
+- **Decision (2026-06-29, accepted direction):** asd's product is **per-project
+  working memory that is read back**, not a cross-project distillation of how the
+  operator works. **Rationale:** the U5a spike proved cross-project recurrence is
+  ~0 on this corpus (diverse, mostly one-off work), so the ADR-0006 promotion
+  ladder is structurally unsatisfiable and not worth further investment. The
+  post-U4 finding proved the per-project gate is *already satisfied* (259
+  reachable across 105 projects) and the content is genuinely useful. So:
+  finish closing the per-project loop (ship U4 → re-render → recall delivers real
+  content); keep cross-project/global *promotion* explicitly **out of scope**
+  until the corpus shows recurrence (which is an extraction-generality question,
+  a separate epic, not a code-calibration one). The single-high-signal global
+  fast-path is rejected — it would flood the vault with the trivial tail.
+  Date/Author: 2026-06-29 / execution (plow-ahead).
 - **Decision:** Read-back ships as BOTH a SessionStart hook (deterministic
   file-inject, U1) and an optional registered MCP server (live queries, U2),
   with the hook first. **Rationale:** the hook delivers value with zero model
