@@ -190,8 +190,35 @@ into a session. After this plan:
 
 ## Outcomes & Retrospective
 
-_(Fill at completion: instincts reachable before/after, established count
-before/after, recall-hook fire confirmation, per-unit acceptance results.)_
+**The feedback loop is closed (2026-06-29).** End-to-end, with hard numbers:
+
+- **Reachable instincts: 2 → 259** (`asd stats` reachability, U4-aware build).
+- **Curated `MEMORY.md` content: 0 → 259 bullets across 105 projects.** Before
+  the re-render every project's `MEMORY.md` was a bare 9-line header; after, 105
+  projects carry real instinct bullets (exactly matching the reachable count —
+  no render gap). Top project `d14ae13c25f6` renders 25 bullets.
+- **Consumer proof:** `asd recall` (the exact invocation the SessionStart hook
+  runs) now returns **3,895 bytes** of curated memory for a populated project
+  (capped at the 4 KB budget), vs the empty header it returned before.
+- **Content quality:** the reachable slice is the high-confidence subset (floor
+  0.7 → ~0.74), not the trivial tail — e.g. "Avoid `status` as a zsh variable
+  (read-only)", "pipe input to jq when parsing JSON in shell", "write logs to
+  stderr so stdout stays valid JSON for Tauri".
+
+What closed it: **U4** (persist `confidence_floor`) was the single unlock — it
+stopped recompute from resetting high-signal instincts to the 0.54 noise floor,
+so they clear the per-project rollup gate. **U1** (read-back) + the U4-aware
+re-render then delivered that content to the consumer. The live launchd pipeline
+runs the primary checkout's `dist/` (rebuilt U4-aware post-merge), so the 6-hour
+cycle keeps it current idempotently.
+
+Per-unit acceptance: U1 ✓ (recall delivers real content), U2 in-repo ✓ (global
+scope loads), U3 ✓ (real `generated_at`), U4 ✓ (floor persisted, the unlock),
+U5 ✓ (null result, no merge wired), U8 ✓ (reachability metric). Deferred: U2
+registration (env opt-in), U6 (trigger backfill, budget-gated), U7 global
+*writer* (cross-project promotion out of scope per Decision Log; a within-
+environment global rollup remains an optional feature — its *reader* now works),
+U9 (ADR-0010 docs).
 
 ## Context and Orientation
 
