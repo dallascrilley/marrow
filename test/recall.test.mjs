@@ -91,6 +91,32 @@ test("recall fails open with empty output when no memory exists", async () => {
   }
 });
 
+test("recall fails open for a header-only MEMORY.md with no instinct bullets", async () => {
+  const work = await mkdtemp(join(tmpdir(), "asd-recall-work-"));
+  const vault = await mkdtemp(join(tmpdir(), "asd-recall-vault-"));
+  try {
+    const projectId = hashToProjectId(work);
+    // Exactly what render writes for a project with zero reachable instincts:
+    // frontmatter + heading + boilerplate, but no `- ` bullets.
+    const headerOnly = `---
+tags: [asd, memory, curated]
+---
+
+# Project memory (curated)
+
+Regenerated from atomic instincts. Session-level audit pages live under \`asd-learnings/\`.
+`;
+    await seedVaultMemory(vault, projectId, { "MEMORY.md": headerOnly });
+
+    const result = runCli(["recall", "--cwd", work, "--vault-root", vault]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), "");
+  } finally {
+    await rm(work, { recursive: true, force: true });
+    await rm(vault, { recursive: true, force: true });
+  }
+});
+
 test("recall truncates at a line boundary when over --max-bytes", async () => {
   const work = await mkdtemp(join(tmpdir(), "asd-recall-work-"));
   const vault = await mkdtemp(join(tmpdir(), "asd-recall-vault-"));

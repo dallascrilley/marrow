@@ -57,7 +57,13 @@ export async function executeRecall(context: CommandContext): Promise<number> {
     }
   }
 
-  if (sections.length === 0) {
+  // A rendered MEMORY.md always carries the heading + boilerplate, even for a
+  // project with zero reachable instincts. Topic files only ever hold spillover
+  // *beyond* the MEMORY.md line cap, so the absence of any instinct bullet means
+  // there is genuinely nothing curated to surface. Treat that as fail-open
+  // rather than injecting (and logging as "delivered") a content-free header.
+  const assembled = sections.join("\n\n");
+  if (sections.length === 0 || !hasInstinctBullet(assembled)) {
     await appendRecallEvent({
       ts: new Date().toISOString(),
       project_id: projectId,
@@ -68,7 +74,7 @@ export async function executeRecall(context: CommandContext): Promise<number> {
     return 0;
   }
 
-  const block = capToBytes(sections.join("\n\n"), options.maxBytes);
+  const block = capToBytes(assembled, options.maxBytes);
   context.output.info(block);
   await appendRecallEvent({
     ts: new Date().toISOString(),
@@ -158,6 +164,15 @@ async function readVaultFile(
   } catch {
     return null;
   }
+}
+
+/**
+ * True when the text contains at least one rendered instinct bullet (a line
+ * beginning with `- `). The curated MEMORY.md heading and boilerplate never
+ * start with `- `, so this distinguishes real content from an empty rollup.
+ */
+export function hasInstinctBullet(text: string): boolean {
+  return /^- /mu.test(text);
 }
 
 /** Strip a leading YAML frontmatter block (`---` … `---`) if present. */
