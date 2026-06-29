@@ -24,6 +24,10 @@ export type PromotionProjectEvidence = {
 
 type PromotionProjectSnapshot = PromotionProjectEvidence & {
   observations: Instinct["source"]["observations"];
+  // The instinct's persisted confidence floor (U4). The eligibility replay below
+  // must start from this same floor, else a high-signal instinct's "reached
+  // established at" timestamp lands too late and the age gate undercounts.
+  confidence_floor: number;
 };
 
 export type PromotionQueueEntry = {
@@ -110,6 +114,7 @@ export async function detectPromotionCandidates(
         created_at: instinct.created_at,
         updated_at: instinct.updated_at,
         observations: instinct.source.observations,
+        confidence_floor: instinct.confidence_floor,
       };
       const bucket = buckets.get(instinct.id) ?? {
         exemplar: {
@@ -194,7 +199,8 @@ function buildQueueEntry(
     project_count: projects.length,
     projects: projects
       .sort(compareProjects)
-      .map(({ observations: _observations, ...project }) => project),
+      // Strip replay-only fields; the persisted entry is PromotionProjectEvidence.
+      .map(({ observations: _observations, confidence_floor: _floor, ...project }) => project),
     thresholds: {
       min_projects: PROMOTION_MIN_PROJECTS,
       min_avg_confidence: PROMOTION_MIN_AVG_CONFIDENCE,
@@ -250,7 +256,10 @@ function eligibleMaturityReachedAt(project: PromotionProjectSnapshot): string | 
   const seen: Instinct["source"]["observations"] = [];
   for (const observation of observations) {
     seen.push(observation);
-    current = proposedMaturity(current, maturityStateFrom(seen, observation.at));
+    current = proposedMaturity(
+      current,
+      maturityStateFrom(seen, observation.at, project.confidence_floor),
+    );
     if (PROMOTION_ELIGIBLE_MATURITIES.includes(current)) {
       return observation.at;
     }
