@@ -422,6 +422,24 @@ Flags: `--config <path>` (default `~/.claude.json`), `--name <server>` (default
 `asd`), `--node <path>` (default the running node), `--cli <path>` (default the
 sibling `dist/cli.js` of the running build).
 
+### Project-scoped registration (committed `.mcp.json`)
+
+This repo also ships a checked-in `.mcp.json` so the server is available in the
+asd repo itself without a global install. It points `command` at
+`scripts/mcp-serve.sh` (via `bash`) rather than at `node` directly:
+
+```json
+{ "mcpServers": { "asd": { "type": "stdio", "command": "bash", "args": ["scripts/mcp-serve.sh"] } } }
+```
+
+The launcher exists because GUI- and IDE-launched MCP clients spawn servers with
+a minimal `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`) that excludes a
+mise/nvm-managed `node` — so a bare `command: "node"` would fail to start. `bash`
+is always on that minimal `PATH`; `scripts/mcp-serve.sh` then resolves a usable
+`node` at spawn time (PATH → mise shim → newest mise install) and resolves
+`dist/cli.js` relative to itself, so it works whether launched from a terminal or
+the desktop app, and from any working directory.
+
 ## Retention Model
 
 The current lifecycle is:
