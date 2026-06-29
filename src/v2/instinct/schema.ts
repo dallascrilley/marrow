@@ -67,6 +67,10 @@ export const instinctSchema = z.object({
   trigger: nonEmptyStringSchema,
   finding: nonEmptyStringSchema,
   confidence: confidenceSchema,
+  // Create-time confidence floor, derived from the learning's signal level
+  // (high/medium/low). The recompute base in decay.ts; legacy YAML without
+  // this field defaults to 0.5 to preserve existing behavior.
+  confidence_floor: confidenceSchema.default(0.5),
   domain: domainSchema,
   maturity: maturitySchema,
   scope: scopeSchema,

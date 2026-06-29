@@ -41,6 +41,9 @@ export function applyDelta(
         trigger: delta.trigger,
         finding: delta.finding,
         confidence: clamp(delta.initial_confidence),
+        // Persist the create-time signal level so recompute starts from it
+        // instead of discarding it back to the 0.5 floor (ADR/U4).
+        confidence_floor: clamp(delta.initial_confidence),
         domain: delta.domain,
         maturity: "candidate",
         scope: "project",
@@ -186,7 +189,7 @@ function recomputeInstinct(
   observations: Instinct["source"]["observations"],
   now: string,
 ): Instinct {
-  const state = maturityStateFrom(observations, now);
+  const state = maturityStateFrom(observations, now, instinct.confidence_floor);
   const maturity: Maturity =
     instinct.maturity === "deprecated" ? "deprecated" : proposedMaturity(instinct.maturity, state);
 
