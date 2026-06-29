@@ -201,7 +201,7 @@ export function shouldDeprecate(s: MaturityState): boolean {
 
 // ---- ID generation helper. -------------------------------------------
 
-const STOPWORDS = new Set([
+export const STOPWORDS = new Set([
   "a",
   "an",
   "and",
