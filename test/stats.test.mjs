@@ -43,7 +43,11 @@ function reachableBundle(projectId) {
         trigger: "When wiring read-back",
         finding: "Recall must surface curated memory.",
         domain: "workflow",
-        initial_confidence: 0.6,
+        // initial_confidence is overwritten on first reinforce: confidence is
+        // recomputed from the observation log starting at INITIAL_CONFIDENCE
+        // (0.5), so this value does not drive reachability here — the three
+        // observations below do. (U4 changes this by persisting a floor.)
+        initial_confidence: 0.5,
       },
       { op: "reinforce", instinct_id: "reachable-instinct-aaaa1111", delta: { confidence: 0.04 } },
       { op: "reinforce", instinct_id: "reachable-instinct-aaaa1111", delta: { confidence: 0.04 } },
