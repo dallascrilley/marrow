@@ -106,6 +106,7 @@ export async function executeMemoryPushWiki(
       await renderProjectMemoryToVault({
         projectId,
         vaultRoot: options.vaultRoot,
+        generatedAt: now,
       }),
     );
   }
