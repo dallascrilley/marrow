@@ -89,13 +89,13 @@ export async function executeHooksInstall(context: CommandContext): Promise<numb
     settings = mergeHookEvent(settings, spec.event, hookCommand, spec.marker);
   }
 
-  for (const script of installedScripts) {
-    context.output.info(`Installed hook script at ${script}`);
-  }
-
   if (settingsUnchanged(before, settings)) {
     context.output.info(`Hooks already registered in ${settingsPath}`);
     return 0;
+  }
+
+  for (const script of installedScripts) {
+    context.output.info(`Installed hook script at ${script}`);
   }
 
   await mkdir(dirname(settingsPath), { recursive: true });
@@ -154,16 +154,21 @@ export function parseHookEvents(args: readonly string[]): Set<HookSpec["key"]> {
     let raw: string | undefined;
     if (arg === "--events") {
       raw = args[i + 1];
+      if (raw === undefined) {
+        throw new Error("Missing value for --events (expected end, start, or end,start)");
+      }
     } else if (arg.startsWith("--events=")) {
       raw = arg.slice("--events=".length);
-    }
-    if (raw === undefined) {
+    } else {
       continue;
     }
     const keys = raw
       .split(",")
       .map((part) => part.trim().toLowerCase())
       .filter((part) => part.length > 0);
+    if (keys.length === 0) {
+      throw new Error("Empty value for --events (expected end, start, or end,start)");
+    }
     const selected = new Set<HookSpec["key"]>();
     for (const key of keys) {
       if (!valid.has(key as HookSpec["key"])) {
@@ -171,9 +176,7 @@ export function parseHookEvents(args: readonly string[]): Set<HookSpec["key"]> {
       }
       selected.add(key as HookSpec["key"]);
     }
-    if (selected.size > 0) {
-      return selected;
-    }
+    return selected;
   }
   return new Set(valid);
 }

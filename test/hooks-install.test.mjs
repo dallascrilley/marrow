@@ -6,9 +6,25 @@ import test from "node:test";
 
 import {
   mergeSessionEndHook,
+  parseHookEvents,
   parseHooksInstallOptions,
   resolveSettingsPath,
 } from "../dist/commands/hooks-install.js";
+
+test("parseHookEvents defaults to both events when --events absent", () => {
+  assert.deepEqual([...parseHookEvents([])].sort(), ["end", "start"]);
+});
+
+test("parseHookEvents parses an explicit subset", () => {
+  assert.deepEqual([...parseHookEvents(["--events", "start"])], ["start"]);
+  assert.deepEqual([...parseHookEvents(["--events=end,start"])].sort(), ["end", "start"]);
+});
+
+test("parseHookEvents throws on a bare or empty --events value", () => {
+  assert.throws(() => parseHookEvents(["--events"]), /Missing value for --events/);
+  assert.throws(() => parseHookEvents(["--events="]), /Empty value for --events/);
+  assert.throws(() => parseHookEvents(["--events", "bogus"]), /Unknown hook event/);
+});
 
 test("parseHooksInstallOptions accepts --dry-run and --global", () => {
   assert.deepEqual(parseHooksInstallOptions(["--dry-run", "--global"]), {
