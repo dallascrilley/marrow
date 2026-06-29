@@ -8,6 +8,7 @@ import { dirname, join, normalize } from "node:path";
 import { getRuntimePath } from "../../config/paths.js";
 import type { Instinct, Maturity, Scope } from "../instinct/schema.js";
 import { loadAllInstincts } from "../instinct/store.js";
+import { loadGlobalInstincts } from "../vault/render-memory.js";
 import type {
   InstinctHit,
   InstinctsForFileInput,
@@ -131,6 +132,13 @@ async function loadScopedInstincts(projectId: string, scope: Scope[]): Promise<I
       throw new Error("project_id is required when scope includes project instincts");
     }
     result.push(...(await loadAllInstincts(projectId)).values());
+  }
+  // Global scope was declared in DEFAULT_COMBINED_SCOPE but never loaded, so
+  // every search/recent query silently dropped global-scope instincts. Load
+  // them from the same store render/reachability read so the MCP query honors
+  // the scope contract it advertises.
+  if (scopes.has("global")) {
+    result.push(...(await loadGlobalInstincts()));
   }
   return dedupeInstincts(result);
 }
