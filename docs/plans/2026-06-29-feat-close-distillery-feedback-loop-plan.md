@@ -47,7 +47,7 @@ into a session. After this plan:
 - [ ] U6. Trigger backfill for the 1,570 trigger-less instincts (budget-gated)
 - [ ] U7. Global rollup render + read-back (`wiki/projects/_global/MEMORY.md`)
 - [x] (2026-06-29) U8. Delivered-and-consumed metric in `asd stats` — PR #95; live runtime reads 1,065 produced / 2 reachable (0.19%)
-- [ ] U9. ADR-0010 + README/docs for the new reinforcement + read-back contract
+- [x] (2026-06-29) U9. ADR-0010 + README/docs for the reinforcement + read-back contract — `docs/decisions/0010-recall-read-back.md`, README "Read Back (Recall)" section. Also shipped the **live delivery surface** the diagnosis flagged as missing: `asd-recall-sessionstart` hub hook (`~/.hub/artifacts/hooks/asd-recall-sessionstart/`, hub commit 2cc353ef7) wired surgically into `~/.claude/settings.json`. Verified end-to-end: 2,279 bytes/10 bullets for `agent-ntfy-ios`, 1,034 bytes/4 bullets for `cohost-ai-studio`; header-only (unmemoried) projects fail-open to `{}`. **The read-back loop is now live, not just renderable.**
 
 ## Surprises & Discoveries
 

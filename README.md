@@ -348,6 +348,41 @@ Design and contract:
 - [`docs/research/vault-push-source-strategy.md`](docs/research/vault-push-source-strategy.md)
 - [`docs/claude-md-amendment-draft.md`](docs/claude-md-amendment-draft.md) — the global CLAUDE.md carve-out that this command relies on.
 
+## Read Back (Recall)
+
+Pushing memory to the vault is only half the loop. `asd recall` is the read-back
+surface that delivers a project's curated memory into the **next** agent session,
+closing the loop (see [`docs/decisions/0010-recall-read-back.md`](docs/decisions/0010-recall-read-back.md)).
+
+```bash
+# Print the curated memory for the project owning the current directory.
+node dist/cli.js recall
+
+# Resolve a specific project by path.
+node dist/cli.js recall --cwd /path/to/project
+```
+
+`recall` resolves the project id from the working directory (git-remote hash,
+`.asd-project-key`, or path hash per ADR-0002), reads `MEMORY.md` plus the topic
+files from that project's carve-out, strips frontmatter, caps the payload at
+4000 bytes, and **fails open** — a missing vault prints nothing and exits 0.
+
+### SessionStart delivery
+
+Read-back is wired into the agent harness through a hub-managed SessionStart
+hook, `asd-recall-sessionstart`
+(`~/.hub/artifacts/hooks/asd-recall-sessionstart/`). On `startup|resume` it runs
+`asd recall` for the session's `cwd` and injects the result as
+`hookSpecificOutput.additionalContext`. It is fail-open by contract: any error,
+missing build, missing vault, or an unmemoried project yields `{}`, so a session
+never breaks. The hook resolves the CLI as `$ASD_BIN` → `asd` on `PATH` →
+`$HOME/Code/agent-session-distillery/dist/cli.js`.
+
+The reinforcement contract behind which instincts reach `MEMORY.md` at all —
+persisted `confidence_floor`, the per-project rollup gate, and why cross-project
+promotion is intentionally out of scope — is documented in
+[`docs/decisions/0010-recall-read-back.md`](docs/decisions/0010-recall-read-back.md).
+
 ## Retention Model
 
 The current lifecycle is:
