@@ -1,0 +1,499 @@
+---
+date: 2026-06-29
+origin: chat-diagnosis (this session) — "how do we make this actually useful?"
+td_epic: td-31338a
+worktree_slug: feat/close-distillery-feedback-loop
+---
+
+# Close the distillery feedback loop
+
+**Summary:** asd ingests and renders prolifically but delivers almost nothing
+back to agents. The deterministic 80% (ingest → summarize → extract → render →
+vault push) is mature and runs every 6h; the value-bearing 20% (reinforce →
+promote → read-back) is unbuilt. This plan builds that 20% in nine
+stable-numbered units, ordered by leverage: make agents *read* the memory
+(U1–U2), make instincts *mature* so there is good memory to read (U3–U5), refine
+the corpus and surface it globally (U6–U7), and measure the only number that
+matters — instincts a future agent will actually see (U8) — then document the
+new contract (U9).
+
+This is a living document. Update **Progress**, **Surprises & Discoveries**,
+**Decision Log**, and **Outcomes** at every stopping point. No `PLANS.md` exists
+in this repo; default plan home is `docs/plans/`.
+
+## Purpose / Big Picture
+
+Today, across 259 projects and 2,009 instincts, exactly **2** instinct lines
+have ever reached a vault `MEMORY.md`, and **nothing reads those files back**
+into a session. After this plan:
+
+- A new Claude Code (or Cursor/Codex) session in any ingested project
+  automatically receives that project's curated memory at session start,
+  plus any globally-promoted instincts.
+- High-signal instincts climb past the `0.54` confidence floor and accrue
+  reinforcement across sessions, so `established`/`proven` maturity and
+  cross-project promotion (ADR-0006) actually fire instead of being dead code.
+- `asd stats` reports *reachable* instincts (rendered + consumed), not just
+  *produced* artifacts — so we measure delivered signal, the failure mode this
+  whole exercise exists to fix.
+
+## Progress
+
+- [ ] U1. SessionStart read-back: `asd recall` + hook installer
+- [ ] U2. Register `asd mcp serve` + fix global-scope-never-loaded
+- [ ] U3. Fix epoch-0 `generated_at` in MEMORY.md renderer
+- [ ] U4. Persist instinct confidence floor (stop discarding `initial_confidence`)
+- [ ] U5. Cross-session reinforcement via canonical-key merge (core fix)
+- [ ] U6. Trigger backfill for the 1,570 trigger-less instincts (budget-gated)
+- [ ] U7. Global rollup render + read-back (`wiki/projects/_global/MEMORY.md`)
+- [ ] U8. Delivered-and-consumed metric in `asd stats`
+- [ ] U9. ADR-0010 + README/docs for the new reinforcement + read-back contract
+
+## Surprises & Discoveries
+
+- Observation: the read-back path was never an oversight — `memory-push-wiki.ts:137`
+  already prints "Add @import for MEMORY.md in the consuming repo CLAUDE.md if
+  ambient context is desired." Evidence: that string is a manual suggestion with
+  no automation behind it; project-id is a 12-hex hash so a static `@import`
+  line can't be templated generically — dynamic resolution at session start is
+  required.
+- Observation: a runnable MCP server already exists (`asd mcp serve`,
+  `src/v2/mcp/stdio-server.ts:81`) but is registered nowhere, and its `global`
+  scope is requested-but-never-loaded. Evidence: `query.ts:126-136` only has a
+  `project` loader branch.
+- Observation: `finalizeInstinct` recomputes confidence from the observation log
+  starting at `INITIAL_CONFIDENCE = 0.5`, *discarding* the learning's intended
+  `initial_confidence` (0.7/0.55/0.4). Evidence: `decay.ts:59-74` +
+  `apply-delta.ts:184-203`. Every single-observation instinct pins to exactly
+  `0.5 + 0.04 = 0.54`.
+
+## Decision Log
+
+- **Decision:** Read-back ships as BOTH a SessionStart hook (deterministic
+  file-inject, U1) and an optional registered MCP server (live queries, U2),
+  with the hook first. **Rationale:** the hook delivers value with zero model
+  tool-selection cost and works for Cursor/Codex too; the MCP server adds live
+  semantic/file/recency queries for power use. Hook-first means the highest-
+  leverage win (#1) lands in the smallest, lowest-risk unit. Reversible.
+  Date/Author: 2026-06-29 / planning.
+- **Decision:** Global rollup writes to a reserved project-id `_global`
+  (`wiki/projects/_global/MEMORY.md`), NOT a new top-level vault path.
+  **Rationale:** stays inside the ADR-0004 carve-out allowlist (a `MEMORY.md`
+  under `wiki/projects/<id>/`), so it needs no carve-out re-opening per
+  CLAUDE.md. `sanitiseProjectId` (`vault-paths.ts:88`) preserves a leading
+  underscore (only leading dots are stripped), so `_global` is a legal id.
+  Date/Author: 2026-06-29 / planning.
+- **Decision:** Cross-session identity uses a deterministic **canonical key**
+  (normalized trigger+finding: lowercase, strip punctuation, drop stopwords,
+  sort tokens), not embeddings. **Rationale:** zero new dependency or LLM cost,
+  matches the existing in-session `dedupeLearnings` approach (`extract.ts:1879`),
+  and is unit-testable. Embeddings remain a labeled future option if the
+  canonical key under-merges. Date/Author: 2026-06-29 / planning.
+- **Decision:** Do NOT change ADR-0006 promotion thresholds (`min_projects:2`,
+  `avg_confidence≥0.8`, `min_age_days:14`). **Rationale:** ADR-0006 explicitly
+  feared "nothing ever promotes → dead code" — which is exactly what happened.
+  The fix is restoring the *reinforcement signal* the thresholds assume (U4/U5),
+  not lowering the bar. Lowering the bar would pollute the global tier with the
+  same noise. Date/Author: 2026-06-29 / planning.
+
+## Outcomes & Retrospective
+
+_(Fill at completion: instincts reachable before/after, established count
+before/after, recall-hook fire confirmation, per-unit acceptance results.)_
+
+## Context and Orientation
+
+asd is a TypeScript/Node 22 CLI; runtime root `~/.agent-session-distillery`,
+vault output `~/vault/wiki/projects/<id>/`. Key modules for this plan
+(repo-relative):
+
+- Read-back: `src/commands/mcp.ts`, `src/v2/mcp/{stdio-server.ts,query.ts,types.ts}`,
+  `src/commands/hooks-install.ts`, `scripts/claude-session-end-ingest.sh`,
+  `src/v2/project/resolve.ts`, `src/config/vault-paths.ts`.
+- Instinct math: `src/v2/math/decay.ts`, `src/v2/instinct/{apply-delta.ts,
+  from-learning.ts,bundle.ts,schema.ts,id.ts,yaml-io.ts}`.
+- Render: `src/v2/vault/render-memory.ts`, `src/commands/memory-push-wiki.ts`.
+- Promotion: `src/v2/promotion/queue.ts`, `src/commands/promote-review.ts`.
+- Stats: `src/commands/stats.ts`.
+
+Governing ADRs (must be respected or amended): 0002 (project-id), 0004
+(carve-out boundary), 0005 (MCP 3-tool cap), 0006 (promotion thresholds), 0009
+(extraction quality gates). Relevant prior learning:
+`docs/solutions/performance/openrouter-reasoning-tokens-dominate-trivial-tasks.md`
+(cap reasoning effort on trivial LLM classify — binds U6 cost).
+
+Terms: **instinct** = atomic distilled learning (YAML in `instincts/projects/<id>/`).
+**candidate/established/proven** = maturity tiers. **reinforcing observation** =
+a later session re-asserting the same instinct, raising confidence. **canonical
+key** (new, U5) = normalized text used to decide two extractions are the same
+instinct.
+
+Build/test/lint: `npm run build` (tsc), `npm test` (`node --test`,
+`--test-concurrency=1`), `npm run lint` (biome). CLI after build:
+`node dist/cli.js <cmd>` or linked `asd <cmd>`.
+
+## Plan of Work
+
+Work proceeds in leverage order. U1–U3 are independent and low-risk and may land
+in any order or in parallel branches. U4 precedes U5 (confidence floor before
+reinforcement so the maturity math is correct when reinforcement starts firing).
+U5 precedes U7 (global promotion needs reinforcement working). U6 is independent
+but budget-gated and serializes after the existing `td-85e202` U4 sweep. U8 lands
+with U1 (it measures what U1 enables). U9 documents U2/U4/U5/U7 and lands last.
+
+## Milestones
+
+**M1 — Read-back live (U1, U2, U8).** A fresh session in an ingested project
+receives its curated memory; `asd stats` reports reachable instincts. Proves the
+loop is closed even before maturity improves.
+
+**M2 — Instincts mature (U3, U4, U5).** Re-extracting the corpus produces
+non-trivial `established` counts and collapses duplicate singletons; per-project
+`MEMORY.md` files carry real timestamps and multiple high-confidence lines.
+
+**M3 — Refine + globalize + document (U6, U7, U9).** Trigger-less instincts get
+triggers; cross-project promotion populates a global rollup the harness reads;
+the new contract is captured in ADR-0010 and the README.
+
+## Implementation units
+
+### U1. SessionStart read-back: `asd recall` + hook installer
+
+- **Goal:** A new session in an ingested project automatically receives that
+  project's curated `MEMORY.md` (and topic files) as session-start context.
+- **Requirements:** R1 (close the read-back loop — top priority).
+- **Files:**
+  - Create `src/commands/recall.ts` — resolves project id via
+    `resolveProjectId({ workspacePath: cwd })` (`src/v2/project/resolve.ts:32`),
+    locates `vaultProjectPath(vaultRoot, id, "MEMORY.md")`
+    (`src/config/vault-paths.ts:42`), reads it plus any present topic files
+    (`workflow.md`, `tooling.md`, `pitfalls.md`, `debugging.md`,
+    `preferences.md`), prints a compact merged block to stdout. Flags:
+    `--cwd <dir>` (default `process.cwd()`), `--vault-root <dir>` (default
+    `$ASD_VAULT_ROOT || ~/vault`), `--max-bytes <n>` (default 4000, cap injected
+    context). Missing vault/file → print nothing, exit 0 (fail-open, mirror
+    `scripts/claude-session-end-ingest.sh:23`).
+  - Modify `src/cli.ts` — register a `recall` command alongside `mcp`
+    (`src/cli.ts:243`) dispatching to `executeRecall`.
+  - Create `scripts/claude-session-start-recall.sh` — mirror
+    `scripts/claude-session-end-ingest.sh`; drain stdin, run
+    `asd recall --cwd "$CLAUDE_PROJECT_DIR"`, emit stdout (Claude Code injects a
+    SessionStart hook's stdout as additional context), fail open on any error.
+  - Modify `src/commands/hooks-install.ts` — add `mergeSessionStartHook(...)`
+    mirroring `mergeSessionEndHook` (`hooks-install.ts:96-120`), copy the new
+    template, and register a `SessionStart` entry in `.claude/settings.json`
+    (project) or `~/.claude/settings.json` (`--global`). Keep SessionEnd
+    install intact; install both by default, gate with `--events end,start`.
+- **Approach:** Pure-read command + a second hook event. No instinct mutation.
+  The hash project-id is resolved dynamically so no static `@import` is needed,
+  superseding the manual suggestion at `memory-push-wiki.ts:137`.
+- **Tests** (`test/recall.test.mjs`): (a) seed a temp vault
+  `wiki/projects/<id>/MEMORY.md` with two curated lines and a resolvable
+  `workspacePath`; `asd recall --cwd <dir> --vault-root <tmp>` prints both lines
+  within the byte cap. (b) Missing MEMORY.md → empty stdout, exit 0. (c)
+  `--max-bytes` truncates deterministically at a line boundary. (d)
+  `test/hooks-install.test.mjs` (extend existing if present, else create):
+  `asd hooks install --global --events start` merges exactly one SessionStart
+  entry and is idempotent on re-run.
+- **Verification:** `npm test`; then `node dist/cli.js recall --cwd "$(pwd)"`
+  prints this repo's curated memory (or nothing if none qualifies yet);
+  `node dist/cli.js hooks install` then `grep -A3 SessionStart ~/.claude/settings.json`.
+
+### U2. Register `asd mcp serve` + fix global-scope-never-loaded
+
+- **Goal:** The existing MCP server is registered into Claude Code, and its
+  `global` scope actually returns global instincts.
+- **Requirements:** R1 (second read-back path — live queries).
+- **Files:**
+  - Modify `src/v2/mcp/query.ts:126-136` — add the missing `global` loader
+    branch so `scope` including `"global"` loads global-scope instincts (the
+    `search_instincts` default scope is `["project","global"]` per
+    `types.ts:34-41` but only `project` is ever loaded today).
+  - Modify `src/commands/mcp.ts` — add an `install` subcommand that merges an
+    entry into `~/.claude.json` `mcpServers` (`agent-session-distillery` →
+    `{ command: "node", args: ["<abs>/dist/cli.js","mcp","serve"] }`), idempotent;
+    print the equivalent `claude mcp add` command for manual/portable use.
+- **Approach:** No new tools (respects ADR-0005 `MAX_MCP_TOOLS=3`,
+  `types.ts:10`). Fixing global loading honors ADR-0005's intent rather than
+  changing surface.
+- **Tests:** (a) `test/mcp-query.test.mjs` (extend): seed one `project` and one
+  `global` instinct; `search_instincts` with default scope returns both; with
+  `scope:["project"]` returns only project. (b) `mcp.ts install` writes the
+  expected JSON shape and is idempotent.
+- **Verification:** `npm test`; `node dist/cli.js mcp search_instincts --query
+  "build" --scope global` returns global hits (after U5/U7 populate global, else
+  empty but well-formed); `node dist/cli.js mcp install` then confirm
+  `~/.claude.json` entry; `node dist/cli.js mcp serve` responds to a piped
+  `initialize` JSON-RPC line.
+
+### U3. Fix epoch-0 `generated_at` in MEMORY.md renderer
+
+- **Goal:** No rendered `MEMORY.md` carries `generated_at: 1970-01-01T00:00:00.000Z`.
+- **Requirements:** R5 (recency correctness — decay/curation depend on it).
+- **Files:** Modify `src/v2/vault/render-memory.ts`: at `:154` pass an explicit
+  `generatedAt` (real clock, threaded from the caller — `memory-push-wiki.ts`
+  already has a run timestamp) into `renderMemoryMarkdown`; and harden the
+  `:74-79` reduce so an empty `instincts` array or empty `updated_at` does not
+  emit the epoch seed (skip writing frontmatter `generated_at` or use the passed
+  clock). Decide via test: empty selection should not render a misleading
+  timestamp.
+- **Approach:** Renderer-default-seed bug, not a stored-zero. One-file change.
+- **Tests** (`test/render-memory.test.mjs`): (a) non-empty instincts →
+  `generated_at` equals the passed clock (or max `updated_at`), never epoch. (b)
+  empty selection → no epoch-0 frontmatter emitted.
+- **Verification:** `npm test`; regenerate one project
+  (`node dist/cli.js memory push-wiki ...` against a temp vault) and
+  `grep generated_at` shows a real timestamp.
+
+### U4. Persist instinct confidence floor (stop discarding `initial_confidence`)
+
+- **Goal:** A high-signal (`high`) learning finalizes at ≥0.7 confidence, not
+  the 0.54 floor; corrections still decay correctly.
+- **Requirements:** R2 (fix promotion economics — part 1).
+- **Files:**
+  - `src/v2/instinct/schema.ts` — persist the create-time level/floor on the
+    instinct (e.g. `confidence_floor` derived from `from-learning.ts:6-10`
+    `high:0.7/medium:0.55/low:0.4`).
+  - `src/v2/math/decay.ts:59-74` — `confidenceFromObservations` starts from the
+    instinct's persisted floor instead of the hardcoded `INITIAL_CONFIDENCE=0.5`
+    (default to 0.5 when absent, preserving back-compat for existing YAML).
+  - `src/v2/instinct/apply-delta.ts:184-203` — thread the floor through
+    `recomputeInstinct`/`finalizeInstinct` so it is not overwritten.
+- **Approach:** Smallest change that makes the learning's confidence level
+  survive finalize. Existing instincts without the field keep current behavior.
+- **Tests** (`test/decay.test.mjs` / `test/apply-delta.test.mjs`): (a) a `high`
+  learning with one reinforcing observation finalizes ≥0.7. (b) a `low` learning
+  finalizes ≥0.4. (c) a correction after reinforcement still drops below the
+  established bar. (d) legacy instinct with no floor field → unchanged 0.54.
+- **Verification:** `npm test`; re-extract one project deterministically and
+  confirm a known high-signal instinct now reports ≥0.7.
+
+### U5. Cross-session reinforcement via canonical-key merge (core fix)
+
+- **Goal:** Two sessions asserting the *same* insight in slightly different words
+  reinforce one instinct (reinforcing_count climbs) instead of spawning two
+  floor-confidence singletons — so `established`/`proven` and ADR-0006 promotion
+  actually fire.
+- **Requirements:** R2 (fix promotion economics — part 2, the root cause).
+- **Files:**
+  - `src/v2/instinct/id.ts` — add `canonicalKey(trigger, finding)`: normalize
+    (lowercase, strip punctuation, drop stopwords, dedupe + sort tokens). Keep
+    the existing exact `sha256(trigger|finding)` id for addressing; the canonical
+    key is the *merge* discriminator.
+  - `src/v2/instinct/bundle.ts:55-76` (`replayBundles`) and
+    `src/v2/instinct/from-learning.ts:36-59` — when a new `create` delta's
+    canonical key matches an existing instinct, route to a `reinforce` (append
+    observation) instead of creating a new instinct. The `merge`/`reinforce`
+    delta shapes already parse (`yaml-io.ts:358-408`) but are never emitted —
+    emit them here.
+  - `src/v2/instinct/apply-delta.ts` — ensure the reinforce path appends an
+    observation and re-runs `recomputeInstinct`.
+- **Approach:** Deterministic canonical key (Decision Log), no embeddings. This
+  is the highest-risk unit → gated by a prototype milestone before it touches
+  the live pipeline default.
+- **Prototype (spike, U5a):** Add `asd pipeline reextract --canonical-merge
+  --dry-run` (or a one-off script under `scripts/`) that replays the existing
+  corpus with canonical-key merging and prints: singleton count before/after,
+  new maturity distribution (candidate/established/proven), and the top 20
+  largest merge clusters for eyeball validation. **Promote criteria:**
+  established count > 0 AND singleton reduction ≥ 25% AND spot-checked clusters
+  are genuinely the same insight (no obvious over-merge). **Discard criteria:**
+  visible over-merging of distinct insights → fall back to stricter key or
+  embeddings (labeled future option). Record the numbers in Surprises.
+- **Tests** (`test/canonical-merge.test.mjs`): (a) two learnings with reworded
+  but semantically identical trigger/finding produce one instinct with
+  `reinforcing_count = 2`. (b) two genuinely distinct learnings stay separate.
+  (c) after merge, a 2-observation instinct aged ≥7d with confidence ≥0.6
+  reaches `established` (`decay.ts:119-136`). (d) idempotent re-replay does not
+  double-count observations.
+- **Verification:** `npm test`; run the U5a spike on the live corpus and record
+  before/after maturity distribution in Surprises; confirm `promote-queue.json`
+  gains ≥1 entry after a full re-extract + `detectPromotionCandidates`.
+
+### U6. Trigger backfill for the 1,570 trigger-less instincts (budget-gated)
+
+- **Goal:** Reduce the share of instincts whose trigger reads "original trigger
+  not recorded" (78% → target < 25% on re-processed projects), restoring the
+  retrieval AND canonical-merge key.
+- **Requirements:** R3 (rescue the trigger field).
+- **Files:** Extend the existing LLM review path
+  (`asd quality review-learnings` / `apply-learning-review`) with a
+  trigger-reconstruction mode that fills a missing/placeholder trigger from the
+  learning's finding + session context. Reuse the budget gate
+  (`reports/llm-budget.json`) and **cap reasoning effort** per
+  `docs/solutions/performance/openrouter-reasoning-tokens-dominate-trivial-tasks.md`
+  (gpt-5-nano was spending ~94% of tokens on reasoning for a trivial classify —
+  minimal effort is mandatory here).
+- **Approach:** This is the natural continuation of `td-85e202` (U4/U5/U6 review
+  sweep). **Serialize after** the in-progress `td-683c75` sweep to avoid double-
+  spending budget. Deterministic re-extraction (`asd pipeline reextract
+  --process-chatter-only`) handles non-LLM cases first; LLM only for the
+  residue.
+- **Tests:** (a) an instinct with placeholder trigger + a concrete finding gets
+  a reconstructed trigger containing a condition clause. (b) the budget gate
+  blocks the sweep at the configured cap (no overspend). (c) reasoning-effort
+  param is set minimal on the request body.
+- **Verification:** `npm test`; bounded sweep on N projects, then
+  `grep -rl "original trigger not recorded" instincts/` count drops; record
+  cost-per-learning from telemetry.
+
+### U7. Global rollup render + read-back (`wiki/projects/_global/MEMORY.md`)
+
+- **Goal:** Cross-project-promoted (`scope: global`) instincts render to a single
+  global rollup, and the read-back path (U1/U2) surfaces them in every session.
+- **Requirements:** R4 (roll up globally, not 259 silos).
+- **Files:**
+  - `src/v2/vault/render-memory.ts` — render `scope: global` instincts to
+    `vaultProjectPath(vaultRoot, "_global", "MEMORY.md")` (legal under the
+    carve-out; `sanitiseProjectId` preserves `_global`).
+  - `src/commands/recall.ts` (from U1) — also read `_global/MEMORY.md` and
+    prepend a "Global instincts" section.
+  - `src/v2/mcp/query.ts` — ensure the now-loadable global scope (U2) reads from
+    the global instinct store so MCP and file-inject agree.
+  - Wire the promote-review apply step (`src/commands/promote-review.ts`) to mark
+    approved candidates `scope: global` so they flow into the global render.
+- **Approach:** Depends on U5 (promotion must fire to have anything global).
+  Reserved-id strategy avoids touching ADR-0004.
+- **Tests:** (a) a `global`-scope instinct renders into `_global/MEMORY.md` and
+  nowhere else. (b) `asd recall` output includes a Global section when
+  `_global/MEMORY.md` exists. (c) carve-out guard still rejects any non-allowed
+  `_global/...` path.
+- **Verification:** `npm test`; after U5 promotion + `asd promote review`
+  approval, `_global/MEMORY.md` is populated and `asd recall` shows it.
+
+### U8. Delivered-and-consumed metric in `asd stats`
+
+- **Goal:** `asd stats` reports the number that matters — instincts *reachable*
+  by a future agent (rendered into some `MEMORY.md` and/or returned by recall),
+  not just total produced.
+- **Requirements:** R1-meta (measure delivered signal, not artifacts).
+- **Files:**
+  - `src/commands/stats.ts` — add a `reachable` section: count instincts that
+    appear in any rendered `MEMORY.md` (cross-ref the render selection) and the
+    count surfaced per project; show "produced vs reachable" ratio.
+  - `src/commands/recall.ts` (U1) — append one structured line per fire to a
+    recall log (e.g. `<runtime>/reports/recall-events.jsonl`) so consumption is
+    observable; `stats` summarizes recent recall fires.
+- **Approach:** Lands with U1 since it measures what U1 enables.
+- **Tests** (`test/stats.test.mjs`): (a) with 5 instincts of which 2 are in a
+  rendered MEMORY.md, stats reports reachable=2. (b) recall-event log lines are
+  appended and summarized.
+- **Verification:** `npm test`; `node dist/cli.js stats` shows
+  produced/reachable (today: ~2,009 produced / ~2 reachable — the headline this
+  plan moves).
+
+### U9. ADR-0010 + README/docs for the new reinforcement + read-back contract
+
+- **Goal:** The new behavior is documented as accepted decisions and discoverable
+  in the README.
+- **Requirements:** Docs-are-part-of-done; U2/U4/U5/U7 change accepted behavior.
+- **Files:**
+  - Create `docs/decisions/0010-reinforcement-and-readback.md` (use
+    `docs/decisions/0000-template.md`): records (1) canonical-key reinforcement
+    (U5) and `confidence_floor` persistence (U4) — and that ADR-0006 thresholds
+    are unchanged, only the signal feeding them is restored; (2) the read-back
+    contract (SessionStart hook + registered MCP, U1/U2); (3) the `_global`
+    reserved-id rollup (U7) and why it stays inside the ADR-0004 carve-out.
+  - Modify `README.md` Automation table — add `asd recall`, `asd hooks install
+    --events start`, and `asd mcp install` rows.
+  - Capture the U5 spike result + the produced/reachable delta in this plan's
+    **Outcomes**, and a one-line learning via `ce-compound` if the canonical-key
+    approach proves out.
+- **Tests:** none (docs); `npm run lint` for any touched code comments.
+- **Verification:** ADR renders; README commands all run as written
+  (run each once before documenting — docs-accuracy rule).
+
+## Worktree & concurrency
+
+- **worktree_slug:** `feat/close-distillery-feedback-loop`
+- **spine_owner:** self
+- **Pre-flight:** `scripts/worktree-posture.sh --json` then
+  `scripts/worktree-posture.sh --check-surfaces "<surfaces below>" || true`
+  (run if the script exists; this repo's checkout is otherwise clean except a
+  foreign linter edit to `CLAUDE.md`).
+- **Active conflicts:** none known. `td-683c75` (U4 review-learnings sweep) is
+  in-progress and touches the LLM review path — **U6 here serializes after it**
+  to avoid budget contention; no file-level overlap expected (U6 extends the
+  review command, the sweep only runs it).
+
+### Write surfaces
+
+- U1: `src/commands/recall.ts`, `src/cli.ts`, `src/commands/hooks-install.ts`,
+  `scripts/claude-session-start-recall.sh`, `test/recall.test.mjs`
+- U2: `src/v2/mcp/query.ts`, `src/commands/mcp.ts`, `test/mcp-query.test.mjs`
+- U3: `src/v2/vault/render-memory.ts`, `test/render-memory.test.mjs`
+- U4: `src/v2/instinct/schema.ts`, `src/v2/math/decay.ts`,
+  `src/v2/instinct/apply-delta.ts`, `test/decay.test.mjs`
+- U5: `src/v2/instinct/{id.ts,bundle.ts,from-learning.ts,apply-delta.ts}`,
+  `test/canonical-merge.test.mjs` (+ spike script under `scripts/`)
+- U6: LLM review-learnings command + pipeline reextract paths
+- U7: `src/v2/vault/render-memory.ts`, `src/commands/recall.ts`,
+  `src/v2/mcp/query.ts`, `src/commands/promote-review.ts`
+- U8: `src/commands/stats.ts`, `src/commands/recall.ts`, `test/stats.test.mjs`
+- U9: `docs/decisions/0010-reinforcement-and-readback.md`, `README.md`
+
+Note: U2/U5/U7 each touch `src/v2/mcp/query.ts` or
+`src/v2/vault/render-memory.ts` — land them on the same branch in unit order
+(U2 → U5 → U7) to avoid spine collisions; do not parallelize those across
+worktrees.
+
+## Validation and Acceptance
+
+System-level acceptance (human-observable):
+
+1. **Loop closed:** in a freshly-ingested project, `node dist/cli.js recall`
+   prints that project's curated lines; with the SessionStart hook installed, a
+   new Claude Code session shows that content as session-start context.
+2. **Maturity moves:** after a full re-extract with U4+U5, `asd stats` (or a
+   maturity count) shows `established > 0` where today it is 1, and
+   `promote-queue.json` is non-empty.
+3. **Reachable signal up:** `asd stats` produced/reachable ratio improves
+   materially from ~2,009 / ~2.
+4. **No epoch timestamps:** `grep -rl "1970-01-01" ~/vault/wiki/projects/*/MEMORY.md`
+   returns nothing after a re-render.
+5. **Global tier real:** `_global/MEMORY.md` exists and `asd recall` surfaces it.
+
+Per-unit acceptance is in each unit's **Tests** + **Verification**. Standard gate
+for every unit: `npm run build && npm test && npm run lint` green, plus the
+unit's CLI verification command run and read.
+
+## Idempotence and Recovery
+
+- `asd recall`, `asd hooks install`, and `asd mcp install` must be idempotent
+  (re-run adds no duplicate hook/server entries) — asserted in tests.
+- U4/U5 change confidence math: existing YAML without the new `confidence_floor`
+  field must replay unchanged (back-compat test). A full re-extract is the
+  recovery path; the runtime root is rebuildable from `ledger/sessions.sqlite`
+  + source transcripts. Take a `backups/` snapshot before the first live
+  canonical-merge re-extract (U5) so the corpus can be restored if over-merge is
+  detected.
+- The U5 spike runs `--dry-run` only; it must not mutate the instinct store.
+
+## Interfaces and Dependencies
+
+- `resolveProjectId({ workspacePath })` → `src/v2/project/resolve.ts:32`
+- `vaultProjectPath(vaultRoot, id, "MEMORY.md")` → `src/config/vault-paths.ts:42`
+  (guarded by `assertAllowedVaultProjectPath`, allowlist `:12-21`)
+- `confidenceFromObservations(observations, now)` → `src/v2/math/decay.ts:59`
+- `proposedMaturity(...)` thresholds → `src/v2/math/decay.ts:119-136`
+- `instinctIdFromTriggerFinding` / id gen → `src/v2/instinct/id.ts:5-14`
+- `runMcpStdioServer()` → `src/v2/mcp/stdio-server.ts:81`; tools/schemas →
+  `src/v2/mcp/types.ts:34-77`
+- `renderMemoryMarkdown` / `renderProjectMemoryToVault` →
+  `src/v2/vault/render-memory.ts:65/147`
+- `detectPromotionCandidates` / thresholds → `src/v2/promotion/queue.ts:11-15,87`
+- No new runtime dependencies. Stays on `zod` + Node stdlib.
+
+## Artifacts and Notes
+
+- Diagnosis numbers (this session): 2,009 instincts / 259 projects; maturity
+  1,065 candidate / 1 established (of the measured subset); confidence 1,063 in
+  0.5–0.6, 3 above 0.6; 1,570/2,009 trigger-less; 2 instinct lines promoted into
+  any vault MEMORY.md; largest MEMORY.md = 420 bytes (1 instinct).
+- launchd job `com.dallascrilley.asd-memory-pipeline` runs every 6h; last clean
+  run 2026-06-29 02:40.
+
+## Revision History
+
+- 2026-06-29: Initial plan authored from session diagnosis + two code-mechanism
+  surveys (promotion/reinforcement map; MCP/render/hook/timestamp map).
