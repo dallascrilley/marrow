@@ -41,8 +41,8 @@ into a session. After this plan:
 
 - [x] (2026-06-29) U1. SessionStart read-back: `asd recall` + hook installer — PR #95, 438 tests green, smoke-tested against the live vault
 - [ ] U2. Register `asd mcp serve` + fix global-scope-never-loaded
-- [ ] U3. Fix epoch-0 `generated_at` in MEMORY.md renderer
-- [ ] U4. Persist instinct confidence floor (stop discarding `initial_confidence`)
+- [x] (2026-06-29) U3. Fix epoch-0 `generated_at` in MEMORY.md renderer — PR #95 commit 5983390; renderer omits epoch seed / stamps real clock
+- [x] (2026-06-29) U4. Persist instinct confidence floor — PR #95 commit 088895e; `confidence_floor` persisted, recompute starts from the create-time signal instead of the 0.5 floor
 - [ ] U5. Cross-session reinforcement via canonical-key merge (core fix)
 - [ ] U6. Trigger backfill for the 1,570 trigger-less instincts (budget-gated)
 - [ ] U7. Global rollup render + read-back (`wiki/projects/_global/MEMORY.md`)
