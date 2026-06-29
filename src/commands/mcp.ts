@@ -11,12 +11,13 @@ import {
   recentInstinctsInputSchema,
   searchInstinctsInputSchema,
 } from "../v2/mcp/types.js";
+import { executeMcpInstall } from "./mcp-install.js";
 
 export async function executeMcp(context: CommandContext): Promise<number> {
   const [toolName, ...args] = context.args;
   if (!toolName) {
     throw new Error(
-      "mcp requires a tool name or serve: search_instincts, instincts_for_file, recent_instincts, or serve",
+      "mcp requires a tool name or serve: search_instincts, instincts_for_file, recent_instincts, install, or serve",
     );
   }
   const startedAt = Date.now();
@@ -26,6 +27,9 @@ export async function executeMcp(context: CommandContext): Promise<number> {
     if (toolName === "serve") {
       await runMcpStdioServer();
       return 0;
+    }
+    if (toolName === "install") {
+      return await executeMcpInstall({ ...context, args });
     }
     if (toolName === "search_instincts") {
       const input = searchInstinctsInputSchema.parse(parseKeyValueArgs(args));
