@@ -1,13 +1,21 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { getRuntimePath } from "../dist/config/paths.js";
 import { saveInstinct } from "../dist/v2/instinct/store.js";
+import { serializeInstinct } from "../dist/v2/instinct/yaml-io.js";
 import { refreshPromotionQueue } from "../dist/v2/promotion/queue.js";
+
+async function saveGlobalInstinct(instinct) {
+  const dir = getRuntimePath("instinctsGlobal");
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, `${instinct.id}.yaml`), serializeInstinct(instinct), "utf8");
+}
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
@@ -180,6 +188,37 @@ test("mcp search_instincts does not expose queued promotion candidates as approv
     const payload = JSON.parse(result.stdout);
     assert.equal(payload.hits.length, 0);
     assert.equal(payload.total_in_corpus, 0);
+  });
+});
+
+test("mcp search_instincts loads genuinely global-scoped instincts (U2 fix)", async () => {
+  await withRuntime(async (root) => {
+    // Before the fix, loadScopedInstincts only ever read the project store, so
+    // a global-scope query silently returned nothing even when the global
+    // store held instincts. Persist one to the global store and assert the
+    // combined-scope default now surfaces it.
+    await saveGlobalInstinct(
+      makeInstinct({
+        id: "always-pin-versions-bbbb2222",
+        scope: "global",
+        project_id: "globalstore0",
+        trigger: "When adding a dependency",
+        finding: "Pin exact versions across every repo.",
+      }),
+    );
+    const result = runCli(root, [
+      "mcp",
+      "search_instincts",
+      "--scope",
+      "global",
+      "--query",
+      "pin versions",
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.hits.length, 1);
+    assert.equal(payload.hits[0].instinct.id, "always-pin-versions-bbbb2222");
+    assert.equal(payload.hits[0].instinct.scope, "global");
   });
 });
 

@@ -39,6 +39,7 @@ export function serializeInstinct(instinct: Instinct): string {
     "finding: |",
     indentBlock(instinct.finding.trimEnd(), 2),
     `confidence: ${yamlNumber(instinct.confidence)}`,
+    `confidence_floor: ${yamlNumber(instinct.confidence_floor ?? 0.5)}`,
     `domain: ${yamlString(instinct.domain)}`,
     `maturity: ${yamlString(instinct.maturity)}`,
     `scope: ${yamlString(instinct.scope)}`,
@@ -323,6 +324,12 @@ function nodeToInstinct(node: YamlNode): Instinct {
     trigger: node.trigger,
     finding: node.finding,
     confidence: clampConfidence(Number(node.confidence)),
+    // Legacy YAML predates this field; leave undefined so the schema default
+    // (0.5) applies and behavior is unchanged for older instincts.
+    confidence_floor:
+      node.confidence_floor === undefined || node.confidence_floor === null
+        ? undefined
+        : clampConfidence(Number(node.confidence_floor)),
     domain: node.domain,
     maturity: node.maturity,
     scope: node.scope,

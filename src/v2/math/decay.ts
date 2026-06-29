@@ -59,8 +59,9 @@ export function clampConfidence(value: number): number {
 export function confidenceFromObservations(
   observations: readonly Observation[],
   now: string,
+  floor: number = INITIAL_CONFIDENCE,
 ): number {
-  let value = INITIAL_CONFIDENCE;
+  let value = floor;
   for (const o of observations) {
     const ageDays = daysBetween(o.at, now);
     const weight = decayFactor(ageDays);
@@ -81,6 +82,7 @@ export function confidenceFromObservations(
 export function maturityStateFrom(
   observations: readonly Observation[],
   now: string,
+  floor: number = INITIAL_CONFIDENCE,
 ): MaturityState {
   const reinforcing = observations.filter((o) => o.reinforcing).length;
   const correction = observations.length - reinforcing;
@@ -88,7 +90,7 @@ export function maturityStateFrom(
     observations.length > 0 ? Math.max(...observations.map((o) => daysBetween(o.at, now))) : 0;
   const survived = survivedContradiction(observations);
   return {
-    confidence: confidenceFromObservations(observations, now),
+    confidence: confidenceFromObservations(observations, now, floor),
     age_days: ageDays,
     reinforcing_count: reinforcing,
     correction_count: correction,

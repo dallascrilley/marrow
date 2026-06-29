@@ -41,6 +41,9 @@ export function applyDelta(
         trigger: delta.trigger,
         finding: delta.finding,
         confidence: clamp(delta.initial_confidence),
+        // Persist the create-time signal level so recompute starts from it
+        // instead of discarding it back to the 0.5 floor (ADR/U4).
+        confidence_floor: clamp(delta.initial_confidence),
         domain: delta.domain,
         maturity: "candidate",
         scope: "project",
@@ -117,7 +120,13 @@ export function applyDelta(
       const target = next.get(delta.into);
       if (source && target && target.maturity !== "deprecated") {
         const observations = [...target.source.observations, ...source.source.observations];
-        next.set(delta.into, recomputeInstinct(target, observations, now));
+        // The merged observation set earned the stronger of the two signals;
+        // keep the higher floor so recompute doesn't undervalue it (U4/U5).
+        const mergedTarget: Instinct = {
+          ...target,
+          confidence_floor: Math.max(target.confidence_floor, source.confidence_floor),
+        };
+        next.set(delta.into, recomputeInstinct(mergedTarget, observations, now));
       }
       next.delete(delta.instinct_id);
       return next;
@@ -186,7 +195,7 @@ function recomputeInstinct(
   observations: Instinct["source"]["observations"],
   now: string,
 ): Instinct {
-  const state = maturityStateFrom(observations, now);
+  const state = maturityStateFrom(observations, now, instinct.confidence_floor);
   const maturity: Maturity =
     instinct.maturity === "deprecated" ? "deprecated" : proposedMaturity(instinct.maturity, state);
 

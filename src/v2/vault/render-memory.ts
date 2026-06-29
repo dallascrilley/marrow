@@ -9,6 +9,9 @@ import { parseInstinctYaml } from "../instinct/yaml-io.js";
 
 export const MEMORY_LINE_CAP = 200;
 
+/** Sentinel the `updated_at` reduce seeds with; never emit it as a real time. */
+const EPOCH_SEED = "1970-01-01T00:00:00.000Z";
+
 const DOMAIN_TOPIC_FILES: Partial<Record<Domain, string>> = {
   workflow: "workflow.md",
   tooling: "tooling.md",
@@ -75,14 +78,20 @@ export function renderMemoryMarkdown(
     generatedAt ??
     instincts.reduce(
       (latest, instinct) => (instinct.updated_at > latest ? instinct.updated_at : latest),
-      "1970-01-01T00:00:00.000Z",
+      EPOCH_SEED,
     );
 
+  // Never stamp the epoch seed: an empty selection (or one with no real
+  // `updated_at`) and no explicit clock omits `generated_at` rather than
+  // emitting 1970-01-01, which would silently corrupt recency-decay math.
+  const frontmatter = ["---", "tags: [asd, memory, curated]"];
+  if (generated !== EPOCH_SEED) {
+    frontmatter.push(`generated_at: ${generated}`);
+  }
+  frontmatter.push("---");
+
   const lines: string[] = [
-    "---",
-    "tags: [asd, memory, curated]",
-    `generated_at: ${generated}`,
-    "---",
+    ...frontmatter,
     "",
     "# Project memory (curated)",
     "",
@@ -147,11 +156,13 @@ export async function loadGlobalInstincts(): Promise<Instinct[]> {
 export async function renderProjectMemoryToVault(input: {
   projectId: string;
   vaultRoot: string;
+  /** Render clock (real time). Threaded from the caller's run timestamp. */
+  generatedAt?: string;
 }): Promise<RenderMemoryResult> {
   const projectInstincts = [...(await replayBundles(input.projectId)).values()];
   const globalInstincts = await loadGlobalInstincts();
   const selected = selectInstinctsForRollup(projectInstincts, globalInstincts);
-  const rendered = renderMemoryMarkdown(selected);
+  const rendered = renderMemoryMarkdown(selected, input.generatedAt);
 
   const projectDir = vaultProjectDir(input.vaultRoot, input.projectId);
   await mkdir(projectDir, { recursive: true });

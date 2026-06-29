@@ -24,6 +24,7 @@ import { executeQualityAudit } from "./commands/quality-audit.js";
 import { executeQualityCostReport } from "./commands/quality-cost-report.js";
 import { executeQualityResummarize } from "./commands/quality-resummarize.js";
 import { executeQualityReviewLearnings } from "./commands/quality-review-learnings.js";
+import { executeRecall } from "./commands/recall.js";
 import { executeReport } from "./commands/report.js";
 import { executeReviewQueue } from "./commands/review-queue.js";
 import { executeReviewShow } from "./commands/review-show.js";
@@ -243,6 +244,11 @@ const commandTree: Record<string, CommandDefinition> = {
   mcp: {
     description: "Query distilled instincts through the capped ADR-0005 MCP surface.",
     execute: async (context) => executeMcp(context),
+  },
+  recall: {
+    description:
+      "Print the current project's curated vault memory for a SessionStart hook to inject (ADR-0010 read-back). Fails open when no memory exists. Flags: --cwd, --vault-root, --max-bytes.",
+    execute: async (context) => executeRecall(context),
   },
 };
 
