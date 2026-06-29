@@ -43,7 +43,7 @@ into a session. After this plan:
 - [ ] U2. Register `asd mcp serve` + fix global-scope-never-loaded
 - [x] (2026-06-29) U3. Fix epoch-0 `generated_at` in MEMORY.md renderer — PR #95 commit 5983390; renderer omits epoch seed / stamps real clock
 - [x] (2026-06-29) U4. Persist instinct confidence floor — PR #95 commit 088895e; `confidence_floor` persisted, recompute starts from the create-time signal instead of the 0.5 floor
-- [ ] U5. Cross-session reinforcement via canonical-key merge (core fix)
+- [x] (2026-06-29) U5. Canonical-key reinforcement — **spike null result**: PR #95 commits 8ad425e (floor-threading review fixes) + 4eade4a (canonicalKey + U5a spike). Spike proved zero merge opportunity at every granularity; merge path NOT wired (see Surprises/Decision Log). Reframes the epic toward extraction quality.
 - [ ] U6. Trigger backfill for the 1,570 trigger-less instincts (budget-gated)
 - [ ] U7. Global rollup render + read-back (`wiki/projects/_global/MEMORY.md`)
 - [x] (2026-06-29) U8. Delivered-and-consumed metric in `asd stats` — PR #95; live runtime reads 1,065 produced / 2 reachable (0.19%)
@@ -85,7 +85,30 @@ into a session. After this plan:
   starting at `INITIAL_CONFIDENCE = 0.5`, *discarding* the learning's intended
   `initial_confidence` (0.7/0.55/0.4). Evidence: `decay.ts:59-74` +
   `apply-delta.ts:184-203`. Every single-observation instinct pins to exactly
-  `0.5 + 0.04 = 0.54`.
+  `0.5 + 0.04 = 0.54`. **Fixed by U4** (commit 088895e): `confidence_floor` is
+  now persisted and recompute starts from it.
+- **Major finding (U5a spike, 2026-06-29): the singleton problem is NOT a
+  dedup-key problem — the corpus has no reinforcement signal at any
+  granularity.** The U5 premise was that reworded duplicates spawn distinct
+  slug-hash ids that never reinforce, so a semantic canonical key would recover
+  the lost signal. The spike (`scripts/canonical-merge-spike.mjs`, commit
+  4eade4a) disproves it on the live corpus (259 projects, 1072 create-deltas):
+  - within-project: **1065 distinct exact ids == 1065 distinct canonical keys**
+    (0% bucket reduction; not one project has two ids sharing a canonical key).
+  - cross-project: **0 instincts appear in ≥2 projects** by exact id *or*
+    canonical key — so the ADR-0006 promotion gate (`min_projects:2`) is
+    *starved of input*, not miscalibrated. It can never fire on this corpus.
+  Implication: the same insight essentially never recurs — within a project,
+  across projects, reworded or verbatim. No dedup key (canonical or embedding)
+  can manufacture maturity that organic recurrence never produces. The maturity
+  ladder's `reinforcing_count ≥ 2` requirement is structurally unsatisfiable at
+  the current extraction granularity. The real bottleneck is **upstream**:
+  extraction emits hyper-specific, one-off findings (avg ~4 instincts/project,
+  almost all unique), so there is nothing to reinforce. This reframes the epic:
+  read-back (U1) and floor-persistence (U4) are correct and necessary, but the
+  path to a non-empty vault `MEMORY.md` runs through extraction *generality* and
+  the maturity/promotion contract — NOT through better dedup. See the new
+  Decision Log entry and Open Questions.
 
 ## Decision Log
 
@@ -115,6 +138,18 @@ into a session. After this plan:
   The fix is restoring the *reinforcement signal* the thresholds assume (U4/U5),
   not lowering the bar. Lowering the bar would pollute the global tier with the
   same noise. Date/Author: 2026-06-29 / planning.
+- **Decision (2026-06-29, execution):** U5's canonical-merge path is NOT wired
+  into the live pipeline; only the `canonicalKey` util and the U5a spike ship.
+  **Rationale:** the U5a spike (see Surprises) measured *zero* merge opportunity
+  at every granularity, so a canonical-merge code path would be dead code that
+  silently changes nothing while adding a branch to maintain (YAGNI). The spike
+  is retained as the evidence-producer: re-run it after any change to extraction
+  granularity to re-validate the assumption. The `confidence_floor` merge-max
+  fix (apply-delta.ts) and queue floor-threading (queue.ts) *did* ship because
+  they are correctness fixes independent of the merge opportunity. This upholds
+  the earlier "do NOT lower ADR-0006 thresholds" decision — the spike confirms
+  lowering the bar would only admit unique, mostly-trivial singletons (which the
+  operator explicitly does not trust yet). Date/Author: 2026-06-29 / execution.
 
 ## Outcomes & Retrospective
 
@@ -513,7 +548,32 @@ unit's CLI verification command run and read.
 - launchd job `com.dallascrilley.asd-memory-pipeline` runs every 6h; last clean
   run 2026-06-29 02:40.
 
+## Open Questions
+
+- **(Raised by the U5a spike — needs operator direction before U6/U7 continue.)**
+  The spike proved the maturity/promotion ladder is structurally unsatisfiable on
+  the current corpus: insights never recur, so `reinforcing_count ≥ 2` and the
+  `min_projects:2` gate can never fire. Three mutually-exclusive directions, none
+  a routine default:
+  1. **Fix extraction generality** (largest effort, addresses root cause): make
+     extraction emit fewer, more general findings that *do* recur across sessions
+     /projects, so reinforcement happens organically. This is a separate epic.
+  2. **Single-high-signal fast-path** (medium effort): let a lone `high`-confidence
+     finding reach `established` without a second observation, so floor-0.7
+     instincts become reachable. Risk: the operator stated the raw instincts are
+     "mostly trivial… I wouldn't trust them as input yet" — this would surface
+     exactly that noise. Needs a quality gate first.
+  3. **Accept per-project-only memory** (smallest effort): drop the cross-project
+     promotion ambition; ship U7 as a within-project rollup only. Honest about
+     what the data supports, but abandons the "global instincts" goal.
+  U6 (trigger backfill) and U7 (global rollup) still have standalone value
+  (retrieval keys; per-project surfacing) and can proceed regardless, but the
+  *promotion* half of U7 is moot until one of the above is chosen.
+
 ## Revision History
 
 - 2026-06-29: Initial plan authored from session diagnosis + two code-mechanism
   surveys (promotion/reinforcement map; MCP/render/hook/timestamp map).
+- 2026-06-29: U1/U3/U4/U8 landed; U5 closed as a spike null result (no merge
+  opportunity at any granularity) — reframed the epic toward extraction quality.
+  Added the Open Questions section for the operator decision this surfaced.
