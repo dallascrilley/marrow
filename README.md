@@ -383,6 +383,45 @@ persisted `confidence_floor`, the per-project rollup gate, and why cross-project
 promotion is intentionally out of scope — is documented in
 [`docs/decisions/0010-recall-read-back.md`](docs/decisions/0010-recall-read-back.md).
 
+## MCP Query Server (On-Demand Read Back)
+
+`recall` injects the *curated rollup* at session start. The MCP query server is
+the complementary surface: it lets an agent **query the full instinct store on
+demand** — including candidate instincts not yet promoted into `MEMORY.md`. It
+exposes the three capped tools from ADR-0005 (`search_instincts`,
+`instincts_for_file`, `recent_instincts`) over stdio.
+
+```bash
+# Speak JSON-RPC over stdio (this is what Claude Code spawns).
+node dist/cli.js mcp serve
+
+# One-shot CLI form for the same query engine.
+node dist/cli.js mcp search_instincts --project-id <id> --query "sqlite"
+```
+
+Queries default to combined `project` + `global` scope and never surface
+deprecated instincts or unapproved promotion candidates.
+
+### Registering the server
+
+`asd mcp install` registers the server in `~/.claude.json` under `mcpServers.asd`
+as a `type: "stdio"` entry. It is **idempotent** (a re-run that matches the
+existing entry leaves the file byte-identical), preserves every other key, and
+writes atomically. Preview first with `--dry-run`:
+
+```bash
+# Preview the exact entry without touching the file.
+node dist/cli.js mcp install --dry-run
+
+# Register (run from the PRIMARY checkout so the entry pins to a stable
+# dist/cli.js, not a worktree that may be removed).
+node dist/cli.js mcp install
+```
+
+Flags: `--config <path>` (default `~/.claude.json`), `--name <server>` (default
+`asd`), `--node <path>` (default the running node), `--cli <path>` (default the
+sibling `dist/cli.js` of the running build).
+
 ## Retention Model
 
 The current lifecycle is:

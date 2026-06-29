@@ -242,7 +242,8 @@ const commandTree: Record<string, CommandDefinition> = {
     },
   },
   mcp: {
-    description: "Query distilled instincts through the capped ADR-0005 MCP surface.",
+    description:
+      "Query distilled instincts through the capped ADR-0005 MCP surface. Subcommands: search_instincts, instincts_for_file, recent_instincts, serve, install (register asd in ~/.claude.json; --dry-run to preview).",
     execute: async (context) => executeMcp(context),
   },
   recall: {
