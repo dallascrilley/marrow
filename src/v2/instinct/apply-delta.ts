@@ -120,7 +120,13 @@ export function applyDelta(
       const target = next.get(delta.into);
       if (source && target && target.maturity !== "deprecated") {
         const observations = [...target.source.observations, ...source.source.observations];
-        next.set(delta.into, recomputeInstinct(target, observations, now));
+        // The merged observation set earned the stronger of the two signals;
+        // keep the higher floor so recompute doesn't undervalue it (U4/U5).
+        const mergedTarget: Instinct = {
+          ...target,
+          confidence_floor: Math.max(target.confidence_floor, source.confidence_floor),
+        };
+        next.set(delta.into, recomputeInstinct(mergedTarget, observations, now));
       }
       next.delete(delta.instinct_id);
       return next;

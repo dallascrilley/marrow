@@ -39,7 +39,7 @@ export function serializeInstinct(instinct: Instinct): string {
     "finding: |",
     indentBlock(instinct.finding.trimEnd(), 2),
     `confidence: ${yamlNumber(instinct.confidence)}`,
-    `confidence_floor: ${yamlNumber(instinct.confidence_floor)}`,
+    `confidence_floor: ${yamlNumber(instinct.confidence_floor ?? 0.5)}`,
     `domain: ${yamlString(instinct.domain)}`,
     `maturity: ${yamlString(instinct.maturity)}`,
     `scope: ${yamlString(instinct.scope)}`,

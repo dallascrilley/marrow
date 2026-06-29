@@ -123,6 +123,59 @@ test("detectPromotionCandidates skips instincts that only recently reached estab
   });
 });
 
+// U4 review regression: the eligibility replay must start from the instinct's
+// persisted confidence_floor. These three observations reach `established` at
+// obs2 (2026-06-01) when floored at 0.7 — clearing the 14-day age gate against
+// fixedNow — but only at obs3 (2026-06-20) when floored at the 0.5 default,
+// which lands 5 days out and is rejected. Same observations, floor flips it.
+const floorSensitiveObservations = [
+  { session: "sess-1", reinforcing: true, at: "2026-05-20T00:00:00.000Z" },
+  { session: "sess-2", reinforcing: true, at: "2026-06-01T00:00:00.000Z" },
+  { session: "sess-3", reinforcing: true, at: "2026-06-20T00:00:00.000Z" },
+];
+
+function makeFloorSensitiveInstinct(projectId, confidence, confidenceFloor) {
+  return makeInstinct(projectId, {
+    confidence,
+    confidence_floor: confidenceFloor,
+    created_at: "2026-05-20T00:00:00.000Z",
+    source: {
+      first_session: `${projectId}-sess-1`,
+      first_observed_at: "2026-05-20T00:00:00.000Z",
+      source_refs: [],
+      observations: floorSensitiveObservations,
+    },
+  });
+}
+
+test("detectPromotionCandidates honors a high confidence_floor when timing eligibility", async () => {
+  await withRuntime(async () => {
+    await saveInstinct("proj-alpha001", makeFloorSensitiveInstinct("proj-alpha001", 0.82, 0.7));
+    await saveInstinct("proj-beta0002", makeFloorSensitiveInstinct("proj-beta0002", 0.9, 0.7));
+
+    const entries = await detectPromotionCandidates(fixedNow);
+    assert.equal(
+      entries.length,
+      1,
+      "floor 0.7 reaches established at obs2 and clears the 14-day age gate",
+    );
+  });
+});
+
+test("detectPromotionCandidates with the default 0.5 floor rejects the same observations", async () => {
+  await withRuntime(async () => {
+    await saveInstinct("proj-alpha001", makeFloorSensitiveInstinct("proj-alpha001", 0.82, 0.5));
+    await saveInstinct("proj-beta0002", makeFloorSensitiveInstinct("proj-beta0002", 0.9, 0.5));
+
+    const entries = await detectPromotionCandidates(fixedNow);
+    assert.equal(
+      entries.length,
+      0,
+      "floor 0.5 only reaches established at obs3, inside the 14d gate",
+    );
+  });
+});
+
 test("detectPromotionCandidates skips instincts that do not meet ADR-0006 thresholds", async () => {
   await withRuntime(async () => {
     await saveInstinct("proj-alpha001", makeInstinct("proj-alpha001", { confidence: 0.79 }));
