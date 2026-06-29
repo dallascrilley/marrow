@@ -6,6 +6,7 @@ import type { CommandContext } from "../cli.js";
 import { vaultProjectPath } from "../config/vault-paths.js";
 import { appendRecallEvent } from "../v2/metrics/recall-events.js";
 import { resolveProjectId } from "../v2/project/resolve.js";
+import { GLOBAL_ROLLUP_ID } from "../v2/vault/render-memory.js";
 
 const DEFAULT_MAX_BYTES = 4000;
 
@@ -43,6 +44,17 @@ export async function executeRecall(context: CommandContext): Promise<number> {
   }
 
   const sections: string[] = [];
+
+  // Cross-project global rollup leads — these instincts apply in every session.
+  // It carries its own `# Global memory (curated)` header, so push its stripped
+  // body verbatim. Only surface it when it holds at least one instinct bullet.
+  const globalMemory = await readVaultFile(options.vaultRoot, GLOBAL_ROLLUP_ID, "MEMORY.md");
+  if (globalMemory) {
+    const globalBody = stripFrontmatter(globalMemory).trim();
+    if (hasInstinctBullet(globalBody)) {
+      sections.push(globalBody);
+    }
+  }
 
   const memory = await readVaultFile(options.vaultRoot, projectId, "MEMORY.md");
   if (memory) {

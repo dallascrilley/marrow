@@ -11,7 +11,10 @@ import {
   readWikiMemoryJsonl,
   vaultExists,
 } from "../pipeline/vault-push.js";
-import { renderProjectMemoryToVault } from "../v2/vault/render-memory.js";
+import {
+  renderGlobalMemoryToVault,
+  renderProjectMemoryToVault,
+} from "../v2/vault/render-memory.js";
 import { executeMemoryExportWiki } from "./memory-export-wiki.js";
 
 export const vaultRootEnvVar = "ASD_VAULT_ROOT";
@@ -111,19 +114,29 @@ export async function executeMemoryPushWiki(
     );
   }
 
-  context.output.info(formatSummary(result, options, memoryRenders));
+  // Render the cross-project global rollup once per run so `scope: global`
+  // instincts reach every session via recall, independent of any project.
+  const globalRender = await renderGlobalMemoryToVault({
+    vaultRoot: options.vaultRoot,
+    generatedAt: now,
+  });
+
+  context.output.info(formatSummary(result, options, memoryRenders, globalRender));
   return 0;
 }
+
+type MemoryRender = {
+  memoryPath: string;
+  topicFiles: Record<string, string>;
+  includedCount: number;
+  spilledCount: number;
+};
 
 function formatSummary(
   result: PushAllResult,
   options: PushWikiOptions,
-  memoryRenders: Array<{
-    memoryPath: string;
-    topicFiles: Record<string, string>;
-    includedCount: number;
-    spilledCount: number;
-  }>,
+  memoryRenders: MemoryRender[],
+  globalRender: MemoryRender,
 ): string {
   return JSON.stringify(
     {
@@ -134,6 +147,7 @@ function formatSummary(
       total_skipped_unchanged: result.total_skipped_unchanged,
       total_skipped_protected: result.total_skipped_protected,
       memory_renders: memoryRenders,
+      global_render: globalRender,
       claude_import_hint:
         "Add @import for MEMORY.md in the consuming repo CLAUDE.md if ambient context is desired.",
       pages: result.outcomes.map((entry) => ({

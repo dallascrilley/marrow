@@ -9,6 +9,29 @@ import { parseInstinctYaml } from "../instinct/yaml-io.js";
 
 export const MEMORY_LINE_CAP = 200;
 
+/**
+ * Reserved project-id for the cross-project global rollup (ADR-0010 / U7).
+ * `sanitiseProjectId` preserves the leading underscore, so this resolves to the
+ * carve-out path `wiki/projects/_global/MEMORY.md` without a new top-level vault
+ * path. Global-scope instincts render here once instead of being duplicated into
+ * all 259 per-project silos.
+ */
+export const GLOBAL_ROLLUP_ID = "_global";
+
+type RollupHeading = { title: string; intro: string };
+
+const PROJECT_HEADING: RollupHeading = {
+  title: "Project memory (curated)",
+  intro:
+    "Regenerated from atomic instincts. Session-level audit pages live under `asd-learnings/`.",
+};
+
+const GLOBAL_HEADING: RollupHeading = {
+  title: "Global memory (curated)",
+  intro:
+    "Cross-project instincts promoted to global scope. Surfaced in every session via `asd recall`.",
+};
+
 /** Sentinel the `updated_at` reduce seeds with; never emit it as a real time. */
 const EPOCH_SEED = "1970-01-01T00:00:00.000Z";
 
@@ -68,6 +91,7 @@ export function compareInstincts(left: Instinct, right: Instinct): number {
 export function renderMemoryMarkdown(
   instincts: readonly Instinct[],
   generatedAt?: string,
+  heading: RollupHeading = PROJECT_HEADING,
 ): {
   memory: string;
   topics: Record<string, string>;
@@ -90,14 +114,7 @@ export function renderMemoryMarkdown(
   }
   frontmatter.push("---");
 
-  const lines: string[] = [
-    ...frontmatter,
-    "",
-    "# Project memory (curated)",
-    "",
-    "Regenerated from atomic instincts. Session-level audit pages live under `asd-learnings/`.",
-    "",
-  ];
+  const lines: string[] = [...frontmatter, "", `# ${heading.title}`, "", heading.intro, ""];
 
   const topicBuckets = new Map<string, string[]>();
   let includedCount = 0;
@@ -159,10 +176,51 @@ export async function renderProjectMemoryToVault(input: {
   /** Render clock (real time). Threaded from the caller's run timestamp. */
   generatedAt?: string;
 }): Promise<RenderMemoryResult> {
+  // Project files carry project-scope instincts only. Global-scope instincts
+  // render once to the `_global` rollup (renderGlobalMemoryToVault) and reach
+  // every session through `asd recall`, rather than being duplicated into each
+  // per-project MEMORY.md (R4: roll up globally, not 259 silos).
   const projectInstincts = [...(await replayBundles(input.projectId)).values()];
+  const selected = selectInstinctsForRollup(projectInstincts, []);
+  return writeRollup({
+    instincts: selected,
+    projectId: input.projectId,
+    vaultRoot: input.vaultRoot,
+    generatedAt: input.generatedAt,
+    heading: PROJECT_HEADING,
+  });
+}
+
+/**
+ * Render the cross-project global rollup (`scope: global` instincts) to
+ * `wiki/projects/_global/MEMORY.md`. Called once per pipeline run, independent
+ * of any single project. Honors the same inclusion/sort/spill rules as project
+ * rollups; the read-back path (`asd recall`) prepends it to every session.
+ */
+export async function renderGlobalMemoryToVault(input: {
+  vaultRoot: string;
+  /** Render clock (real time). Threaded from the caller's run timestamp. */
+  generatedAt?: string;
+}): Promise<RenderMemoryResult> {
   const globalInstincts = await loadGlobalInstincts();
-  const selected = selectInstinctsForRollup(projectInstincts, globalInstincts);
-  const rendered = renderMemoryMarkdown(selected, input.generatedAt);
+  const selected = selectInstinctsForRollup([], globalInstincts);
+  return writeRollup({
+    instincts: selected,
+    projectId: GLOBAL_ROLLUP_ID,
+    vaultRoot: input.vaultRoot,
+    generatedAt: input.generatedAt,
+    heading: GLOBAL_HEADING,
+  });
+}
+
+async function writeRollup(input: {
+  instincts: readonly Instinct[];
+  projectId: string;
+  vaultRoot: string;
+  generatedAt: string | undefined;
+  heading: RollupHeading;
+}): Promise<RenderMemoryResult> {
+  const rendered = renderMemoryMarkdown(input.instincts, input.generatedAt, input.heading);
 
   const projectDir = vaultProjectDir(input.vaultRoot, input.projectId);
   await mkdir(projectDir, { recursive: true });
