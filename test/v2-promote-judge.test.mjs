@@ -7,7 +7,18 @@ import test from "node:test";
 import { loadGlobalInstinctIds, saveGlobalInstinct } from "../dist/v2/instinct/global-store.js";
 import { instinctSchema } from "../dist/v2/instinct/schema.js";
 import { saveInstinct } from "../dist/v2/instinct/store.js";
-import { judgeGlobalApplicability, parseGlobalJudgeVerdict } from "../dist/v2/promotion/judge.js";
+import {
+  JUDGE_PROMPT_VERSION,
+  judgeContentHash,
+  judgeGlobalApplicability,
+  parseGlobalJudgeVerdict,
+} from "../dist/v2/promotion/judge.js";
+import {
+  judgeCacheKey,
+  loadJudgeCache,
+  saveJudgeCache,
+  setCachedVerdict,
+} from "../dist/v2/promotion/judge-cache.js";
 import { detectGlobalJudgeCandidates } from "../dist/v2/promotion/queue.js";
 
 function instinct(overrides = {}) {
@@ -104,6 +115,57 @@ test("judgeGlobalApplicability surfaces a clean error on null message content", 
       }),
     /returned no message content/,
   );
+});
+
+test("judgeContentHash is stable for same content and changes when content changes", () => {
+  const a = { trigger: "t", finding: "Run lint before push.", domain: "workflow" };
+  const b = { trigger: "t", finding: "Run lint before push.", domain: "workflow" };
+  const c = { trigger: "t", finding: "Run tests before push.", domain: "workflow" };
+  assert.equal(judgeContentHash(a), judgeContentHash(b));
+  assert.notEqual(judgeContentHash(a), judgeContentHash(c));
+});
+
+test("judgeCacheKey separates by content, model, and prompt version", () => {
+  const h = "abc";
+  assert.notEqual(judgeCacheKey(h, "m1", "v1"), judgeCacheKey(h, "m2", "v1"));
+  assert.notEqual(judgeCacheKey(h, "m1", "v1"), judgeCacheKey(h, "m1", "v2"));
+  assert.equal(judgeCacheKey(h, "m1", "v1"), judgeCacheKey(h, "m1", "v1"));
+});
+
+test("judge cache round-trips verdicts and a re-load sees them", async () => {
+  const previousRoot = process.env.AGENT_SESSION_DISTILLERY_ROOT;
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-jcache-"));
+  process.env.AGENT_SESSION_DISTILLERY_ROOT = join(sandbox, "runtime");
+  try {
+    const cache = await loadJudgeCache();
+    assert.equal(cache.size, 0, "fresh cache is empty");
+
+    const key = judgeCacheKey(
+      judgeContentHash({ trigger: "t", finding: "f", domain: "workflow" }),
+      "deepseek/deepseek-v4-flash",
+      JUDGE_PROMPT_VERSION,
+    );
+    setCachedVerdict(
+      cache,
+      key,
+      { global: false, confidence: 0.9, reason: "project-specific" },
+      "deepseek/deepseek-v4-flash",
+      JUDGE_PROMPT_VERSION,
+      "2026-06-30T00:00:00Z",
+    );
+    await saveJudgeCache(cache);
+
+    const reloaded = await loadJudgeCache();
+    assert.equal(reloaded.size, 1);
+    const entry = reloaded.get(key);
+    assert.equal(entry.verdict.global, false);
+    assert.equal(entry.verdict.confidence, 0.9);
+    assert.equal(entry.prompt_version, JUDGE_PROMPT_VERSION);
+  } finally {
+    if (previousRoot === undefined) delete process.env.AGENT_SESSION_DISTILLERY_ROOT;
+    else process.env.AGENT_SESSION_DISTILLERY_ROOT = previousRoot;
+    await rm(sandbox, { recursive: true, force: true });
+  }
 });
 
 test("detectGlobalJudgeCandidates returns high-confidence instincts, deduped and filtered", async () => {
