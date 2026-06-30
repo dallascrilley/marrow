@@ -1,9 +1,16 @@
 # ADR-0006: Cross-project promotion thresholds
 
 - Date: 2026-05-19
-- Status: accepted (2026-05-19)
+- Status: accepted (2026-05-19); supplemented by [ADR-0011](0011-llm-judged-promotion.md) (2026-06-30)
 - Deciders: operator
-- Related: [td-5aeb65](#), [ADR-0001](0001-storage-unit.md), [ADR-0002](0002-project-id.md)
+- Related: [td-5aeb65](#), [ADR-0001](0001-storage-unit.md), [ADR-0002](0002-project-id.md), [ADR-0011](0011-llm-judged-promotion.md)
+
+> **Note (2026-06-30):** The `min_projects: 2` gate this ADR sets almost never
+> fires in practice — the same insight rarely produces the same slug id across
+> projects (U5 spike: ~0 overlap), so only 2 instincts were ever promoted.
+> [ADR-0011](0011-llm-judged-promotion.md) adds an LLM-judged single-project
+> fast-path as the working promotion route. The thresholds below still govern
+> the deterministic queue; they are not retuned here.
 
 ## Context
 
