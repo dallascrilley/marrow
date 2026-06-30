@@ -18,6 +18,7 @@ import { executeMemoryPushWiki } from "./commands/memory-push-wiki.js";
 import { executeMigrateProjectIds } from "./commands/migrate-project-ids.js";
 import { executePipelineGate } from "./commands/pipeline-gate.js";
 import { executePipelineReextract } from "./commands/pipeline-reextract.js";
+import { executePromoteJudge } from "./commands/promote-judge.js";
 import { executePromoteReview } from "./commands/promote-review.js";
 import { executeQualityApplyLearningReview } from "./commands/quality-apply-learning-review.js";
 import { executeQualityAudit } from "./commands/quality-audit.js";
@@ -238,6 +239,11 @@ const commandTree: Record<string, CommandDefinition> = {
       review: {
         description: "List queued cross-project promotion candidates from ADR-0006.",
         execute: async (context) => executePromoteReview(context),
+      },
+      judge: {
+        description:
+          "LLM-judge high-confidence single-project instincts for global promotion (U10). Flags: --model, --limit, --min-verdict-confidence, --max-per, --max-usd, --dry-run.",
+        execute: async (context) => executePromoteJudge(context),
       },
     },
   },

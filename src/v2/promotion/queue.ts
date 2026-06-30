@@ -14,6 +14,27 @@ export const PROMOTION_MIN_AVG_CONFIDENCE = 0.8;
 export const PROMOTION_MIN_AGE_DAYS = 14;
 const PROMOTION_ELIGIBLE_MATURITIES: readonly Maturity[] = ["established", "proven"];
 
+// Single-project LLM-judge fast-path (U10). The multi-project gate above
+// requires the SAME instinct id in >= 2 projects, but the U5 spike found ~0
+// cross-project id overlap (slug ids rarely collide), so it never fires. The
+// fast-path instead surfaces high-confidence single-project instincts and lets
+// an LLM judge global applicability. 0.7 is the live high-signal cliff: only ~3
+// instincts clear 0.75 but ~257 clear 0.70, so this is where real candidates are.
+export const PROMOTION_JUDGE_MIN_CONFIDENCE = 0.7;
+
+export type GlobalJudgeCandidate = {
+  instinct_id: string;
+  trigger: string;
+  finding: string;
+  domain: Instinct["domain"];
+  confidence: number;
+  maturity: Maturity;
+  /** Source project of the highest-confidence occurrence. */
+  project_id: string;
+  /** How many projects hold this instinct id (usually 1). */
+  project_count: number;
+};
+
 export type PromotionProjectEvidence = {
   project_id: string;
   confidence: number;
@@ -266,6 +287,60 @@ function eligibleMaturityReachedAt(project: PromotionProjectSnapshot): string | 
   }
 
   return null;
+}
+
+/**
+ * Detect single-project high-confidence instincts for the LLM-judge fast-path.
+ * Pure scan over the project instinct store: returns every non-deprecated
+ * project-scope instinct at or above PROMOTION_JUDGE_MIN_CONFIDENCE, deduped by
+ * id to its highest-confidence occurrence, sorted strongest-first. Whether each
+ * is actually global is decided downstream by the LLM judge — this only gathers
+ * the high-signal pool. `alreadyGlobalIds` skips ids already promoted.
+ */
+export async function detectGlobalJudgeCandidates(
+  alreadyGlobalIds: ReadonlySet<string> = new Set(),
+): Promise<GlobalJudgeCandidate[]> {
+  const best = new Map<string, GlobalJudgeCandidate>();
+
+  for (const projectId of await listProjectIds()) {
+    const instincts = await loadAllInstincts(projectId);
+    for (const instinct of instincts.values()) {
+      if (instinct.scope !== "project") continue;
+      if (instinct.maturity === "deprecated") continue;
+      if (instinct.confidence < PROMOTION_JUDGE_MIN_CONFIDENCE) continue;
+      if (alreadyGlobalIds.has(instinct.id)) continue;
+
+      const existing = best.get(instinct.id);
+      if (existing === undefined) {
+        best.set(instinct.id, {
+          instinct_id: instinct.id,
+          trigger: instinct.trigger,
+          finding: instinct.finding,
+          domain: instinct.domain,
+          confidence: instinct.confidence,
+          maturity: instinct.maturity,
+          project_id: projectId,
+          project_count: 1,
+        });
+        continue;
+      }
+
+      existing.project_count += 1;
+      if (instinct.confidence > existing.confidence) {
+        existing.confidence = instinct.confidence;
+        existing.maturity = instinct.maturity;
+        existing.project_id = projectId;
+        existing.trigger = instinct.trigger;
+        existing.finding = instinct.finding;
+      }
+    }
+  }
+
+  return [...best.values()].sort((left, right) => {
+    if (right.confidence !== left.confidence) return right.confidence - left.confidence;
+    if (right.project_count !== left.project_count) return right.project_count - left.project_count;
+    return left.instinct_id.localeCompare(right.instinct_id);
+  });
 }
 
 function compareProjects(left: PromotionProjectEvidence, right: PromotionProjectEvidence): number {
