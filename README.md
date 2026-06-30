@@ -447,6 +447,56 @@ is always on that minimal `PATH`; `scripts/mcp-serve.sh` then resolves a usable
 `dist/cli.js` relative to itself, so it works whether launched from a terminal or
 the desktop app, and from any working directory.
 
+## Promotion (Project → Global)
+
+Most instincts are project-scoped. A few are cross-cutting best practices that
+belong in **every** session — those get promoted to `scope: global`, rendered
+once to `wiki/projects/_global/MEMORY.md`, and surfaced by `recall` everywhere
+(see [Read Back](#read-back-recall)).
+
+There are two promotion paths:
+
+```bash
+# 1. Deterministic queue (ADR-0006): the same instinct id seen in >= 2 projects
+#    at >= 0.8 avg confidence. Inspect the queue (read-only):
+node dist/cli.js promote review
+```
+
+In practice the deterministic gate almost never fires: the same insight rarely
+produces the same slug id across unrelated codebases, so the >= 2-projects
+requirement is unmet. The working path is the LLM judge:
+
+```bash
+# 2. LLM-judged fast-path (ADR-0011): surface high-confidence (>= 0.7)
+#    single-project instincts and ask a model whether each is globally
+#    applicable. Approved verdicts are written as scope: global.
+node dist/cli.js promote judge --model deepseek/deepseek-v4-flash --limit 20
+
+# Preview without spending or writing — judges nothing, just lists candidates
+# would-be cost is bounded by the budgets below:
+node dist/cli.js promote judge --dry-run --limit 5
+```
+
+Flags:
+
+- `--model <id>` — OpenRouter model id (default `OPENROUTER_MODEL` env, else the
+  learning-review default). Requires `OPENROUTER_API_KEY`; **fails open** (prints
+  a skip and exits 0) when the key is absent.
+- `--limit <n>` — max candidates to judge this run (default 20). Candidates are
+  sorted strongest-confidence first.
+- `--min-verdict-confidence <0..1>` — minimum judge confidence to promote
+  (default 0.6).
+- `--max-per <N/Tu>` and `--max-usd <U/Tu>` — the shared LLM count and USD budget
+  windows (e.g. `60/1h`, `0.50/1h`), re-checked before every call so a run stops
+  cleanly when either ceiling is reached rather than overspending.
+- `--dry-run` — judge but write nothing (still costs LLM calls).
+
+The judge is conservative (it defaults to "not global" when unsure) and only
+considers transferable advice — workflow discipline, tooling habits, testing /
+debugging / security practices — rejecting anything tied to one codebase's file
+names, services, env vars, or schemas. Approved instincts flow into the global
+rollup on the next render and reach every session through `recall`.
+
 ## Retention Model
 
 The current lifecycle is:

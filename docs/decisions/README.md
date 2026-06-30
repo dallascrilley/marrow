@@ -21,5 +21,9 @@ ADRs are immutable once accepted. Superseding requires a new ADR.
 - [0003-primary-render](0003-primary-render.md) — MEMORY.md vs asd-learnings/ as primary render
 - [0004-carve-out-boundary](0004-carve-out-boundary.md) — vault carve-out scope for MEMORY.md
 - [0005-mcp-surface](0005-mcp-surface.md) — MCP tool surface cap
-- [0006-promotion-thresholds](0006-promotion-thresholds.md) — cross-project promotion thresholds
+- [0006-promotion-thresholds](0006-promotion-thresholds.md) — cross-project promotion thresholds (supplemented by 0011)
 - [0007-daemon-llm-separation](0007-daemon-llm-separation.md) — cheap pipeline gate before LLM passes
+- [0008-revision-addressed-manifests](0008-revision-addressed-manifests.md) — revision-addressed session provenance manifests
+- [0009-project-learning-quality-gates](0009-project-learning-quality-gates.md) — project learning extraction quality gates
+- [0010-recall-read-back](0010-recall-read-back.md) — recall read-back and the per-project reinforcement contract
+- [0011-llm-judged-promotion](0011-llm-judged-promotion.md) — LLM-judged global promotion fast-path (supplements 0006)
