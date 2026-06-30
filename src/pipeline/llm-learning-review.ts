@@ -99,7 +99,7 @@ export function cacheHitUsage(model: string): LlmCallUsage {
 }
 
 type FetchLike = typeof fetch;
-type ChatMessage = {
+export type ChatMessage = {
   content: string;
   role: "system" | "user";
 };
@@ -614,7 +614,7 @@ function stableStringify(value: unknown): string {
     .join(",")}}`;
 }
 
-async function completeOpenRouterJson(input: {
+export async function completeOpenRouterJson(input: {
   apiKey?: string | undefined;
   errorLabel: string;
   fetchImpl?: FetchLike | undefined;
