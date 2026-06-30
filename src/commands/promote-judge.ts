@@ -11,7 +11,19 @@ import { appendLlmTelemetry, buildLlmTelemetryRecord } from "../pipeline/llm-tel
 import { loadGlobalInstinctIds, saveGlobalInstinct } from "../v2/instinct/global-store.js";
 import { instinctSchema } from "../v2/instinct/schema.js";
 import { loadInstinct } from "../v2/instinct/store.js";
-import { judgeGlobalApplicability, resolveJudgeModel } from "../v2/promotion/judge.js";
+import {
+  type GlobalJudgeVerdict,
+  JUDGE_PROMPT_VERSION,
+  judgeContentHash,
+  judgeGlobalApplicability,
+  resolveJudgeModel,
+} from "../v2/promotion/judge.js";
+import {
+  judgeCacheKey,
+  loadJudgeCache,
+  saveJudgeCache,
+  setCachedVerdict,
+} from "../v2/promotion/judge-cache.js";
 import { detectGlobalJudgeCandidates, type GlobalJudgeCandidate } from "../v2/promotion/queue.js";
 
 const DEFAULT_LIMIT = 20;
@@ -77,8 +89,12 @@ export async function executePromoteJudge(context: CommandContext): Promise<numb
   const maxUsd = options.maxUsd ?? getDefaultMaxUsd();
   const model = resolveJudgeModel(options.model);
 
+  const cache = await loadJudgeCache();
+  let cacheDirty = false;
+
   const promoted: PromotedEntry[] = [];
   let judged = 0;
+  let fromCache = 0;
   let rejected = 0;
   let errored = 0;
   let consecutiveErrors = 0;
@@ -91,50 +107,66 @@ export async function executePromoteJudge(context: CommandContext): Promise<numb
   const MAX_CONSECUTIVE_ERRORS = 3;
 
   for (const candidate of candidates) {
-    // Re-check both budgets before every paid call so a mid-run exhaustion stops
-    // cleanly rather than overspending. Dry-run still judges (it costs calls) but
-    // writes nothing.
-    const budget = await assessLlmBudget(maxPer);
-    const usdBudget = await assessUsdBudget(maxUsd);
-    if (!budget.allowed || !usdBudget.allowed) {
-      stoppedReason = budget.allowed ? "usd_budget_exhausted" : "count_budget_exhausted";
-      break;
-    }
+    const cacheKey = judgeCacheKey(judgeContentHash(candidate), model, JUDGE_PROMPT_VERSION);
+    const cached = cache.get(cacheKey);
 
-    let result: Awaited<ReturnType<typeof judgeGlobalApplicability>>;
-    try {
-      result = await judgeGlobalApplicability({
-        instinct: candidate,
-        model,
-        apiKey,
-      });
-    } catch (error) {
-      errored += 1;
-      consecutiveErrors += 1;
-      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-        stoppedReason = `aborted_after_${consecutiveErrors}_consecutive_errors: ${(error as Error).message}`;
+    let verdict: GlobalJudgeVerdict;
+    if (cached !== undefined) {
+      // A prior run already judged this exact content with this model+prompt.
+      // Reuse it — no LLM call, no spend, no budget consumed.
+      verdict = cached.verdict;
+      fromCache += 1;
+    } else {
+      // Re-check both budgets before every paid call so a mid-run exhaustion
+      // stops cleanly rather than overspending. Cache hits above never reach
+      // this gate, so a free re-run completes even with an exhausted budget.
+      const budget = await assessLlmBudget(maxPer);
+      const usdBudget = await assessUsdBudget(maxUsd);
+      if (!budget.allowed || !usdBudget.allowed) {
+        stoppedReason = budget.allowed ? "usd_budget_exhausted" : "count_budget_exhausted";
         break;
       }
-      continue;
-    }
-    consecutiveErrors = 0;
-    await recordLlmBudgetUse(maxPer);
-    // Record the spend to the telemetry ledger that assessUsdBudget reads, so the
-    // --max-usd cap actually enforces against THIS run's accumulating cost on the
-    // next iteration's pre-call check (recordLlmBudgetUse only tracks the count).
-    await appendLlmTelemetry(
-      buildLlmTelemetryRecord({
-        usage: result.usage,
-        operation: "global_promotion_judge",
-        sessionId: candidate.project_id,
-        learningId: candidate.instinct_id,
-        createdAt: new Date().toISOString(),
-      }),
-    );
-    judged += 1;
-    totalCost += result.usage.cost ?? 0;
 
-    const { verdict } = result;
+      let result: Awaited<ReturnType<typeof judgeGlobalApplicability>>;
+      try {
+        result = await judgeGlobalApplicability({ instinct: candidate, model, apiKey });
+      } catch (error) {
+        errored += 1;
+        consecutiveErrors += 1;
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          stoppedReason = `aborted_after_${consecutiveErrors}_consecutive_errors: ${(error as Error).message}`;
+          break;
+        }
+        continue;
+      }
+      consecutiveErrors = 0;
+      await recordLlmBudgetUse(maxPer);
+      // Record the spend to the telemetry ledger that assessUsdBudget reads, so
+      // the --max-usd cap actually enforces against THIS run's accumulating cost
+      // on the next iteration's check (recordLlmBudgetUse only tracks the count).
+      await appendLlmTelemetry(
+        buildLlmTelemetryRecord({
+          usage: result.usage,
+          operation: "global_promotion_judge",
+          sessionId: candidate.project_id,
+          learningId: candidate.instinct_id,
+          createdAt: new Date().toISOString(),
+        }),
+      );
+      judged += 1;
+      totalCost += result.usage.cost ?? 0;
+      verdict = result.verdict;
+      setCachedVerdict(
+        cache,
+        cacheKey,
+        verdict,
+        model,
+        JUDGE_PROMPT_VERSION,
+        new Date().toISOString(),
+      );
+      cacheDirty = true;
+    }
+
     const approved = verdict.global && verdict.confidence >= options.minVerdictConfidence;
     if (!approved) {
       rejected += 1;
@@ -166,6 +198,12 @@ export async function executePromoteJudge(context: CommandContext): Promise<numb
     });
   }
 
+  // Persist newly-judged verdicts (including dry-run: the spend already happened,
+  // so a later real run should reuse it rather than re-pay).
+  if (cacheDirty) {
+    await saveJudgeCache(cache);
+  }
+
   context.output.info(
     JSON.stringify(
       {
@@ -174,6 +212,7 @@ export async function executePromoteJudge(context: CommandContext): Promise<numb
         candidates_total: allCandidates.length,
         candidates_considered: candidates.length,
         judged,
+        from_cache: fromCache,
         promoted_count: promoted.length,
         rejected,
         errored,
