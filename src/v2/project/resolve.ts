@@ -137,18 +137,41 @@ function normaliseWorkspacePath(workspacePath: string | null): string | null {
   return resolve(workspacePath.trim());
 }
 
-async function readGitOriginRemote(workspacePath: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["-C", workspacePath, "remote", "get-url", "origin"],
-      { encoding: "utf8", timeout: 5_000, env: gitProbeEnv() },
-    );
-    const trimmed = stdout.trim();
-    return trimmed.length > 0 ? normaliseGitRemote(trimmed) : null;
-  } catch {
-    return null;
+// In-process memoization of the `git remote get-url` probe, keyed on workspace
+// path. Ingest discovery resolves a project id for EVERY transcript before the
+// skip filter, and many transcripts share one workspace — without this cache
+// that was one `git` fork per transcript (thousands per pipeline run). The
+// origin remote is stable within a process, so caching is safe; a worktree-long
+// command (MCP serve) can call `resetProjectIdCache` if it ever needs a refresh.
+// Caching the PROMISE (not the result) means concurrent callers for the same
+// path share a single fork instead of racing to spawn duplicate gits.
+const gitRemoteCache = new Map<string, Promise<string | null>>();
+
+/** Clear the in-process git-remote cache (test isolation / long-lived refresh). */
+export function resetProjectIdCache(): void {
+  gitRemoteCache.clear();
+}
+
+function readGitOriginRemote(workspacePath: string): Promise<string | null> {
+  const cached = gitRemoteCache.get(workspacePath);
+  if (cached !== undefined) {
+    return cached;
   }
+  const pending = (async (): Promise<string | null> => {
+    try {
+      const { stdout } = await execFileAsync(
+        "git",
+        ["-C", workspacePath, "remote", "get-url", "origin"],
+        { encoding: "utf8", timeout: 5_000, env: gitProbeEnv() },
+      );
+      const trimmed = stdout.trim();
+      return trimmed.length > 0 ? normaliseGitRemote(trimmed) : null;
+    } catch {
+      return null;
+    }
+  })();
+  gitRemoteCache.set(workspacePath, pending);
+  return pending;
 }
 
 /**
