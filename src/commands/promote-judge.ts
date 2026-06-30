@@ -80,8 +80,15 @@ export async function executePromoteJudge(context: CommandContext): Promise<numb
   const promoted: PromotedEntry[] = [];
   let judged = 0;
   let rejected = 0;
+  let errored = 0;
+  let consecutiveErrors = 0;
   let totalCost = 0;
   let stoppedReason: string | null = null;
+
+  // A single bad model response (e.g. an occasional null-content reply) should
+  // skip that candidate, not abort a long sweep — but a run of consecutive
+  // failures means something systemic (bad key/model), so circuit-break.
+  const MAX_CONSECUTIVE_ERRORS = 3;
 
   for (const candidate of candidates) {
     // Re-check both budgets before every paid call so a mid-run exhaustion stops
@@ -102,9 +109,15 @@ export async function executePromoteJudge(context: CommandContext): Promise<numb
         apiKey,
       });
     } catch (error) {
-      stoppedReason = `judge_error: ${(error as Error).message}`;
-      break;
+      errored += 1;
+      consecutiveErrors += 1;
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        stoppedReason = `aborted_after_${consecutiveErrors}_consecutive_errors: ${(error as Error).message}`;
+        break;
+      }
+      continue;
     }
+    consecutiveErrors = 0;
     await recordLlmBudgetUse(maxPer);
     // Record the spend to the telemetry ledger that assessUsdBudget reads, so the
     // --max-usd cap actually enforces against THIS run's accumulating cost on the
@@ -163,6 +176,7 @@ export async function executePromoteJudge(context: CommandContext): Promise<numb
         judged,
         promoted_count: promoted.length,
         rejected,
+        errored,
         total_cost_usd: Number(totalCost.toFixed(6)),
         stopped_reason: stoppedReason,
         promoted,

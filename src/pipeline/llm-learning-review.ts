@@ -741,12 +741,15 @@ function numberOrNull(value: number | undefined): number | null {
 
 function extractMessageContent(
   payload: {
-    choices?: Array<{ message?: { content?: string } }>;
+    choices?: Array<{ message?: { content?: string | null } }>;
   },
   errorLabel: string,
 ): string {
   const content = payload.choices?.[0]?.message?.content;
-  if (content === undefined || content.trim().length === 0) {
+  // Some models (e.g. deepseek-v4-flash) return `content: null` rather than
+  // omitting it. `== null` catches both null and undefined; without it
+  // `content.trim()` throws a TypeError instead of the clean error below.
+  if (content == null || content.trim().length === 0) {
     throw new Error(`OpenRouter ${errorLabel} returned no message content`);
   }
 
