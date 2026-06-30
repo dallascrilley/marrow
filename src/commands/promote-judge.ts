@@ -7,6 +7,7 @@ import {
   recordLlmBudgetUse,
 } from "../pipeline/llm-budget.js";
 import { openRouterApiKeyEnvVar } from "../pipeline/llm-learning-review.js";
+import { appendLlmTelemetry, buildLlmTelemetryRecord } from "../pipeline/llm-telemetry.js";
 import { loadGlobalInstinctIds, saveGlobalInstinct } from "../v2/instinct/global-store.js";
 import { instinctSchema } from "../v2/instinct/schema.js";
 import { loadInstinct } from "../v2/instinct/store.js";
@@ -105,6 +106,18 @@ export async function executePromoteJudge(context: CommandContext): Promise<numb
       break;
     }
     await recordLlmBudgetUse(maxPer);
+    // Record the spend to the telemetry ledger that assessUsdBudget reads, so the
+    // --max-usd cap actually enforces against THIS run's accumulating cost on the
+    // next iteration's pre-call check (recordLlmBudgetUse only tracks the count).
+    await appendLlmTelemetry(
+      buildLlmTelemetryRecord({
+        usage: result.usage,
+        operation: "global_promotion_judge",
+        sessionId: candidate.project_id,
+        learningId: candidate.instinct_id,
+        createdAt: new Date().toISOString(),
+      }),
+    );
     judged += 1;
     totalCost += result.usage.cost ?? 0;
 
