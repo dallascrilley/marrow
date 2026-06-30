@@ -4,7 +4,10 @@ import { dirname, join } from "node:path";
 import { getRuntimePath } from "../config/paths.js";
 import type { LlmCallUsage } from "./llm-learning-review.js";
 
-export type LlmTelemetryOperation = "learning_review" | "topic_generation";
+export type LlmTelemetryOperation =
+  | "learning_review"
+  | "topic_generation"
+  | "global_promotion_judge";
 
 /**
  * One OpenRouter call's telemetry, shaped for OpenTelemetry GenAI semantic
