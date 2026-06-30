@@ -86,6 +86,26 @@ test("judgeGlobalApplicability calls the model and returns a parsed verdict + us
   assert.equal(result.usage.model, "deepseek/deepseek-v4-flash");
 });
 
+test("judgeGlobalApplicability surfaces a clean error on null message content", async () => {
+  // deepseek-v4-flash occasionally returns choices[0].message.content === null;
+  // extractMessageContent must reject it cleanly, not throw a TypeError on .trim().
+  const nullContentFetch = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ choices: [{ message: { content: null } }], usage: { cost: 0 } }),
+  });
+  await assert.rejects(
+    () =>
+      judgeGlobalApplicability({
+        instinct: { trigger: "t", finding: "f", domain: "workflow" },
+        model: "deepseek/deepseek-v4-flash",
+        apiKey: "test-key",
+        fetchImpl: nullContentFetch,
+      }),
+    /returned no message content/,
+  );
+});
+
 test("detectGlobalJudgeCandidates returns high-confidence instincts, deduped and filtered", async () => {
   const previousRoot = process.env.AGENT_SESSION_DISTILLERY_ROOT;
   const sandbox = await mkdtemp(join(tmpdir(), "asd-judge-"));
