@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import {
   hashToProjectId,
   normaliseGitRemote,
+  resetProjectIdCache,
   resolveProjectId,
 } from "../dist/v2/project/resolve.js";
 
@@ -89,4 +90,33 @@ test("resolveProjectId uses declared key over path hash when no git remote", asy
 
   assert.equal(resolved.source, "declared-key");
   assert.equal(resolved.id, hashToProjectId("my-stable-key"));
+});
+
+test("resolveProjectId memoizes the git-remote probe per workspace path", async () => {
+  const workspace = await mkdtemp(join(tmpdir(), "asd-v2-memo-ws-"));
+  await execFileAsync("git", ["init"], { cwd: workspace, env: GIT_ENV });
+  await execFileAsync("git", ["remote", "add", "origin", "git@github.com:acme/first.git"], {
+    cwd: workspace,
+    env: GIT_ENV,
+  });
+
+  resetProjectIdCache();
+  const first = await resolveProjectId({ workspacePath: workspace, sessionRoot: workspace });
+  assert.equal(first.id, hashToProjectId("github.com/acme/first"));
+
+  // Change origin on disk but DON'T clear the cache: the memoized probe must
+  // still return the original id (proving the second resolve skipped the fork).
+  await execFileAsync("git", ["remote", "set-url", "origin", "git@github.com:acme/second.git"], {
+    cwd: workspace,
+    env: GIT_ENV,
+  });
+  const cached = await resolveProjectId({ workspacePath: workspace, sessionRoot: workspace });
+  assert.equal(cached.id, hashToProjectId("github.com/acme/first"), "served from cache");
+
+  // After a reset, the probe re-runs and picks up the new remote.
+  resetProjectIdCache();
+  const refreshed = await resolveProjectId({ workspacePath: workspace, sessionRoot: workspace });
+  assert.equal(refreshed.id, hashToProjectId("github.com/acme/second"), "re-forked after reset");
+
+  resetProjectIdCache();
 });
