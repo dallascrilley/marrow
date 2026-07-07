@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 
 import {
   hashToProjectId,
+  isDefinitiveGitMiss,
   normaliseGitRemote,
   resetProjectIdCache,
   resolveProjectId,
@@ -119,4 +120,30 @@ test("resolveProjectId memoizes the git-remote probe per workspace path", async 
   assert.equal(refreshed.id, hashToProjectId("github.com/acme/second"), "re-forked after reset");
 
   resetProjectIdCache();
+});
+
+test("isDefinitiveGitMiss distinguishes a git 'no' from an environmental failure", () => {
+  // git actually RAN and answered no (not a repo / no origin): numeric exit
+  // code, not killed → definitive, safe to cache.
+  assert.equal(isDefinitiveGitMiss({ code: 1 }), true, "exit 1 (no origin) is definitive");
+  assert.equal(isDefinitiveGitMiss({ code: 128 }), true, "exit 128 (not a repo) is definitive");
+  assert.equal(
+    isDefinitiveGitMiss({ code: 2, killed: false }),
+    true,
+    "explicit killed:false stays definitive",
+  );
+
+  // Environmental failures must NOT be cached, so the probe can retry later.
+  assert.equal(
+    isDefinitiveGitMiss({ code: "ENOENT" }),
+    false,
+    "git-not-found (string code) is environmental",
+  );
+  assert.equal(
+    isDefinitiveGitMiss({ code: null, killed: true }),
+    false,
+    "timeout kill is environmental",
+  );
+  assert.equal(isDefinitiveGitMiss({}), false, "a shapeless rejection is not definitive");
+  assert.equal(isDefinitiveGitMiss(new Error("boom")), false, "a bare Error is not definitive");
 });
