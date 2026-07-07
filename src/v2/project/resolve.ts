@@ -166,12 +166,31 @@ function readGitOriginRemote(workspacePath: string): Promise<string | null> {
       );
       const trimmed = stdout.trim();
       return trimmed.length > 0 ? normaliseGitRemote(trimmed) : null;
-    } catch {
+    } catch (error) {
+      // git ran and exited non-zero (not a repo / no origin remote) is a
+      // DEFINITIVE null — safe to keep cached. A spawn failure (ENOENT, git
+      // missing) or a timeout kill is ENVIRONMENTAL and likely transient
+      // (e.g. fork pressure — exactly when this cache matters most); evict it so
+      // a later call retries instead of sticking a wrong path-hash fallback for
+      // the rest of the process.
+      if (!isDefinitiveGitMiss(error)) {
+        gitRemoteCache.delete(workspacePath);
+      }
       return null;
     }
   })();
   gitRemoteCache.set(workspacePath, pending);
   return pending;
+}
+
+/**
+ * True when a `git ... remote get-url` rejection means git actually RAN and
+ * answered "no" (a numeric exit code, e.g. 1/2/128), vs an environmental failure
+ * — git not found (`ENOENT`) or killed on timeout — which should not be cached.
+ */
+export function isDefinitiveGitMiss(error: unknown): boolean {
+  const e = error as { code?: unknown; killed?: unknown };
+  return typeof e.code === "number" && e.killed !== true;
 }
 
 /**
