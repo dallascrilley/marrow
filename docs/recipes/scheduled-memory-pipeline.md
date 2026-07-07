@@ -61,6 +61,8 @@ Run this on a weekly or monthly cadence — not on the same 6-hour ingest cron.
 | `ASD_VAULT_ROOT` | Vault root for `memory push-wiki` (default `~/vault`) |
 | `OPENROUTER_API_KEY` | Required only when running `quality review-learnings`; source from 1Password **OpenRouter API Credentials - agent-session-distillery** |
 | `ASD_LLM_MAX_PER` | Sliding-window LLM budget shared by review-learnings and corpus resummarize (default `5/24h`) |
+| `ASD_LLM_MAX_USD` | USD ceiling for LLM review spend (the real financial guard; count caps only smooth bursts) |
+| `OPENROUTER_MODEL` | Model for `quality review-learnings` (launcher default: `google/gemini-3-flash-preview`) |
 
 Build the CLI once after checkout updates:
 
@@ -120,6 +122,33 @@ launchctl load ~/Library/LaunchAgents/com.dallascrilley.asd-memory-pipeline.plis
 
 `scripts/scheduled-memory-pipeline.sh` runs the steps above and exits
 non-zero on the first failure so cron/launchd can surface regressions.
+
+## Operator-local launcher (paid tier)
+
+The deployed macOS setup adds one layer the plist example above doesn't show
+(verified 2026-07-06): the live plist's `ProgramArguments` points at an
+operator-local launcher, **not** at the repo script directly:
+
+```text
+launchd (6h) → ~/.agent-session-distillery/run-pipeline.sh   # operator-local, outside the repo
+                 → sources ~/.agent-session-distillery/secrets.env  (600; OPENROUTER_API_KEY)
+                 → exports OPENROUTER_MODEL (default google/gemini-3-flash-preview)
+                 → exports ASD_LLM_MAX_USD (default 0.50/24h)
+                 → exec scripts/scheduled-memory-pipeline.sh          # this repo, primary checkout dist/
+```
+
+Consequences:
+
+- **No drift risk from copying:** the launcher `exec`s the repo script in
+  place, so pipeline-step changes ship by committing to `main` and rebuilding
+  the primary checkout's `dist/` (the launcher never snapshots the script).
+- **Secrets stay out of the plist and the repo:** the API key lives only in
+  the 600-perm `secrets.env`, read at runtime.
+- **Paid tier is a file, not a code path:** delete `secrets.env` (or point the
+  plist back at `scripts/scheduled-memory-pipeline.sh`) to drop to the free
+  tier — `review-learnings` is skipped whenever `OPENROUTER_API_KEY` is unset.
+- The launcher itself is operator-owned config; only its existence and
+  contract are documented here.
 
 ## Failure handling
 
