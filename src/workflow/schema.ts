@@ -40,6 +40,11 @@ export type WorkflowCandidate = {
   cluster: WorkflowCluster;
   rule_id: string;
   contradicting_count: number;
+  decision?: {
+    decided_at: string;
+    decision: "adopt" | "dismiss" | "defer";
+    note?: string;
+  };
   encoded_in?: string;
   confidence: WorkflowConfidence;
   supporting_count: number;

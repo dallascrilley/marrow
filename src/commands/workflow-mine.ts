@@ -19,6 +19,7 @@ export async function executeWorkflowMine(
     database,
     cluster: options.cluster,
     days: options.days,
+    includeDecided: options.includeDecided,
     limit: options.limit,
     source: options.source,
     recommendation: options.recommendation,
@@ -43,6 +44,7 @@ export async function executeWorkflowMine(
 function parseWorkflowMineArgs(args: string[]): {
   cluster: WorkflowCluster | null;
   days: number;
+  includeDecided: boolean;
   json: boolean;
   limit: number;
   source: string | null;
@@ -50,6 +52,7 @@ function parseWorkflowMineArgs(args: string[]): {
 } {
   let days = 7;
   let json = false;
+  let includeDecided = false;
   let limit = 20;
   let source: string | null = null;
   let cluster: WorkflowCluster | null = null;
@@ -61,6 +64,11 @@ function parseWorkflowMineArgs(args: string[]): {
 
     if (arg === "--json") {
       json = true;
+      continue;
+    }
+
+    if (arg === "--include-decided") {
+      includeDecided = true;
       continue;
     }
 
@@ -132,7 +140,7 @@ function parseWorkflowMineArgs(args: string[]): {
     throw new Error(`Unknown flag: ${arg}`);
   }
 
-  return { cluster, days, json, limit, recommendation, source };
+  return { cluster, days, includeDecided, json, limit, recommendation, source };
 }
 
 function formatCandidate(candidate: WorkflowCandidate): string {

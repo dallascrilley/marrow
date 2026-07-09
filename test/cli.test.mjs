@@ -269,6 +269,99 @@ test("workflow mine emits read-only JSON candidates", async () => {
   }
 });
 
+test("workflow decisions exclude dismissed candidates unless included", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-decision-"));
+  const runtimeRoot = join(sandbox, "runtime-root");
+  const sessionId = "workflow-decision-session";
+  const summaryDir = join(runtimeRoot, "summaries", "by-session", sessionId);
+  const stagingDir = join(runtimeRoot, "staging", sessionId);
+  const indexDir = join(runtimeRoot, "index");
+
+  try {
+    await mkdir(summaryDir, { recursive: true });
+    await mkdir(stagingDir, { recursive: true });
+    await mkdir(indexDir, { recursive: true });
+    const summaryPath = join(summaryDir, "summary.json");
+    await writeFile(
+      summaryPath,
+      `${JSON.stringify({
+        session_id: sessionId,
+        topic: "Workflow decision fixture",
+        topic_source: "deterministic",
+        what_worked: [],
+        what_failed: [],
+        what_was_decided: ["Always run verification before final summary."],
+        useful_commands: [],
+        files_of_interest: [],
+        next_step: "Continue.",
+        project_learnings: [],
+        user_learnings: [],
+        deletion_readiness: "ready",
+      })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      join(stagingDir, "reduced-session.json"),
+      `${JSON.stringify({ turns: [] })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      join(indexDir, "session-index.jsonl"),
+      `${JSON.stringify({
+        v: 1,
+        source_path: "/tmp/workflow-decision-session.jsonl",
+        source_uuid: sessionId,
+        source_tool: "cursor",
+        asd_session_id: sessionId,
+        topic: "Workflow decision fixture",
+        topic_source: "deterministic",
+        next_step: "Continue.",
+        summary_json_path: summaryPath,
+        updated_at: "2026-07-08T00:00:00.000Z",
+      })}\n`,
+      "utf8",
+    );
+
+    const mineResult = runCli(["workflow", "mine", "--days=30", "--json"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+    assert.equal(mineResult.status, 0, mineResult.stderr);
+    const candidateId = JSON.parse(mineResult.stdout.trim()).candidates[0].candidate_id;
+
+    const dismissResult = runCli(
+      ["workflow", "dismiss", candidateId, "--note", "already covered"],
+      {
+        [runtimeOverrideEnvVar]: runtimeRoot,
+      },
+    );
+    assert.equal(dismissResult.status, 0, dismissResult.stderr);
+
+    const hiddenResult = runCli(["workflow", "mine", "--days=30", "--json"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+    assert.equal(hiddenResult.status, 0, hiddenResult.stderr);
+    const remainingCandidates = JSON.parse(hiddenResult.stdout.trim()).candidates;
+    assert.ok(remainingCandidates.every((candidate) => candidate.candidate_id !== candidateId));
+
+    const includedResult = runCli(
+      ["workflow", "mine", "--days=30", "--include-decided", "--json"],
+      { [runtimeOverrideEnvVar]: runtimeRoot },
+    );
+    assert.equal(includedResult.status, 0, includedResult.stderr);
+    const includedCandidate = JSON.parse(includedResult.stdout.trim()).candidates[0];
+    assert.equal(includedCandidate.candidate_id, candidateId);
+    assert.equal(includedCandidate.decision.decision, "dismiss");
+
+    const unknownShow = runCli(["workflow", "show", "wf_missing"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+    assert.equal(unknownShow.status, 1);
+    assert.match(unknownShow.stderr, /Workflow candidate not found/);
+  } finally {
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
 test("workflow mine filters by cluster and recommendation", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-filter-"));
   const runtimeRoot = join(sandbox, "runtime-root");

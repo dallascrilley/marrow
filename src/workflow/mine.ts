@@ -9,6 +9,7 @@ import { getReducedArtifactPath } from "../pipeline/reduce.js";
 import { loadSessionIndexRecords, type SessionIndexRecord } from "../read/session-index.js";
 import { loadGlobalInstinct, loadGlobalInstinctIds } from "../v2/instinct/global-store.js";
 import { canonicalKey } from "../v2/instinct/id.js";
+import { latestWorkflowDecisionMap, type WorkflowDecision } from "./decisions.js";
 import type {
   WorkflowArtifactKind,
   WorkflowCandidate,
@@ -25,6 +26,7 @@ export type MineWorkflowOptions = {
   cluster?: WorkflowCluster | null;
   days?: number;
   recommendation?: WorkflowRecommendation | null;
+  includeDecided?: boolean;
   limit?: number;
   source?: string | null;
 };
@@ -167,6 +169,7 @@ export async function mineWorkflowCandidates(
   const source = options.source ?? null;
   const cluster = options.cluster ?? null;
   const recommendation = options.recommendation ?? null;
+  const includeDecided = options.includeDecided ?? false;
   const loadOptions = options.database
     ? { database: options.database, fallbackToBuild: true }
     : { fallbackToBuild: true };
@@ -186,10 +189,13 @@ export async function mineWorkflowCandidates(
     seeds.push(...extractSeeds(record, summary, turns));
   }
 
+  const decisionMap = await latestWorkflowDecisionMap();
   const candidates = suppressAlreadyEncodedCandidates(
     clusterSeeds(seeds),
     await loadEncodedInstincts(),
   )
+    .map((candidate) => annotateDecision(candidate, decisionMap.get(candidate.candidate_id)))
+    .filter((candidate) => includeDecided || candidate.decision === undefined)
     .filter((candidate) => !cluster || candidate.cluster === cluster)
     .filter((candidate) => !recommendation || candidate.recommendation === recommendation)
     .slice(0, limit);
@@ -314,6 +320,24 @@ function suppressAlreadyEncodedCandidates(
       status: "already_encoded",
     };
   });
+}
+
+function annotateDecision(
+  candidate: WorkflowCandidate,
+  decision: WorkflowDecision | undefined,
+): WorkflowCandidate {
+  if (!decision) {
+    return candidate;
+  }
+
+  return {
+    ...candidate,
+    decision: {
+      decided_at: decision.decided_at,
+      decision: decision.decision,
+      ...(decision.note ? { note: decision.note } : {}),
+    },
+  };
 }
 
 function clusterSeeds(seeds: CandidateSeed[]): WorkflowCandidate[] {
