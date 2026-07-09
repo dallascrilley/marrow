@@ -268,6 +268,93 @@ test("workflow mine emits read-only JSON candidates", async () => {
     await rm(sandbox, { force: true, recursive: true });
   }
 });
+
+test("workflow mine filters by cluster and recommendation", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-filter-"));
+  const runtimeRoot = join(sandbox, "runtime-root");
+  const indexDir = join(runtimeRoot, "index");
+  const sessions = [
+    { id: "workflow-filter-validation", decision: "Always run verification before final summary." },
+    { id: "workflow-filter-shipping", worked: "Opened a PR with concrete CI evidence." },
+  ];
+
+  try {
+    await mkdir(indexDir, { recursive: true });
+    const indexRecords = [];
+    for (const session of sessions) {
+      const summaryDir = join(runtimeRoot, "summaries", "by-session", session.id);
+      const stagingDir = join(runtimeRoot, "staging", session.id);
+      await mkdir(summaryDir, { recursive: true });
+      await mkdir(stagingDir, { recursive: true });
+      const summaryPath = join(summaryDir, "summary.json");
+      await writeFile(
+        summaryPath,
+        `${JSON.stringify({
+          session_id: session.id,
+          topic: "Workflow filter fixture",
+          topic_source: "deterministic",
+          what_worked: session.worked ? [session.worked] : [],
+          what_failed: [],
+          what_was_decided: session.decision ? [session.decision] : [],
+          useful_commands: [],
+          files_of_interest: [],
+          next_step: "Continue.",
+          project_learnings: [],
+          user_learnings: [],
+          deletion_readiness: "ready",
+        })}\n`,
+        "utf8",
+      );
+      await writeFile(join(stagingDir, "reduced-session.json"), `${JSON.stringify({ turns: [] })}\n`, "utf8");
+      indexRecords.push({
+        v: 1,
+        source_path: `/tmp/${session.id}.jsonl`,
+        source_uuid: session.id,
+        source_tool: "cursor",
+        asd_session_id: session.id,
+        topic: "Workflow filter fixture",
+        topic_source: "deterministic",
+        next_step: "Continue.",
+        summary_json_path: summaryPath,
+        updated_at: "2026-07-08T00:00:00.000Z",
+      });
+    }
+    await writeFile(join(indexDir, "session-index.jsonl"), `${indexRecords.map((record) => JSON.stringify(record)).join("\n")}\n`, "utf8");
+
+    const clusterResult = runCli(["workflow", "mine", "--days=30", "--cluster=validation", "--json"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+    assert.equal(clusterResult.status, 0, clusterResult.stderr);
+    const clusterPayload = JSON.parse(clusterResult.stdout.trim());
+    assert.ok(clusterPayload.candidates.length > 0);
+    assert.ok(clusterPayload.candidates.every((candidate) => candidate.cluster === "validation"));
+
+    const recommendationResult = runCli(
+      ["workflow", "mine", "--days=30", "--recommendation=dismiss", "--json"],
+      { [runtimeOverrideEnvVar]: runtimeRoot },
+    );
+    assert.equal(recommendationResult.status, 0, recommendationResult.stderr);
+    const recommendationPayload = JSON.parse(recommendationResult.stdout.trim());
+    assert.ok(recommendationPayload.candidates.length > 0);
+    assert.ok(
+      recommendationPayload.candidates.every((candidate) => candidate.recommendation === "dismiss"),
+    );
+  } finally {
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("workflow mine validates cluster and recommendation filters", () => {
+  const clusterResult = runCli(["workflow", "mine", "--cluster=bogus"]);
+  assert.equal(clusterResult.status, 1);
+  assert.match(clusterResult.stderr, /--cluster must be one of:/);
+  assert.match(clusterResult.stderr, /validation/);
+
+  const recommendationResult = runCli(["workflow", "mine", "--recommendation=maybe"]);
+  assert.equal(recommendationResult.status, 1);
+  assert.match(recommendationResult.stderr, /--recommendation must be one of:/);
+  assert.match(recommendationResult.stderr, /adopt/);
+});
 test("report --html writes a static dashboard artifact via CLI", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "asd-report-html-"));
   const runtimeRoot = join(sandbox, "runtime-root");

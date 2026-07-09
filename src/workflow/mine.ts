@@ -22,7 +22,9 @@ import type {
 
 export type MineWorkflowOptions = {
   database?: DatabaseSync;
+  cluster?: WorkflowCluster | null;
   days?: number;
+  recommendation?: WorkflowRecommendation | null;
   limit?: number;
   source?: string | null;
 };
@@ -163,6 +165,8 @@ export async function mineWorkflowCandidates(
   const days = options.days ?? DEFAULT_DAYS;
   const limit = options.limit ?? DEFAULT_LIMIT;
   const source = options.source ?? null;
+  const cluster = options.cluster ?? null;
+  const recommendation = options.recommendation ?? null;
   const loadOptions = options.database
     ? { database: options.database, fallbackToBuild: true }
     : { fallbackToBuild: true };
@@ -182,10 +186,10 @@ export async function mineWorkflowCandidates(
     seeds.push(...extractSeeds(record, summary, turns));
   }
 
-  const candidates = suppressAlreadyEncodedCandidates(clusterSeeds(seeds), await loadEncodedInstincts()).slice(
-    0,
-    limit,
-  );
+  const candidates = suppressAlreadyEncodedCandidates(clusterSeeds(seeds), await loadEncodedInstincts())
+    .filter((candidate) => !cluster || candidate.cluster === cluster)
+    .filter((candidate) => !recommendation || candidate.recommendation === recommendation)
+    .slice(0, limit);
 
   return {
     candidates,
