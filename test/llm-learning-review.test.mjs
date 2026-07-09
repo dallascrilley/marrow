@@ -56,6 +56,7 @@ test("OpenRouter learning review sends strict JSON memory-lint request", async (
                   reason: "Useful project decision after rewrite.",
                   statement:
                     "Keep the rule and fix generation because callers need one error channel.",
+                  trigger: "When callers need one reliable error channel.",
                   verdict: "rewrite",
                 }),
               },
@@ -82,6 +83,7 @@ test("OpenRouter learning review sends strict JSON memory-lint request", async (
     keep: true,
     reason: "Useful project decision after rewrite.",
     statement: "Keep the rule and fix generation because callers need one error channel.",
+    trigger: "When callers need one reliable error channel.",
     verdict: "rewrite",
   });
   assert.equal(calls.length, 1);
@@ -153,6 +155,7 @@ function reviewResponse(usage) {
                 keep: true,
                 reason: "Useful project decision.",
                 statement: "Keep the rule and fix generation.",
+                trigger: "When revisiting related project decisions.",
                 verdict: "keep",
               }),
             },
@@ -273,6 +276,7 @@ test("learning review reports a cache hit as zero-cost usage without fetching", 
         keep: true,
         reason: "Cached.",
         statement: "Cached statement.",
+        trigger: "When using cached reviewed learnings.",
         verdict: "keep",
       })}\n`,
       "utf8",
@@ -370,6 +374,7 @@ test("OpenRouter learning review uses exact-input cache before fetching", async 
     keep: true,
     reason: "Cached durable project rule.",
     statement: "Use cached review output for identical learning inputs.",
+    trigger: "When using cached review output.",
     verdict: "keep",
   };
   const item = learning();
@@ -420,6 +425,7 @@ test("OpenRouter learning review refresh bypasses cache and overwrites it", asyn
       keep: true,
       reason: "Old cached result.",
       statement: "Use old cached result.",
+      trigger: "When using old cached review output.",
       verdict: "keep",
     })}\n`,
     "utf8",
@@ -440,6 +446,7 @@ test("OpenRouter learning review refresh bypasses cache and overwrites it", asyn
                   keep: true,
                   reason: "Fresh model result.",
                   statement: "Use fresh model review when refresh is requested.",
+                  trigger: "When refresh is requested for review output.",
                   verdict: "rewrite",
                 }),
               },
@@ -468,6 +475,7 @@ test("OpenRouter learning review refresh bypasses cache and overwrites it", asyn
     assert.equal(review.statement, "Use fresh model review when refresh is requested.");
     const cached = JSON.parse(await readFile(cachePath, "utf8"));
     assert.equal(cached.statement, "Use fresh model review when refresh is requested.");
+    assert.equal(cached.trigger, "When refresh is requested for review output.");
   } finally {
     await rm(cacheDir, { force: true, recursive: true });
   }

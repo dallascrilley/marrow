@@ -180,6 +180,7 @@ export async function executeQualityReviewLearnings(
         verdict: review.review.verdict,
         durability: review.review.durability,
         keep: review.review.keep,
+        trigger: review.review.trigger,
       });
       await appendLlmTelemetry(
         buildLlmTelemetryRecord({

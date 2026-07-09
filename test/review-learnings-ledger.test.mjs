@@ -130,6 +130,7 @@ test("review-learnings excludes ledgered ids before caps and appends all verdict
                           keep: !rejected,
                           reason: `Reviewed ${id}.`,
                           statement: `Reviewed statement for ${id}.`,
+                          trigger: `When applying reviewed trigger for ${id}.`,
                           verdict: rejected ? "reject" : "rewrite",
                         };
                       }),
@@ -178,6 +179,10 @@ test("review-learnings excludes ledgered ids before caps and appends all verdict
       assert.deepEqual(
         sidecarLines.map((entry) => entry.learning_id),
         ["ledger-session-1:learning-3", "ledger-session-2:learning-1"],
+      );
+      assert.equal(
+        sidecarLines[0].trigger,
+        "When applying reviewed trigger for ledger-session-1:learning-3.",
       );
 
       const ledgerLines = (await readFile(ledgerPath, "utf8"))
