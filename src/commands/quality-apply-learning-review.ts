@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { z } from "zod";
 
 import type { CommandContext } from "../cli.js";
 import { getRuntimePath, getRuntimeRoot } from "../config/paths.js";
@@ -52,6 +53,7 @@ export async function executeQualityApplyLearningReview(
       ...original,
       statement: review.suggested_statement,
       title: original.title,
+      trigger: normalizeReviewedTrigger(review.trigger, original.trigger),
       promotion_basis: `${original.promotion_basis} LLM-reviewed with ${review.verdict} verdict.`,
     });
     const sessionLearnings = reviewedLearningsBySession.get(review.session_id) ?? [];
@@ -151,6 +153,7 @@ type ReviewSidecarEntry = {
   statement: string;
   suggested_statement: string;
   verdict: string;
+  trigger?: string | undefined;
 };
 
 function parseOptions(args: readonly string[]): ApplyReviewOptions {
@@ -173,13 +176,34 @@ function parseStringOption(args: readonly string[], flag: string): string | unde
   return value;
 }
 
+const reviewSidecarEntrySchema = z.object({
+  durability: z.string(),
+  keep: z.boolean(),
+  learning_id: z.string(),
+  reason: z.string(),
+  scope_key: z.string(),
+  session_id: z.string(),
+  statement: z.string(),
+  suggested_statement: z.string(),
+  trigger: z.string().optional(),
+  verdict: z.string(),
+});
+
 async function readReviewSidecar(path: string): Promise<ReviewSidecarEntry[]> {
   const contents = await readFile(path, "utf8");
   return contents
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line) as ReviewSidecarEntry);
+    .map((line) => reviewSidecarEntrySchema.parse(JSON.parse(line)));
+}
+
+function normalizeReviewedTrigger(
+  reviewedTrigger: string | undefined,
+  originalTrigger: string,
+): string {
+  const trimmed = reviewedTrigger?.replace(/\s+/g, " ").trim();
+  return trimmed && trimmed.length > 0 ? trimmed : originalTrigger;
 }
 
 async function readOriginalProjectLearnings(

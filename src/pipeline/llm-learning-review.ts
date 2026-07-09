@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { z } from "zod";
 
 import type { Learning, SourceSession, Turn } from "../models/canonical.js";
 import { learningSchema } from "../models/canonical.js";
@@ -14,9 +15,9 @@ export const openRouterModelEnvVar = "OPENROUTER_MODEL";
 // These are trivial structured-output classify tasks where reasoning tokens are
 // pure waste; "low" is the lowest portable effort OpenRouter accepts across models.
 export const lowReasoningEffort = "low";
-export const learningReviewCacheSchemaVersion = "llm-learning-review-cache-v1";
-export const learningReviewPromptVersion = "llm-learning-review-prompt-v1";
-export const learningReviewValidatorVersion = "llm-learning-review-validator-v1";
+export const learningReviewCacheSchemaVersion = "llm-learning-review-cache-v2";
+export const learningReviewPromptVersion = "llm-learning-review-prompt-v2";
+export const learningReviewValidatorVersion = "llm-learning-review-validator-v2";
 
 export type LearningReviewVerdict = "keep" | "reject" | "rewrite";
 export type LearningReviewDurability =
@@ -32,6 +33,7 @@ export type LearningReviewResult = {
   reason: string;
   statement: string;
   verdict: LearningReviewVerdict;
+  trigger: string;
 };
 
 /**
@@ -152,6 +154,7 @@ export async function reviewLearningWithOpenRouter(input: {
             kind: learning.kind,
             project_key: input.projectKey,
             statement: learning.statement,
+            trigger: learning.trigger,
           },
           null,
           2,
@@ -426,7 +429,7 @@ function buildBatchedLearningReviewSystemPrompt(): string {
     buildLearningReviewSystemPrompt(),
     "",
     "You will receive a JSON object with a learnings array; each learning has an id.",
-    'Return only JSON: {"reviews":[{"id","keep","verdict","durability","statement","reason"}]}.',
+    'Return only JSON: {"reviews":[{"id","keep","verdict","durability","statement","trigger","reason"}]}.',
     "Include exactly one review object per input learning, echoing its id verbatim.",
     "Judge each learning independently using the rules above.",
   ].join("\n");
@@ -444,6 +447,7 @@ function buildBatchedLearningReviewPayload(
         kind: learning.kind,
         statement: learning.statement,
         evidence: learning.evidence,
+        trigger: learning.trigger,
       })),
     },
     null,
@@ -451,25 +455,25 @@ function buildBatchedLearningReviewPayload(
   );
 }
 
+const batchedLearningReviewSchema = z.object({
+  reviews: z.array(z.object({ id: z.string() }).passthrough()),
+});
+
 function parseBatchedLearningReview(
   content: string,
   expected: readonly Learning[],
 ): Map<string, LearningReviewResult> {
-  const parsed = JSON.parse(content) as { reviews?: unknown };
-  if (!Array.isArray(parsed.reviews)) {
-    throw new Error("Batched learning review JSON must include a reviews array");
-  }
+  const parsed = batchedLearningReviewSchema.parse(JSON.parse(content));
 
   const expectedIds = new Set(expected.map((learning) => learning.learning_id));
   const byId = new Map<string, LearningReviewResult>();
   for (const entry of parsed.reviews) {
-    const id = (entry as { id?: unknown }).id;
-    if (typeof id !== "string" || !expectedIds.has(id)) {
+    if (!expectedIds.has(entry.id)) {
       // Ignore reviews for ids we did not ask about; missing ones surface later
       // as per-learning failures so they stay pending.
       continue;
     }
-    byId.set(id, validateLearningReview(entry));
+    byId.set(entry.id, validateLearningReview(entry));
   }
 
   return byId;
@@ -478,14 +482,15 @@ function parseBatchedLearningReview(
 function buildLearningReviewSystemPrompt(): string {
   return [
     "You are a strict memory-lint judge for project learnings extracted from agent transcripts.",
-    "Return only JSON with keys: keep, verdict, durability, statement, reason.",
+    "Return only JSON with keys: keep, verdict, durability, statement, trigger, reason.",
     "verdict must be one of: keep, reject, rewrite.",
     "durability must be one of: durable, transient, process, duplicate, unclear.",
     "Reject chat narration, progress reports, generic completion summaries, and statements that are not reusable project knowledge.",
     "If useful but raw, rewrite into one concise durable project-memory statement under 140 characters.",
+    "Also rewrite trigger into one concise precondition that starts with When and explains when the statement should be recalled.",
     "Prefer imperative rule/action form: Use..., Keep..., Move..., Forward..., Add..., Configure..., Avoid...",
     "Do not include test counts, coverage percentages, email counts, or other validation stats unless they are the durable rule itself.",
-    "Do not introduce facts, file paths, commands, or tools that are not present in the statement or evidence.",
+    "Do not introduce facts, file paths, commands, or tools that are not present in the statement, trigger, or evidence.",
     "Reject generic completion summaries whose only durable fact is that work was completed or verified.",
     "Use keep=false for reject; use keep=true for keep or rewrite.",
   ].join("\n");
@@ -559,6 +564,7 @@ export function buildLearningReviewCacheKey(input: {
       prompt_version: learningReviewPromptVersion,
       source_refs: learning.source_refs,
       statement: learning.statement,
+      trigger: learning.trigger,
       validator_version: learningReviewValidatorVersion,
     }),
   );
@@ -765,12 +771,21 @@ function parseTopicGeneration(content: string): string {
   return parsed.topic.replace(/\s+/g, " ").trim();
 }
 
+const learningReviewSchema = z.object({
+  durability: z.unknown().optional(),
+  keep: z.unknown().optional(),
+  reason: z.unknown().optional(),
+  statement: z.unknown().optional(),
+  trigger: z.unknown().optional(),
+  verdict: z.unknown().optional(),
+});
+
 function parseLearningReview(content: string): LearningReviewResult {
   return validateLearningReview(JSON.parse(content));
 }
 
 function validateLearningReview(value: unknown): LearningReviewResult {
-  const parsed = (value ?? {}) as Partial<LearningReviewResult>;
+  const parsed = learningReviewSchema.parse(value);
   const verdict = parseEnum(parsed.verdict, ["keep", "reject", "rewrite"] as const, "verdict");
   const durability = parseEnum(
     parsed.durability,
@@ -791,15 +806,12 @@ function validateLearningReview(value: unknown): LearningReviewResult {
     throw new Error("Learning review JSON must include non-empty statement");
   }
 
-  if (typeof parsed.reason !== "string" || parsed.reason.trim().length === 0) {
-    throw new Error("Learning review JSON must include non-empty reason");
-  }
-
   return {
     durability,
     keep: parsed.keep,
-    reason: parsed.reason.trim(),
+    reason: normalizeReviewReason(parsed.reason),
     statement,
+    trigger: normalizeReviewTrigger({ keep: parsed.keep, trigger: parsed.trigger }),
     verdict,
   };
 }
@@ -813,6 +825,27 @@ function normalizeReviewStatement(input: { keep: boolean; statement: unknown }):
   }
 
   return input.keep ? "__missing_statement__" : "Rejected learning";
+}
+
+function normalizeReviewTrigger(input: { keep: boolean; trigger: unknown }): string {
+  if (typeof input.trigger === "string") {
+    const trimmed = input.trigger.replace(/\s+/g, " ").trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+
+  return input.keep
+    ? "When this reviewed learning is relevant."
+    : "When reviewing rejected learning output.";
+}
+
+function normalizeReviewReason(reason: unknown): string {
+  if (typeof reason !== "string" || reason.trim().length === 0) {
+    throw new Error("Learning review JSON must include non-empty reason");
+  }
+
+  return reason.trim();
 }
 
 function parseEnum<const Values extends readonly string[]>(
