@@ -154,6 +154,7 @@ export async function reviewLearningWithOpenRouter(input: {
             kind: learning.kind,
             project_key: input.projectKey,
             statement: learning.statement,
+            trigger: learning.trigger,
           },
           null,
           2,

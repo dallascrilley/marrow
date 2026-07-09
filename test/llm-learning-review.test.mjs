@@ -95,6 +95,8 @@ test("OpenRouter learning review sends strict JSON memory-lint request", async (
   assert.equal(body.model, "openai/gpt-5-nano");
   assert.deepEqual(body.response_format, { type: "json_object" });
   assert.deepEqual(body.reasoning, { effort: "low" });
+  const userPayload = JSON.parse(body.messages[1].content);
+  assert.equal(userPayload.trigger, "When revisiting related design decisions in studio-tools.");
   assert.match(body.messages[0].content, /strict memory-lint judge/);
   assert.match(body.messages[1].content, /keeping the rule/);
 });
