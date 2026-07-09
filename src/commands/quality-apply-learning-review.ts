@@ -7,6 +7,7 @@ import { getRuntimePath, getRuntimeRoot } from "../config/paths.js";
 import { listSourceSessions } from "../db/ledger.js";
 import { type Learning, learningSchema, type SourceSession } from "../models/canonical.js";
 import type { SupportedSource } from "../pipeline/discover.js";
+import { validateSuggestedStatement } from "../pipeline/prompt-sanitize.js";
 import { syncReviewedLearningsToInstinctStore } from "../v2/learning/sync-reviewed.js";
 import { resolveProjectIdForSession } from "../v2/project/resolve.js";
 
@@ -253,46 +254,6 @@ function getReviewedProjectKnowledgePath(projectKey: string, sessionId: string):
 async function writeJsonlFile(path: string, entries: readonly Learning[]): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`, "utf8");
-}
-
-function validateSuggestedStatement(statement: string): string[] {
-  const flags: string[] = [];
-  const trimmed = statement.trim();
-  const normalized = trimmed.toLowerCase();
-
-  if (
-    trimmed.length === 0 ||
-    trimmed === "Rejected learning" ||
-    trimmed === "__missing_statement__"
-  ) {
-    flags.push("missing_statement");
-  }
-
-  if (trimmed.length > 180) {
-    flags.push("too_long");
-  }
-
-  if (
-    /^(?:completed|fixed done|yes[—-]|you(?:'|’)re right|now fix|here is|here(?:'|’)s|summary)/i.test(
-      trimmed,
-    )
-  ) {
-    flags.push("raw_prefix");
-  }
-
-  if (
-    /\b(?:continue investigating|investigating remaining|line \d+|l\d+ fixed|tests? pass|coverage|verified with `?\.\/scripts\/qa`?)\b/i.test(
-      normalized,
-    )
-  ) {
-    flags.push("transient_or_validation_detail");
-  }
-
-  if (/\*\*|^#+\s|\|\s*-{2,}\s*\|/m.test(trimmed)) {
-    flags.push("markdown_residue");
-  }
-
-  return flags;
 }
 
 function isMissingFileError(error: unknown): boolean {

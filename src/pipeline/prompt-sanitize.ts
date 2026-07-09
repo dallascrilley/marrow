@@ -528,6 +528,46 @@ export function sanitizeLearningStatement(
   return cleaned;
 }
 
+export function validateSuggestedStatement(statement: string): string[] {
+  const flags: string[] = [];
+  const trimmed = statement.trim();
+  const normalized = trimmed.toLowerCase();
+
+  if (
+    trimmed.length === 0 ||
+    trimmed === "Rejected learning" ||
+    trimmed === "__missing_statement__"
+  ) {
+    flags.push("missing_statement");
+  }
+
+  if (trimmed.length > 180) {
+    flags.push("too_long");
+  }
+
+  if (
+    /^(?:completed|fixed done|yes[—-]|you(?:'|’)re right|now fix|here is|here(?:'|’)s|summary)/i.test(
+      trimmed,
+    )
+  ) {
+    flags.push("raw_prefix");
+  }
+
+  if (
+    /\b(?:continue investigating|investigating remaining|line \d+|l\d+ fixed|tests? pass|coverage|verified with `?\.\/scripts\/qa`?)\b/i.test(
+      normalized,
+    )
+  ) {
+    flags.push("transient_or_validation_detail");
+  }
+
+  if (/\*\*|^#+\s|\|\s*-{2,}\s*\|/m.test(trimmed)) {
+    flags.push("markdown_residue");
+  }
+
+  return flags;
+}
+
 function findMarkdownTableStart(value: string): number {
   const lines = value.split("\n");
   for (let i = 0; i < lines.length; i++) {
