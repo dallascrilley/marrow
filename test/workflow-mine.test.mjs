@@ -198,6 +198,65 @@ test("mineWorkflowCandidates asks on contradicted validation guidance", async ()
   }
 });
 
+test("mineWorkflowCandidates signs negated verification as contradiction", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-negated-1",
+      summary: summary("wf-negated-1", {
+        what_was_decided: ["You never need to verify docs-only edits."],
+      }),
+      turns: [turn("wf-negated-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
+
+    assert.ok(validation);
+    assert.equal(validation.supporting_count, 0);
+    assert.equal(validation.contradicting_count, 1);
+    assert.equal(validation.evidence_sessions[0].evidence_kind, "contradiction");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("mineWorkflowCandidates uses contradiction ratio for confidence", async () => {
+  const records = Array.from({ length: 9 }, (_, index) => ({
+    sessionId: `wf-supported-${index}`,
+    summary: summary(`wf-supported-${index}`, {
+      what_was_decided: ["Always run verification before claiming completion."],
+    }),
+    turns: [turn(`wf-supported-${index}`)],
+  }));
+  records.push({
+    sessionId: "wf-one-contradiction",
+    summary: summary("wf-one-contradiction", {
+      what_was_decided: ["Skip verification for this docs-only update."],
+    }),
+    turns: [turn("wf-one-contradiction")],
+  });
+  const { runtimeRoot, sandbox } = await writeRuntime(records);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
+
+    assert.ok(validation);
+    assert.equal(validation.supporting_count, 9);
+    assert.equal(validation.contradicting_count, 1);
+    assert.equal(validation.confidence, "strong");
+    assert.equal(validation.recommendation, "adopt");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
 test("mineWorkflowCandidates redacts local paths from marker matching and evidence topics", async () => {
   const { runtimeRoot, sandbox } = await writeRuntime([
     {

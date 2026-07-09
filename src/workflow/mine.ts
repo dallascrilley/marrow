@@ -52,16 +52,18 @@ const markerRules: Array<{
     evidenceKind: "explicit_preference",
     ruleId: "validation-explicit-verify",
     guidance: "Run the relevant verification before claiming behavior works or work is complete.",
-    pattern: /\b(always|must|never)\b[^.?!]*(verify|test|cibuild|ci|proof|passes|green)/i,
+    pattern:
+      /\b(?:always|must)\b[^.?!]*(verify|verification|test|cibuild|ci|proof|passes|green)|\bnever\b[^.?!]*(skip|ship|claim|finish|merge|complete)[^.?!]*(without\s+)?(verify|verification|test|cibuild|ci|proof)/i,
     trigger: "Before claiming completion, merge readiness, or CI status.",
   },
   {
     artifactKind: "rule",
     cluster: "validation",
     evidenceKind: "contradiction",
-    ruleId: "validation-skip-verify-contradiction",
+    ruleId: "validation-explicit-verify",
     guidance: "Run the relevant verification before claiming behavior works or work is complete.",
-    pattern: /\b(skip|without|no need)\b[^.?!]*(verify|verification|test|cibuild|ci|proof)/i,
+    pattern:
+      /\b(?:without|no need|never need|never have to|do not need|don't need)\b[^.?!]*(verify|verification|test|cibuild|ci|proof)|\bskip\b[^.?!]*(verify|verification|test|cibuild|ci|proof)/i,
     trigger: "Before claiming completion, merge readiness, or CI status.",
   },
   {
@@ -266,19 +268,22 @@ function buildCandidate(seeds: CandidateSeed[]): WorkflowCandidate {
   }
 
   const evidenceSessions = dedupeEvidence(seeds.map((seed) => seed.evidence));
-  const confidence = classifyConfidence(seeds, evidenceSessions);
+  const counts = countEvidenceKinds(seeds);
+  const confidence = classifyConfidence(seeds, evidenceSessions, counts);
   const recommendation = recommendationFor(confidence);
 
   return {
     artifact_kind: recommendation === "dismiss" ? "none" : first.artifactKind,
     candidate_id: buildCandidateId(first.cluster, first.ruleId),
     cluster: first.cluster,
+    contradicting_count: counts.contradicting,
     confidence,
     evidence_sessions: evidenceSessions,
     guidance: first.guidance,
     recommendation,
     risk: confidence === "contradicted" ? "high" : confidence === "weak" ? "medium" : "low",
     rule_id: first.ruleId,
+    supporting_count: counts.supporting,
     trigger: first.trigger,
   };
 }
@@ -286,13 +291,13 @@ function buildCandidate(seeds: CandidateSeed[]): WorkflowCandidate {
 function classifyConfidence(
   seeds: CandidateSeed[],
   evidenceSessions: WorkflowEvidence[],
+  counts: { contradicting: number; supporting: number },
 ): WorkflowConfidence {
-  const hasContradiction = seeds.some((seed) => seed.kind === "contradiction");
   const hasCorrection = seeds.some((seed) => seed.kind === "correction");
   const hasExplicitPreference = seeds.some((seed) => seed.kind === "explicit_preference");
   const sessionCount = evidenceSessions.length;
 
-  if (hasContradiction) {
+  if (counts.contradicting / Math.max(1, counts.supporting + counts.contradicting) > 0.2) {
     return "contradicted";
   }
 
@@ -325,6 +330,21 @@ function confidenceRank(confidence: WorkflowConfidence): number {
     case "contradicted":
       return 1;
   }
+}
+
+function countEvidenceKinds(seeds: CandidateSeed[]): { contradicting: number; supporting: number } {
+  const contradictingSessions = new Set<string>();
+  const supportingSessions = new Set<string>();
+
+  for (const seed of seeds) {
+    if (seed.kind === "contradiction") {
+      contradictingSessions.add(seed.evidence.asd_session_id);
+    } else {
+      supportingSessions.add(seed.evidence.asd_session_id);
+    }
+  }
+
+  return { contradicting: contradictingSessions.size, supporting: supportingSessions.size };
 }
 
 function dedupeEvidence(evidence: WorkflowEvidence[]): WorkflowEvidence[] {
