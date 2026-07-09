@@ -96,11 +96,14 @@ async function collectMigrationEntries(database: DatabaseSync): Promise<Migratio
       resolved_at: resolvedAt,
     });
   }
+  const resolvedNewIds = new Set([...byOldKey.values()].map((entry) => entry.new_id));
 
   try {
     const projectDirs = await readdir(getRuntimePath("knowledgeProjects"));
     for (const oldKey of projectDirs) {
-      if (byOldKey.has(oldKey)) continue;
+      if (byOldKey.has(oldKey) || resolvedNewIds.has(oldKey) || looksLikeAdrProjectId(oldKey)) {
+        continue;
+      }
       const resolved = await resolveProjectId({
         workspacePath: null,
         sessionRoot: oldKey,
@@ -118,4 +121,8 @@ async function collectMigrationEntries(database: DatabaseSync): Promise<Migratio
   }
 
   return [...byOldKey.values()].sort((left, right) => left.old_key.localeCompare(right.old_key));
+}
+
+function looksLikeAdrProjectId(projectKey: string): boolean {
+  return /^[0-9a-f]{12}$/u.test(projectKey);
 }

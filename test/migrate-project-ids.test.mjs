@@ -169,10 +169,8 @@ test("migrate project-ids --apply copies knowledge/projects/<old> to knowledge/p
 
     // Re-running --apply against the same legacy entry is a no-op for that
     // entry: the copy already exists (fs.cp with force:false skips it rather
-    // than throwing), nothing errors, and the migrated content is unchanged.
-    // (The migrated-to dir is itself rediscovered as a new "legacy" key by the
-    // knowledge/projects readdir scan, which is a pre-existing quirk of the
-    // scan-based discovery, not something this test asserts away.)
+    // than throwing), nothing errors, the migrated content is unchanged, and
+    // the migrated-to ADR-0002 id dir is not rediscovered as another legacy key.
     const secondApply = runCli(["migrate", "project-ids", "--apply"], root);
     assert.equal(secondApply.status, 0, secondApply.stderr);
 
@@ -186,6 +184,11 @@ test("migrate project-ids --apply copies knowledge/projects/<old> to knowledge/p
     assert.equal(secondEntryForLegacyKey.new_id, expectedNewId);
     assert.equal(secondEntryForLegacyKey.applied, true);
     assert.equal(secondEntryForLegacyKey.apply_error, undefined);
+    assert.equal(
+      secondReport.entries.some((entry) => entry.old_key === expectedNewId),
+      false,
+      "migrated target dir must not be rediscovered as a legacy key",
+    );
     assert.equal(
       await readFile(join(newKnowledgeDir, "marker.json"), "utf8"),
       JSON.stringify({ ok: true }),
