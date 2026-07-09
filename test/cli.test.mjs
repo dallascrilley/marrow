@@ -269,6 +269,79 @@ test("workflow mine emits read-only JSON candidates", async () => {
   }
 });
 
+test("workflow review accepts limit", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-review-limit-"));
+  const runtimeRoot = join(sandbox, "runtime-root");
+  const indexDir = join(runtimeRoot, "index");
+  const records = ["validation-session", "review-session"];
+
+  try {
+    await mkdir(indexDir, { recursive: true });
+    const indexRecords = [];
+    for (const sessionId of records) {
+      const summaryDir = join(runtimeRoot, "summaries", "by-session", sessionId);
+      const stagingDir = join(runtimeRoot, "staging", sessionId);
+      await mkdir(summaryDir, { recursive: true });
+      await mkdir(stagingDir, { recursive: true });
+      const summaryPath = join(summaryDir, "summary.json");
+      await writeFile(
+        summaryPath,
+        `${JSON.stringify({
+          session_id: sessionId,
+          topic: "Workflow review limit fixture",
+          topic_source: "deterministic",
+          what_worked:
+            sessionId === "review-session" ? ["Independent reviewer approved the PR."] : [],
+          what_failed: [],
+          what_was_decided:
+            sessionId === "validation-session"
+              ? ["Always run script/cibuild before claiming CI is green."]
+              : [],
+          useful_commands: [],
+          files_of_interest: [],
+          next_step: "Continue.",
+          project_learnings: [],
+          user_learnings: [],
+          deletion_readiness: "ready",
+        })}\n`,
+        "utf8",
+      );
+      await writeFile(
+        join(stagingDir, "reduced-session.json"),
+        `${JSON.stringify({ turns: [] })}\n`,
+      );
+      indexRecords.push({
+        v: 1,
+        source_path: `/tmp/${sessionId}.jsonl`,
+        source_uuid: sessionId,
+        source_tool: "cursor",
+        asd_session_id: sessionId,
+        topic: "Workflow review limit fixture",
+        topic_source: "deterministic",
+        next_step: "Continue.",
+        summary_json_path: summaryPath,
+        updated_at: "2026-07-08T00:00:00.000Z",
+      });
+    }
+    await writeFile(
+      join(indexDir, "session-index.jsonl"),
+      `${indexRecords.map((record) => JSON.stringify(record)).join("\n")}\n`,
+      "utf8",
+    );
+
+    const result = runCli(["workflow", "review", "--days=30", "--limit=1"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    const lines = result.stdout.trim().split("\n");
+    assert.match(lines[0], /Undecided workflow candidates: 1/);
+    assert.equal(lines.length, 2);
+  } finally {
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
 test("workflow decisions exclude dismissed candidates unless included", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-decision-"));
   const runtimeRoot = join(sandbox, "runtime-root");

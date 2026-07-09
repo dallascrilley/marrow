@@ -11,6 +11,7 @@ const MAX_DECISION_NOTE_CHARS = 500;
 type CommonOptions = {
   days: number;
   json: boolean;
+  limit?: number;
   source: string | null;
 };
 
@@ -27,6 +28,7 @@ export async function executeWorkflowReview(
   const result = await mineWorkflowCandidates({
     database,
     days: options.days,
+    ...(options.limit === undefined ? {} : { limit: options.limit }),
     source: options.source,
   });
   if (options.json) {
@@ -153,6 +155,7 @@ function parseCommonOptions(args: string[]): CommonOptions {
   let days = 7;
   let json = false;
   let source: string | null = null;
+  let limit: number | undefined;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--json") {
@@ -174,9 +177,18 @@ function parseCommonOptions(args: string[]): CommonOptions {
       if (arg === "--source") index += 1;
       continue;
     }
+    if (arg === "--limit" || arg?.startsWith("--limit=")) {
+      const value = arg === "--limit" ? args[index + 1] : arg?.slice("--limit=".length);
+      if (!value || value.startsWith("--")) throw new Error("--limit requires a value");
+      limit = Number.parseInt(value, 10);
+      if (!Number.isFinite(limit) || limit < 1)
+        throw new Error("--limit must be a positive integer");
+      if (arg === "--limit") index += 1;
+      continue;
+    }
     throw new Error(`Unknown flag: ${arg}`);
   }
-  return { days, json, source };
+  return { days, json, ...(limit === undefined ? {} : { limit }), source };
 }
 
 function parseShowOptions(args: string[]): DecisionOptions {
