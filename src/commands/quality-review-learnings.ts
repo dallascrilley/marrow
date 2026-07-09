@@ -15,6 +15,10 @@ import {
   recordLlmBudgetUse,
 } from "../pipeline/llm-budget.js";
 import { reviewLearningsBatchedWithOpenRouter } from "../pipeline/llm-learning-review.js";
+import {
+  appendLlmLearningReviewLedgerEntries,
+  readLlmLearningReviewLedgerIds,
+} from "../pipeline/llm-learning-review-ledger.js";
 import { appendLlmTelemetry, buildLlmTelemetryRecord } from "../pipeline/llm-telemetry.js";
 import { countPendingLlmReview } from "../pipeline/pipeline-gate.js";
 import { isLowSignalTopic } from "../pipeline/summarize.js";
@@ -71,6 +75,7 @@ export async function executeQualityReviewLearnings(
   }
 
   const sessions = listSourceSessions(database).slice(0, options.limit);
+  const reviewedLearningIds = await readLlmLearningReviewLedgerIds();
   const reviewed = [];
   const failures: Array<{ learning_id: string; reason: string; session_id: string }> = [];
   // Pre-LLM filter state: skips collected across the run, and a set of
@@ -104,7 +109,10 @@ export async function executeQualityReviewLearnings(
       continue;
     }
     const learnings = await readProjectLearnings(session.project_key, session.session_id);
-    if (learnings.length === 0) {
+    const unreviewedLearnings = learnings.filter(
+      (learning) => !reviewedLearningIds.has(learning.learning_id),
+    );
+    if (unreviewedLearnings.length === 0) {
       continue;
     }
 
@@ -112,12 +120,12 @@ export async function executeQualityReviewLearnings(
       options.maxTotalLearnings === undefined
         ? undefined
         : options.maxTotalLearnings - reviewedLearningCount;
-    const selectedLearnings = learnings.slice(
+    const selectedLearnings = unreviewedLearnings.slice(
       0,
       Math.min(
-        learnings.length,
-        options.maxLearnings ?? learnings.length,
-        remainingLearningBudget ?? learnings.length,
+        unreviewedLearnings.length,
+        options.maxLearnings ?? unreviewedLearnings.length,
+        remainingLearningBudget ?? unreviewedLearnings.length,
       ),
     );
     // Drop deterministic junk + duplicates before paying for any review. These
@@ -182,6 +190,17 @@ export async function executeQualityReviewLearnings(
           createdAt: new Date().toISOString(),
         }),
       );
+    }
+    await appendLlmLearningReviewLedgerEntries(
+      sessionReviews.map((review) => ({
+        learning_id: review.learning.learning_id,
+        verdict: review.review.verdict,
+        reviewed_at: new Date().toISOString(),
+        session_id: session.session_id,
+      })),
+    );
+    for (const review of sessionReviews) {
+      reviewedLearningIds.add(review.learning.learning_id);
     }
     reviewedLearningCount += sessionReviews.length;
 

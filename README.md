@@ -320,7 +320,19 @@ node dist/cli.js quality review-learnings --refresh-llm
 node dist/cli.js quality review-learnings --max-usd 1/24h --batch-size 10
 ```
 
-This writes `reports/llm-learning-review.jsonl`. LLM reviews are cached by exact learning/model/prompt/validator input under `cache/llm-learning-review/` by default; pass `--refresh-llm` to overwrite cached entries or `--no-cache` to bypass cache reads and writes. Provider or transport failures are reported in the command output and left pending for retry; they are not written as rejected review entries.
+This writes `reports/llm-learning-review.jsonl` as the per-run input for
+`quality apply-learning-review`; the apply command does not read the ledger.
+Each LLM-reviewed learning id is also appended to the durable
+`reports/llm-learning-review-ledger.jsonl`, so later sweeps skip already
+reviewed learnings before applying review caps. The ledger filter is separate
+from the LLM response cache: `--no-cache` bypasses cache reads/writes but still
+skips ledgered ids, while `--refresh-llm` refreshes cache entries only for ids
+not already in the ledger. LLM reviews are cached by exact
+learning/model/prompt/validator input under `cache/llm-learning-review/` by
+default. Provider or transport failures are reported in the command output and
+left pending for retry; they are not written as rejected review entries. If the
+append-only ledger is manually corrupted or truncated, unreadable entries fail
+open as unreviewed work and may be reviewed again.
 
 **Cost controls.** Reviews use a minimal OpenRouter reasoning effort (the memory-lint is a trivial classify task, so reasoning tokens are pure waste) and run only when **both** budgets allow: the call-count cap (`--max-per` / `ASD_LLM_MAX_PER`, default `5/24h`) and a hard USD ceiling (`--max-usd` / `ASD_LLM_MAX_USD`, default `1/24h`). The USD ceiling sums the **effective** (upstream-aware) cost of telemetry receipts in the trailing window, so it still fires for BYOK keys whose OpenRouter `usage.cost` is 0; over the cap the command skips with `skip_reason: "llm_usd_budget_exhausted"`. Before paying for any review the command drops deterministic junk and duplicate statements (reported as `skipped_pre_llm`), then reviews the remaining cache-miss learnings in batches of `--batch-size` (default 10, `1` disables batching) — one OpenRouter call per batch, demultiplexed by learning id, with cache hits served without a call.
 

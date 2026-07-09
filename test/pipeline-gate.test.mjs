@@ -47,7 +47,7 @@ async function withRuntimeRoot(run) {
   }
 }
 
-test("countPendingLlmReview counts learnings missing from review sidecar", async () => {
+test("countPendingLlmReview ignores per-run sidecar and counts only ledger-reviewed ids", async () => {
   await withRuntimeRoot(async (runtimeRoot) => {
     const projectKey = "agent-session-distillery";
     const sessionId = "gate-session";
@@ -82,9 +82,48 @@ test("countPendingLlmReview counts learnings missing from review sidecar", async
       "utf8",
     );
 
-    const afterPartialReview = await countPendingLlmReview();
-    assert.equal(afterPartialReview.pending_sessions, 1);
-    assert.equal(afterPartialReview.pending_learnings, 1);
+    const afterSidecar = await countPendingLlmReview();
+    assert.equal(afterSidecar.pending_sessions, 1);
+    assert.equal(afterSidecar.pending_learnings, 2);
+  });
+});
+
+test("countPendingLlmReview treats review ledger ids as reviewed", async () => {
+  await withRuntimeRoot(async (runtimeRoot) => {
+    const projectKey = "agent-session-distillery";
+    const sessionId = "ledger-gate-session";
+    const projectPath = getProjectKnowledgeSessionPath(projectKey, sessionId);
+    await mkdir(join(projectPath, ".."), { recursive: true });
+    await writeFile(
+      projectPath,
+      `${JSON.stringify({
+        ...learningFixture,
+        learning_id: "ledger-gate-session:project:one",
+        scope_key: projectKey,
+      })}\n${JSON.stringify({
+        ...learningFixture,
+        learning_id: "ledger-gate-session:project:two",
+        scope_key: projectKey,
+      })}\n`,
+      "utf8",
+    );
+
+    const ledgerPath = join(runtimeRoot, "reports", "llm-learning-review-ledger.jsonl");
+    await mkdir(join(ledgerPath, ".."), { recursive: true });
+    await writeFile(
+      ledgerPath,
+      `${JSON.stringify({
+        learning_id: "ledger-gate-session:project:one",
+        verdict: "reject",
+        reviewed_at: "2026-07-06T00:00:00.000Z",
+        session_id: sessionId,
+      })}\n`,
+      "utf8",
+    );
+
+    const pending = await countPendingLlmReview();
+    assert.equal(pending.pending_sessions, 1);
+    assert.equal(pending.pending_learnings, 1);
   });
 });
 
