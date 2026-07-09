@@ -29,6 +29,7 @@ type CandidateSeed = {
   cluster: WorkflowCluster;
   evidence: WorkflowEvidence;
   guidance: string;
+  ruleId: string;
   kind: WorkflowEvidenceKind;
   trigger: string;
 };
@@ -41,6 +42,7 @@ const markerRules: Array<{
   cluster: WorkflowCluster;
   evidenceKind: WorkflowEvidenceKind;
   guidance: string;
+  ruleId: string;
   pattern: RegExp;
   trigger: string;
 }> = [
@@ -48,6 +50,7 @@ const markerRules: Array<{
     artifactKind: "rule",
     cluster: "validation",
     evidenceKind: "explicit_preference",
+    ruleId: "validation-explicit-verify",
     guidance: "Run the relevant verification before claiming behavior works or work is complete.",
     pattern: /\b(always|must|never)\b[^.?!]*(verify|test|cibuild|ci|proof|passes|green)/i,
     trigger: "Before claiming completion, merge readiness, or CI status.",
@@ -56,6 +59,7 @@ const markerRules: Array<{
     artifactKind: "rule",
     cluster: "validation",
     evidenceKind: "contradiction",
+    ruleId: "validation-skip-verify-contradiction",
     guidance: "Run the relevant verification before claiming behavior works or work is complete.",
     pattern: /\b(skip|without|no need)\b[^.?!]*(verify|verification|test|cibuild|ci|proof)/i,
     trigger: "Before claiming completion, merge readiness, or CI status.",
@@ -64,6 +68,7 @@ const markerRules: Array<{
     artifactKind: "rule",
     cluster: "validation",
     evidenceKind: "correction",
+    ruleId: "validation-scope-correction",
     guidance:
       "Treat user corrections like “not what I asked” as scope failures and realign before continuing.",
     pattern: /\b(not what i asked|didn'?t ask|wrong task|stop doing|stop)\b/i,
@@ -74,6 +79,7 @@ const markerRules: Array<{
     artifactKind: "skill",
     cluster: "review",
     evidenceKind: "accepted_pattern",
+    ruleId: "review-independent-closeout",
     guidance:
       "Use an independent review or explicit self-review path before closing review-gated work.",
     pattern: /\b(review|reviewer|approve|reject|self-review|qa)\b/i,
@@ -83,6 +89,7 @@ const markerRules: Array<{
     artifactKind: "workflow_doc",
     cluster: "shipping",
     evidenceKind: "accepted_pattern",
+    ruleId: "shipping-concrete-evidence",
     guidance:
       "Keep shipping evidence tied to concrete commands, commits, PRs, and CI state rather than local claims.",
     pattern: /\b(pr|pull request|push|commit|ci|branch|merge|ship|shipping)\b/i,
@@ -92,6 +99,7 @@ const markerRules: Array<{
     artifactKind: "skill",
     cluster: "debugging",
     evidenceKind: "accepted_pattern",
+    ruleId: "debugging-root-cause-evidence",
     guidance:
       "Debug from root cause and preserve the failing evidence before changing implementation.",
     pattern: /\b(debug|root cause|failure|failing|regression|logs?|trace)\b/i,
@@ -101,6 +109,7 @@ const markerRules: Array<{
     artifactKind: "rule",
     cluster: "capture",
     evidenceKind: "accepted_pattern",
+    ruleId: "capture-durable-guidance",
     guidance:
       "Capture durable workflow corrections as skills, rules, docs, or reviewable candidates instead of leaving them only in chat.",
     pattern:
@@ -111,6 +120,7 @@ const markerRules: Array<{
     artifactKind: "workflow_doc",
     cluster: "delegation",
     evidenceKind: "accepted_pattern",
+    ruleId: "delegation-quality-speed-check",
     guidance:
       "Delegate only when it improves speed, quality, or independent verification; keep deterministic small edits inline.",
     pattern: /\b(subagent|delegate|parallel|reviewer|agent)\b/i,
@@ -121,6 +131,7 @@ const markerRules: Array<{
     artifactKind: "rule",
     cluster: "communication",
     evidenceKind: "explicit_preference",
+    ruleId: "communication-evidence-first",
     guidance:
       "Keep user-facing updates concise, evidence-first, and focused on decisions, checks, and residual risk.",
     pattern: /\b(concise|terse|brief|evidence|summary|final)\b/i,
@@ -132,6 +143,7 @@ const markerRules: Array<{
     evidenceKind: "accepted_pattern",
     guidance:
       "Prefer the smallest maintainable change and avoid adding abstractions before the existing pattern requires them.",
+    ruleId: "simplification-smallest-maintainable",
     pattern: /\b(simple|simplify|smallest|refactor|abstraction|over-?engineer)\b/i,
     trigger: "When choosing between a direct fix and a broader abstraction.",
   },
@@ -222,20 +234,21 @@ function extractSeeds(
       cluster: rule.cluster,
       evidence: { ...evidenceBase, evidence_kind: rule.evidenceKind },
       guidance: rule.guidance,
+      ruleId: rule.ruleId,
       kind: rule.evidenceKind,
       trigger: rule.trigger,
     }));
 }
 
 function clusterSeeds(seeds: CandidateSeed[]): WorkflowCandidate[] {
-  const byGuidance = new Map<string, CandidateSeed[]>();
+  const byRule = new Map<string, CandidateSeed[]>();
 
   for (const seed of seeds) {
-    const key = `${seed.cluster}\0${seed.guidance}`;
-    byGuidance.set(key, [...(byGuidance.get(key) ?? []), seed]);
+    const key = `${seed.cluster}\0${seed.ruleId}`;
+    byRule.set(key, [...(byRule.get(key) ?? []), seed]);
   }
 
-  return Array.from(byGuidance.values())
+  return Array.from(byRule.values())
     .map(buildCandidate)
     .sort((left, right) => {
       return (
@@ -258,13 +271,14 @@ function buildCandidate(seeds: CandidateSeed[]): WorkflowCandidate {
 
   return {
     artifact_kind: recommendation === "dismiss" ? "none" : first.artifactKind,
-    candidate_id: buildCandidateId(first.cluster, first.guidance),
+    candidate_id: buildCandidateId(first.cluster, first.ruleId),
     cluster: first.cluster,
     confidence,
     evidence_sessions: evidenceSessions,
     guidance: first.guidance,
     recommendation,
     risk: confidence === "contradicted" ? "high" : confidence === "weak" ? "medium" : "low",
+    rule_id: first.ruleId,
     trigger: first.trigger,
   };
 }
@@ -327,8 +341,8 @@ function dedupeEvidence(evidence: WorkflowEvidence[]): WorkflowEvidence[] {
   );
 }
 
-function buildCandidateId(cluster: WorkflowCluster, guidance: string): string {
-  const digest = createHash("sha256").update(`${cluster}\0${guidance}`).digest("hex").slice(0, 10);
+function buildCandidateId(cluster: WorkflowCluster, ruleId: string): string {
+  const digest = createHash("sha256").update(`${cluster}\0${ruleId}`).digest("hex").slice(0, 10);
   return `wf_${digest}`;
 }
 

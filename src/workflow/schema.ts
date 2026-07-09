@@ -36,6 +36,7 @@ export type WorkflowCandidate = {
   artifact_kind: WorkflowArtifactKind;
   candidate_id: string;
   cluster: WorkflowCluster;
+  rule_id: string;
   confidence: WorkflowConfidence;
   evidence_sessions: WorkflowEvidence[];
   guidance: string;

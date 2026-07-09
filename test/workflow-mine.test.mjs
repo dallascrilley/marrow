@@ -119,6 +119,33 @@ test("mineWorkflowCandidates promotes explicit user validation preferences", asy
   }
 });
 
+test("mineWorkflowCandidates keys candidate ids on stable rule ids", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-rule-id-1",
+      summary: summary("wf-rule-id-1", {
+        what_was_decided: ["Always run script/cibuild before claiming CI is green."],
+      }),
+      turns: [turn("wf-rule-id-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const firstResult = await mineWorkflowCandidates({ days: 30 });
+    const firstCandidate = firstResult.candidates.find(
+      (candidate) => candidate.rule_id === "validation-explicit-verify",
+    );
+
+    assert.ok(firstCandidate);
+    assert.equal(firstCandidate.rule_id, "validation-explicit-verify");
+    assert.equal(firstCandidate.candidate_id, "wf_cd61247b3c");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
 test("mineWorkflowCandidates dismisses weak single-session agent patterns", async () => {
   const { runtimeRoot, sandbox } = await writeRuntime([
     {
