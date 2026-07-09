@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
+import { executeQualityApplyLearningReview } from "../dist/commands/quality-apply-learning-review.js";
+import { createLedger, upsertSourceSession } from "../dist/db/ledger.js";
 import { learningFixture, sourceSessionFixture } from "../dist/models/canonical.js";
 import { saveInstinct } from "../dist/v2/instinct/store.js";
 import { syncReviewedLearningsToInstinctStore } from "../dist/v2/learning/sync-reviewed.js";
@@ -13,6 +15,7 @@ import {
   readPromotionQueue,
   refreshPromotionQueue,
 } from "../dist/v2/promotion/queue.js";
+import { getProjectKnowledgeSessionPath } from "../dist/writers/knowledge-writer.js";
 
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
 const fixedNow = "2026-06-25T00:00:00.000Z";
@@ -67,6 +70,48 @@ async function withRuntime(run) {
     }
     await rm(root, { recursive: true, force: true });
   }
+}
+
+function makeSourceSession(projectKey) {
+  return {
+    ...structuredClone(sourceSessionFixture),
+    source_tool: "claude-code",
+    source_path: `/tmp/${projectKey}/session.jsonl`,
+    workspace_path: `/tmp/${projectKey}`,
+    project_key: projectKey,
+    session_id: `${projectKey}-session`,
+    conversation_id: `${projectKey}-conversation`,
+    started_at: "2026-06-24T10:00:00Z",
+    updated_at: "2026-06-24T10:05:00Z",
+  };
+}
+
+function makeReviewedLearning(session, learningId) {
+  return {
+    ...structuredClone(learningFixture),
+    learning_id: learningId,
+    title: "Use pnpm in this repo.",
+    trigger: "When installing packages",
+    statement: "Use pnpm in this repo.",
+    confidence: "high",
+    scope_key: session.project_key,
+    source_refs: [
+      {
+        source_path: session.source_path,
+        source_hash: "sha256:sync-refresh",
+        session_id: session.session_id,
+        turn_id: null,
+        event_id: null,
+        line: 1,
+      },
+    ],
+  };
+}
+
+async function writeProjectLearning(projectKey, sessionId, learning) {
+  const learningPath = getProjectKnowledgeSessionPath(projectKey, sessionId);
+  await mkdir(dirname(learningPath), { recursive: true });
+  await writeFile(learningPath, `${JSON.stringify(learning)}\n`, "utf8");
 }
 
 test("detectPromotionCandidates queues instincts seen in 2 aged projects with avg confidence >= 0.8", async () => {
@@ -199,7 +244,7 @@ test("refreshPromotionQueue writes the candidate queue for promote review", asyn
   });
 });
 
-test("syncReviewedLearningsToInstinctStore refreshes the promotion queue as a side effect", async () => {
+test("syncReviewedLearningsToInstinctStore leaves queue refresh to the apply batch", async () => {
   await withRuntime(async () => {
     await saveInstinct("proj-alpha001", makeInstinct("proj-alpha001", { confidence: 0.85 }));
     await saveInstinct("proj-beta0002", makeInstinct("proj-beta0002", { confidence: 0.87 }));
@@ -216,25 +261,7 @@ test("syncReviewedLearningsToInstinctStore refreshes the promotion queue as a si
       started_at: "2026-06-24T10:00:00Z",
       updated_at: "2026-06-24T10:05:00Z",
     };
-    const learning = {
-      ...structuredClone(learningFixture),
-      learning_id: "learning-sync-refresh",
-      title: "Use pnpm in this repo.",
-      trigger: "When installing packages",
-      statement: "Use pnpm in this repo.",
-      confidence: "high",
-      scope_key: session.project_key,
-      source_refs: [
-        {
-          source_path: session.source_path,
-          source_hash: "sha256:sync-refresh",
-          session_id: session.session_id,
-          turn_id: null,
-          event_id: null,
-          line: 1,
-        },
-      ],
-    };
+    const learning = makeReviewedLearning(session, "learning-sync-refresh");
 
     const result = await syncReviewedLearningsToInstinctStore({
       session,
@@ -245,9 +272,62 @@ test("syncReviewedLearningsToInstinctStore refreshes the promotion queue as a si
     });
 
     assert.equal(result.bundleWritten, true);
-    const queue = await readPromotionQueue();
-    assert.equal(queue.length, 1);
-    assert.equal(queue[0].instinct_id, "prefer-pnpm-aaaaaaaa");
+    assert.deepEqual(await readPromotionQueue(), []);
+  });
+});
+
+test("apply-learning-review refreshes the promotion queue once after the batch", async () => {
+  await withRuntime(async (runtimeRoot) => {
+    const database = await createLedger();
+    try {
+      const sessions = [makeSourceSession("proj-alpha001"), makeSourceSession("proj-beta0002")];
+      await saveInstinct("proj-alpha001", makeInstinct("proj-alpha001", { confidence: 0.85 }));
+      await saveInstinct("proj-beta0002", makeInstinct("proj-beta0002", { confidence: 0.87 }));
+      assert.deepEqual(await readPromotionQueue(), []);
+
+      const sidecarEntries = [];
+      for (const session of sessions) {
+        upsertSourceSession(database, session);
+        const learning = makeReviewedLearning(session, `${session.session_id}:learning-1`);
+        await writeProjectLearning(session.project_key, session.session_id, learning);
+        sidecarEntries.push({
+          durability: "durable",
+          keep: true,
+          learning_id: learning.learning_id,
+          reason: "Durable project rule.",
+          scope_key: session.project_key,
+          session_id: session.session_id,
+          statement: learning.statement,
+          suggested_statement: learning.statement,
+          trigger: learning.trigger,
+          verdict: "keep",
+        });
+      }
+
+      const sidecarPath = join(runtimeRoot, "reports", "llm-learning-review.jsonl");
+      await mkdir(dirname(sidecarPath), { recursive: true });
+      await writeFile(
+        sidecarPath,
+        `${sidecarEntries.map((entry) => JSON.stringify(entry)).join("\n")}\n`,
+      );
+
+      const exitCode = await executeQualityApplyLearningReview(
+        {
+          args: ["--input", sidecarPath],
+          commandPath: ["quality", "apply-learning-review"],
+          output: { error: () => {}, info: () => {} },
+        },
+        database,
+      );
+
+      assert.equal(exitCode, 0);
+      const queue = await readPromotionQueue();
+      assert.equal(queue.length, 1);
+      assert.equal(queue[0].instinct_id, "prefer-pnpm-aaaaaaaa");
+      assert.equal(queue[0].project_count, 2);
+    } finally {
+      database.close();
+    }
   });
 });
 

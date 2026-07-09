@@ -11,6 +11,7 @@ import type { SupportedSource } from "../pipeline/discover.js";
 import { validateSuggestedStatement } from "../pipeline/prompt-sanitize.js";
 import { syncReviewedLearningsToInstinctStore } from "../v2/learning/sync-reviewed.js";
 import { resolveProjectIdForSession } from "../v2/project/resolve.js";
+import { refreshPromotionQueue } from "../v2/promotion/queue.js";
 
 export async function executeQualityApplyLearningReview(
   context: CommandContext,
@@ -92,6 +93,10 @@ export async function executeQualityApplyLearningReview(
       project_id: syncResult.projectId,
       instinct_count: syncResult.instinctCount,
     });
+  }
+
+  if (instinctSync.length > 0) {
+    await refreshPromotionQueue(new Date().toISOString());
   }
 
   const reportPath = join(getRuntimePath("reports"), "llm-learning-review-apply.json");
