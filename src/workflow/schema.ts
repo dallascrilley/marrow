@@ -12,11 +12,13 @@ export const workflowClusters = [
 export const workflowArtifactKinds = ["skill", "rule", "workflow_doc", "none"] as const;
 export const workflowConfidenceLevels = ["strong", "medium", "weak", "contradicted"] as const;
 export const workflowRecommendations = ["adopt", "consider", "dismiss", "ask"] as const;
+export const workflowSourceTiers = ["keyword", "instinct"] as const;
 
 export type WorkflowCluster = (typeof workflowClusters)[number];
 export type WorkflowArtifactKind = (typeof workflowArtifactKinds)[number];
 export type WorkflowConfidence = (typeof workflowConfidenceLevels)[number];
 export type WorkflowRecommendation = (typeof workflowRecommendations)[number];
+export type WorkflowSourceTier = (typeof workflowSourceTiers)[number];
 
 export type WorkflowEvidenceKind =
   | "explicit_preference"
@@ -53,6 +55,7 @@ export type WorkflowCandidate = {
   guidance: string;
   recommendation: WorkflowRecommendation;
   risk: "low" | "medium" | "high";
+  source_tier: WorkflowSourceTier;
   trigger: string;
   status?: "already_encoded";
 };

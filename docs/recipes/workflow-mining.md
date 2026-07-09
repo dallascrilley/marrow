@@ -21,6 +21,7 @@ It emits reviewable candidates with:
 - `cluster` (`shipping`, `review`, `debugging`, `validation`, etc.)
 - `artifact_kind` (`skill`, `rule`, `workflow_doc`, or `none`)
 - `confidence` (`strong`, `medium`, `weak`, or `contradicted`)
+- `source_tier` (`keyword` or `instinct`)
 - `recommendation` (`adopt`, `consider`, `dismiss`, or `ask`)
 - parent-session evidence (`asd_session_id`, source, topic, updated timestamp)
 - supporting/contradicting evidence counts and capped sanitized excerpts
@@ -36,6 +37,10 @@ It emits reviewable candidates with:
 filters to one recommendation before `--limit`. `--limit` truncates the final
 candidate list only. Keyword-tier mining is bounded by the built-in marker rule
 table, so `--limit` is mostly useful once instinct-sourced candidates are present.
+
+Established and proven global workflow instincts also appear as `source_tier: "instinct"` candidates. Proven instincts rank as strong; established instincts
+rank as medium. At the same confidence, instinct-tier candidates sort ahead of
+keyword-tier candidates.
 
 `workflow mine` is intentionally read-only. Use it to prepare a candidate list,
 then write or update skills/rules/docs through the normal reviewed workflow.

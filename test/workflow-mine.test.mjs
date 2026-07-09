@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { saveGlobalInstinct } from "../dist/v2/instinct/global-store.js";
+import { appendWorkflowDecision } from "../dist/workflow/decisions.js";
 import { mineWorkflowCandidates } from "../dist/workflow/mine.js";
 
 function globalInstinct(overrides = {}) {
@@ -545,6 +546,90 @@ test("mineWorkflowCandidates marks repeated accepted patterns as medium", async 
   }
 });
 
+test("mineWorkflowCandidates emits instinct-tier candidates from global instincts", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-keyword-rank",
+      summary: summary("wf-keyword-rank", {
+        what_was_decided: ["Always run verification before final summary."],
+      }),
+      turns: [turn("wf-keyword-rank")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    await saveGlobalInstinct(
+      globalInstinct({
+        id: "keep-shipping-evidence-concrete-1234abcd",
+        finding: "Keep shipping evidence tied to concrete commands and CI state",
+        trigger: "When preparing a change for review",
+      }),
+    );
+
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const instinct = result.candidates.find((candidate) => candidate.source_tier === "instinct");
+
+    assert.ok(instinct);
+    assert.equal(instinct.confidence, "strong");
+    assert.equal(instinct.recommendation, "adopt");
+    assert.equal(
+      instinct.guidance,
+      "Keep shipping evidence tied to concrete commands and CI state",
+    );
+    assert.equal(instinct.trigger, "When preparing a change for review");
+    assert.equal(instinct.evidence_sessions[0].asd_session_id, "instinct-session");
+    assert.ok(
+      result.candidates.findIndex((candidate) => candidate.source_tier === "instinct") <
+        result.candidates.findIndex((candidate) => candidate.source_tier === "keyword"),
+    );
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("mineWorkflowCandidates keeps ledger decisions for instinct-tier candidates", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    await saveGlobalInstinct(
+      globalInstinct({
+        id: "review-with-independent-evidence-1234abcd",
+        finding: "Use independent review evidence before closing review-gated work",
+        maturity: "established",
+        trigger: "When closing review-gated work",
+      }),
+    );
+
+    const first = await mineWorkflowCandidates({ days: 30 });
+    const candidate = first.candidates.find((item) => item.source_tier === "instinct");
+    assert.ok(candidate);
+    assert.equal(candidate.confidence, "medium");
+
+    await appendWorkflowDecision({
+      candidate_id: candidate.candidate_id,
+      decision: "dismiss",
+      rule_id: candidate.rule_id,
+    });
+
+    const hidden = await mineWorkflowCandidates({ days: 30 });
+    assert.equal(
+      hidden.candidates.some((item) => item.candidate_id === candidate.candidate_id),
+      false,
+    );
+
+    const included = await mineWorkflowCandidates({ days: 30, includeDecided: true });
+    const decided = included.candidates.find(
+      (item) => item.candidate_id === candidate.candidate_id,
+    );
+    assert.equal(decided?.decision?.decision, "dismiss");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
 test("mineWorkflowCandidates applies source and day filters", async () => {
   const { runtimeRoot, sandbox } = await writeRuntime([
     {
