@@ -50,6 +50,15 @@ const MAX_EVIDENCE_SESSIONS = 10;
 const MAX_EVIDENCE_EXCERPT_CHARS = 200;
 const ENCODED_OVERLAP_THRESHOLD = 0.6;
 const DEFAULT_LIMIT = 20;
+const MIN_EVIDENCE_EXCERPT_CHARS = 20;
+const GENERIC_EVIDENCE_PATTERNS = [
+  /at every handoff and turn end/i,
+  /branch\/worktree no agent-owned dirt before handoff/i,
+  /do not call a persistent REPL in parallel/i,
+  /prefer skills and repo evidence over broad prose recall/i,
+  /stop when request fulfilled/i,
+  /when `?qa`? CLI on PATH/i,
+];
 
 const markerRules: Array<{
   artifactKind: WorkflowArtifactKind;
@@ -244,9 +253,7 @@ function extractSeeds(
     topic: sanitizeEvidenceText(record.topic),
     updated_at: record.updated_at,
   };
-  const textParts = [
-    record.topic,
-    record.next_step,
+  const evidenceTextParts = [
     ...(summary?.what_worked ?? []),
     ...(summary?.what_failed ?? []),
     ...(summary?.what_was_decided ?? []),
@@ -254,6 +261,7 @@ function extractSeeds(
     ...(summary?.user_learnings ?? []),
     ...turns.flatMap((turn) => [turn.user_prompt, turn.assistant_summary]),
   ];
+  const textParts = [record.topic, record.next_step, ...evidenceTextParts];
   const text = sanitizeEvidenceText(textParts.join("\n"));
 
   return markerRules
@@ -264,7 +272,7 @@ function extractSeeds(
       evidence: {
         ...evidenceBase,
         evidence_kind: rule.evidenceKind,
-        excerpt: extractEvidenceExcerpt(textParts, rule.pattern),
+        excerpt: extractEvidenceExcerpt(evidenceTextParts, rule.pattern),
         matched_rule_id: rule.ruleId,
       },
       guidance: rule.guidance,
@@ -527,14 +535,18 @@ function dedupeEvidence(evidence: WorkflowEvidence[]): WorkflowEvidence[] {
   const bySession = new Map<string, WorkflowEvidence>();
 
   for (const item of evidence) {
-    if (!bySession.has(item.asd_session_id)) {
+    const existing = bySession.get(item.asd_session_id);
+    if (!existing || (!existing.excerpt && item.excerpt)) {
       bySession.set(item.asd_session_id, item);
     }
   }
 
   return Array.from(bySession.values()).sort((left, right) => {
+    const usefulnessOrder = Number(Boolean(right.excerpt)) - Number(Boolean(left.excerpt));
     const updatedAtOrder = Date.parse(right.updated_at) - Date.parse(left.updated_at);
-    return updatedAtOrder || left.asd_session_id.localeCompare(right.asd_session_id);
+    return (
+      usefulnessOrder || updatedAtOrder || left.asd_session_id.localeCompare(right.asd_session_id)
+    );
   });
 }
 
@@ -552,7 +564,8 @@ function buildCandidateId(
 }
 
 function extractEvidenceExcerpt(textParts: readonly string[], pattern: RegExp): string {
-  for (const text of [...textParts, textParts.join(" ")]) {
+  const fallbackParts = textParts.length > 0 ? textParts : [""];
+  for (const text of [...fallbackParts, fallbackParts.join(" ")]) {
     const sanitizedText = sanitizeEvidenceText(text);
     const match = pattern.exec(sanitizedText);
     if (!match) {
@@ -561,7 +574,7 @@ function extractEvidenceExcerpt(textParts: readonly string[], pattern: RegExp): 
 
     const sentence = sentenceContainingMatch(sanitizedText, match.index);
     const cleanExcerpt = sanitizeLearningStatement(sanitizeEvidenceText(sentence));
-    if (cleanExcerpt.length > 0) {
+    if (isUsefulEvidenceExcerpt(cleanExcerpt)) {
       return cleanExcerpt.length <= MAX_EVIDENCE_EXCERPT_CHARS
         ? cleanExcerpt
         : `${cleanExcerpt.slice(0, MAX_EVIDENCE_EXCERPT_CHARS - 1).trimEnd()}…`;
@@ -569,6 +582,13 @@ function extractEvidenceExcerpt(textParts: readonly string[], pattern: RegExp): 
   }
 
   return "";
+}
+
+function isUsefulEvidenceExcerpt(excerpt: string): boolean {
+  return (
+    excerpt.length >= MIN_EVIDENCE_EXCERPT_CHARS &&
+    !GENERIC_EVIDENCE_PATTERNS.some((pattern) => pattern.test(excerpt))
+  );
 }
 
 function sentenceContainingMatch(text: string, matchIndex: number): string {

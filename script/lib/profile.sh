@@ -23,11 +23,8 @@ run_setup()  { run_bootstrap; npm install; run_install_hooks; }
 run_update() { npm install; }
 
 run_server() {
-  if [[ -f dist/cli.js ]]; then
-    node dist/cli.js --help
-  else
-    die "No built CLI — run script/setup && npm run build first"
-  fi
+  npm run build --silent
+  node dist/cli.js "$@"
 }
 
 run_test()   { npm test "$@"; }

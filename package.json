@@ -12,6 +12,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "asd": "npm run build --silent && node dist/cli.js",
     "memory:pipeline:dry-run": "node scripts/memory-pipeline-dry-run.mjs",
     "corpus:resummarize": "npm run build && node scripts/resummarize-corpus.mjs",
     "corpus:resummarize:dry-run": "npm run build && node scripts/resummarize-corpus.mjs --dry-run",

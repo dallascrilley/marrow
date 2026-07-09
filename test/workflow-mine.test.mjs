@@ -630,6 +630,36 @@ test("mineWorkflowCandidates keeps ledger decisions for instinct-tier candidates
     await rm(sandbox, { force: true, recursive: true });
   }
 });
+
+test("mineWorkflowCandidates omits generic policy excerpts but preserves evidence counts", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-generic-policy-1",
+      summary: summary("wf-generic-policy-1", {
+        what_was_decided: [
+          "Stop when request fulfilled — including unblocked in-scope follow-on — validation done, status clean except reported foreign dirt.",
+        ],
+      }),
+      turns: [turn("wf-generic-policy-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const candidate = result.candidates.find(
+      (item) => item.rule_id === "validation-scope-correction",
+    );
+
+    assert.ok(candidate);
+    assert.equal(candidate.evidence_count, 1);
+    assert.equal(candidate.supporting_count, 1);
+    assert.equal(candidate.evidence_sessions[0].excerpt, "");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
 test("mineWorkflowCandidates applies source and day filters", async () => {
   const { runtimeRoot, sandbox } = await writeRuntime([
     {
