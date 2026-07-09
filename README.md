@@ -211,6 +211,49 @@ Explicit deletion apply:
 node dist/cli.js delete apply --apply
 ```
 
+Session integrity check (read-only):
+
+```bash
+node dist/cli.js check
+```
+
+`check` reports duplicate ledger/session identities and orphan manifests. It exits
+non-zero when integrity violations are present, so scheduled pipelines run it
+before mutating export or vault state.
+
+Export and search the consolidated session index:
+
+```bash
+node dist/cli.js export-index
+node dist/cli.js search cursor
+node dist/cli.js search cursor --json
+```
+
+`export-index` writes `index/session-index.jsonl` under the runtime root. `search`
+matches topic, ASD session id, or source tool; run it after ingest/export so the
+index is populated.
+
+Preview legacy project-key to ADR-0002 project-id migration:
+
+```bash
+node dist/cli.js migrate project-ids
+```
+
+The command is dry-run by default and writes `_project-id-migration.json` under
+the runtime root. `--apply` copies `knowledge/projects/<old>` to
+`knowledge/projects/<new>` when needed; it does not rename vault paths.
+
+Check OpenRouter provider readiness and budget state:
+
+```bash
+node dist/cli.js doctor provider
+node dist/cli.js doctor provider --json
+```
+
+Without `OPENROUTER_API_KEY`, credential and remote route checks fail or skip, but
+local count/USD budget checks still report. Use this before LLM-gated commands
+such as `quality review-learnings`.
+
 High-level runtime stats:
 
 ```bash
@@ -278,6 +321,16 @@ node dist/cli.js quality apply-learning-review
 ```
 
 This writes `knowledge/projects-reviewed/` and `reports/llm-learning-review-apply.json` without mutating `knowledge/projects/`. The apply step keeps only durable keep/rewrite verdicts that pass strict post-validation.
+
+Export reviewed memory records for downstream wiki ingestion:
+
+```bash
+node dist/cli.js memory export-wiki
+```
+
+This writes `exports/wiki-memory/reviewed-memory.jsonl` under the runtime root.
+When `knowledge/projects-reviewed/` exists, the export prefers reviewed records;
+otherwise it falls back to deterministic project learnings.
 
 Report OpenRouter LLM cost from the telemetry receipts written during review (`reports/llm-telemetry.jsonl`):
 
