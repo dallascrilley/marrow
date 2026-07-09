@@ -9,7 +9,15 @@ import type {
   Turn,
 } from "../models/canonical.js";
 import { isAtomicStatement, isProcessChatterText } from "./artifact-heuristics.js";
+import {
+  commandFromEvent,
+  extractCommandFromText,
+  readPayloadString,
+  usefulCommandsForTurn,
+  usefulFilesForTurn,
+} from "./extract/command-helpers.js";
 import { createLearning, createSourceRef, dedupeLearnings } from "./extract/learning-builders.js";
+import { uniqueStrings } from "./extract/strings.js";
 import { normalizeFilePath } from "./file-paths.js";
 import {
   capEvidenceText,
@@ -823,23 +831,6 @@ function splitPromptLines(prompt: string): string[] {
     .filter((line) => line.length > 0);
 }
 
-function readPayloadString(event: Event, key: string): string | null {
-  const value = event.payload_small[key];
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
-}
-
-function readPayloadStringArray(event: Event, key: string): string[] {
-  const value = event.payload_small[key];
-
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.filter(
-    (entry): entry is string => typeof entry === "string" && entry.trim().length > 0,
-  );
-}
-
 function stripEventPrefix(value: string): string {
   return value.replace(/^Verification noted:\s*/i, "").trim();
 }
@@ -898,79 +889,6 @@ function stripLeadingWorkflowPrefix(value: string): string {
     .replace(/^(?:completed|done)\s+/i, "")
     .replace(/^implemented\s+(?=implemented\b)/i, "")
     .trim();
-}
-
-function extractCommandFromText(value: string): string | null {
-  for (const match of value.matchAll(/`([^`\n]+)`/g)) {
-    const candidate = match[1]?.trim();
-
-    if (
-      candidate !== undefined &&
-      /^(?:\.\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b)/i.test(
-        candidate,
-      )
-    ) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
-function commandFromEvent(event: Event): string | undefined {
-  return readPayloadString(event, "verification_command") ?? usefulCommandsForEvent(event)[0];
-}
-
-function usefulCommandsForTurn(turn: Turn, events: readonly Event[]): string[] {
-  return uniqueStrings([
-    ...turn.commands_seen,
-    ...events.flatMap((event) => usefulCommandsForEvent(event)),
-  ]);
-}
-
-function usefulCommandsForEvent(event: Event): string[] {
-  return uniqueStrings([
-    ...readPayloadStringArray(event, "command_strings"),
-    ...extractCommandsFromText(event.summary),
-  ]).filter(isUsefulCommand);
-}
-
-function extractCommandsFromText(value: string): string[] {
-  const commands: string[] = [];
-
-  for (const match of value.matchAll(/`([^`\n]+)`/g)) {
-    const candidate = match[1]?.trim();
-
-    if (candidate !== undefined) {
-      commands.push(candidate);
-    }
-  }
-
-  return commands;
-}
-
-function usefulFilesForTurn(turn: Turn, events: readonly Event[]): string[] {
-  return uniqueStrings([
-    ...turn.files_touched,
-    ...events.flatMap((event) => readPayloadStringArray(event, "command_strings")),
-    ...events.flatMap((event) => readPayloadStringArray(event, "files_touched")),
-    ...events.flatMap((event) => readPayloadStringArray(event, "file_paths")),
-    ...events.flatMap((event) => readPayloadStringArray(event, "paths")),
-  ])
-    .map((value) => normalizeFilePath(value))
-    .filter((value): value is string => value !== null);
-}
-
-function isUsefulCommand(command: string): boolean {
-  const normalized = command.trim().toLowerCase();
-
-  if (["node", "python", "python3"].includes(normalized)) {
-    return false;
-  }
-
-  return /^(?:\.\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b)/i.test(
-    command.trim(),
-  );
 }
 
 function isUsefulVerificationText(value: string): boolean {
@@ -1585,24 +1503,6 @@ function sourceRefsForEvents(sourceSession: SourceSession, events: readonly Even
       turnId: event.turn_id,
     }),
   );
-}
-
-function uniqueStrings(values: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const uniqueValues: string[] = [];
-
-  for (const value of values) {
-    const normalized = value.trim();
-
-    if (normalized.length === 0 || seen.has(normalized)) {
-      continue;
-    }
-
-    seen.add(normalized);
-    uniqueValues.push(normalized);
-  }
-
-  return uniqueValues;
 }
 
 // Dedupe-key prefixes whose candidates are backed by observed fix/verification

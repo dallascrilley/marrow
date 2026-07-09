@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { eventSchema, sourceSessionFixture, turnSchema } from "../dist/models/canonical.js";
+import { extractCommandFromText } from "../dist/pipeline/extract/command-helpers.js";
 import { extractLearnings } from "../dist/pipeline/extract.js";
 
 function sourceSession(overrides = {}) {
@@ -89,6 +90,9 @@ test("promotes same-turn fix and verification into project learning", () => {
   );
 });
 
+test("extractCommandFromText keeps bare node verification commands", () => {
+  assert.equal(extractCommandFromText("Verification noted: `node` passes."), "node");
+});
 test("tags verified-fix project learnings with evidence_type and a derived trigger", () => {
   const source = sourceSession();
   const firstTurn = turn({
