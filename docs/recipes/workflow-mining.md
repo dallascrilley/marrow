@@ -12,6 +12,7 @@ asd workflow mine --days 30 --cluster validation --recommendation adopt --json
 asd workflow review --days 30
 asd workflow show wf_cd61247b3c --days 30
 asd workflow apply wf_cd61247b3c --target rule --dry-run --days 30
+asd workflow judge --limit 5 --max-per 5/24h --max-usd 1/24h
 ```
 
 `workflow mine` reads the session index, summaries, and reduced-session artifacts.
@@ -42,8 +43,10 @@ Established and proven global workflow instincts also appear as `source_tier: "i
 rank as medium. At the same confidence, instinct-tier candidates sort ahead of
 keyword-tier candidates.
 
-`workflow mine` is intentionally read-only. Use it to prepare a candidate list,
-then write or update skills/rules/docs through the normal reviewed workflow.
+`workflow judge` is LLM-gated and budgeted. It judges undecided candidates,
+reuses the shared judge cache, records OpenRouter telemetry, and appends a
+`judged` decision note with wording/artifact/confidence advice. Cache hits do
+not consume count or USD budget; budget-exhausted runs stop before paid calls.
 
 `workflow apply` is draft-only in v1. It requires `--dry-run` and writes a
 Markdown draft plus JSON apply report under `reports/workflow-drafts/` without
