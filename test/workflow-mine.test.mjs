@@ -5,6 +5,33 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { mineWorkflowCandidates } from "../dist/workflow/mine.js";
+import { saveGlobalInstinct } from "../dist/v2/instinct/global-store.js";
+
+function globalInstinct(overrides = {}) {
+  return {
+    schema_version: 1,
+    id: "run-verification-before-claiming-completion-1234abcd",
+    trigger: "Before claiming completion",
+    finding: "Run verification before claiming completion",
+    confidence: 0.8,
+    confidence_floor: 0.5,
+    domain: "workflow",
+    maturity: "proven",
+    scope: "global",
+    project_id: "",
+    source: {
+      first_session: "instinct-session",
+      first_observed_at: "2026-07-01T00:00:00.000Z",
+      source_refs: [],
+      observations: [{ session: "instinct-session", reinforcing: true, at: "2026-07-01T00:00:00.000Z" }],
+    },
+    related: [],
+    created_at: "2026-07-01T00:00:00.000Z",
+    updated_at: "2026-07-01T00:00:00.000Z",
+    last_promoted_at: "2026-07-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
 
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
 
@@ -306,6 +333,72 @@ test("mineWorkflowCandidates includes sanitized evidence excerpts", async () => 
     assert.doesNotMatch(validation.evidence_sessions[0].excerpt, /\/Users\/example/);
     assert.doesNotMatch(validation.evidence_sessions[0].excerpt, /API_KEY=abc123/);
     assert.doesNotMatch(validation.evidence_sessions[0].excerpt, /\*\*|\|/);
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("mineWorkflowCandidates suppresses already encoded global instincts", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-encoded-1",
+      summary: summary("wf-encoded-1", {
+        what_was_decided: ["Always run verification before claiming completion."],
+      }),
+      turns: [turn("wf-encoded-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    await saveGlobalInstinct(
+      globalInstinct({
+        finding: "Run relevant verification before claiming behavior works or work is complete",
+        trigger: "Before claiming completion merge readiness or CI status",
+      }),
+    );
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
+
+    assert.ok(validation);
+    assert.equal(validation.status, "already_encoded");
+    assert.equal(validation.encoded_in, "run-verification-before-claiming-completion-1234abcd");
+    assert.equal(validation.recommendation, "dismiss");
+    assert.equal(validation.artifact_kind, "none");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("mineWorkflowCandidates does not suppress unrelated global instincts", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-unencoded-1",
+      summary: summary("wf-unencoded-1", {
+        what_was_decided: ["Always run verification before claiming completion."],
+      }),
+      turns: [turn("wf-unencoded-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    await saveGlobalInstinct(
+      globalInstinct({
+        id: "prefer-small-pull-requests-1234abcd",
+        trigger: "When preparing a branch",
+        finding: "Prefer small pull requests with focused commits",
+      }),
+    );
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
+
+    assert.ok(validation);
+    assert.equal(validation.status, undefined);
+    assert.equal(validation.encoded_in, undefined);
+    assert.equal(validation.recommendation, "adopt");
   } finally {
     delete process.env[runtimeOverrideEnvVar];
     await rm(sandbox, { force: true, recursive: true });

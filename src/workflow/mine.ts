@@ -6,6 +6,8 @@ import type { DatabaseSync } from "node:sqlite";
 import { type Summary, summarySchema, type Turn, turnSchema } from "../models/canonical.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
 import { sanitizeLearningStatement } from "../pipeline/prompt-sanitize.js";
+import { loadGlobalInstinct, loadGlobalInstinctIds } from "../v2/instinct/global-store.js";
+import { canonicalKey } from "../v2/instinct/id.js";
 import { loadSessionIndexRecords, type SessionIndexRecord } from "../read/session-index.js";
 import type {
   WorkflowArtifactKind,
@@ -38,6 +40,7 @@ type CandidateSeed = {
 const DEFAULT_DAYS = 7;
 const MAX_EVIDENCE_SESSIONS = 10;
 const MAX_EVIDENCE_EXCERPT_CHARS = 200;
+const ENCODED_OVERLAP_THRESHOLD = 0.6;
 const DEFAULT_LIMIT = 20;
 
 const markerRules: Array<{
@@ -179,7 +182,10 @@ export async function mineWorkflowCandidates(
     seeds.push(...extractSeeds(record, summary, turns));
   }
 
-  const candidates = clusterSeeds(seeds).slice(0, limit);
+  const candidates = suppressAlreadyEncodedCandidates(clusterSeeds(seeds), await loadEncodedInstincts()).slice(
+    0,
+    limit,
+  );
 
   return {
     candidates,
@@ -247,6 +253,58 @@ function extractSeeds(
       kind: rule.evidenceKind,
       trigger: rule.trigger,
     }));
+}
+
+type EncodedInstinct = {
+  id: string;
+  tokens: Set<string>;
+};
+
+async function loadEncodedInstincts(): Promise<EncodedInstinct[]> {
+  const instincts = [];
+  for (const id of await loadGlobalInstinctIds()) {
+    const instinct = await loadGlobalInstinct(id);
+    if (!instinct || instinct.maturity === "deprecated") {
+      continue;
+    }
+    const tokens = canonicalKey(instinct.trigger, instinct.finding).split("-").filter(Boolean);
+    if (tokens.length > 0) {
+      instincts.push({ id: instinct.id, tokens: new Set(tokens) });
+    }
+  }
+  return instincts;
+}
+
+function suppressAlreadyEncodedCandidates(
+  candidates: WorkflowCandidate[],
+  encodedInstincts: EncodedInstinct[],
+): WorkflowCandidate[] {
+  if (encodedInstincts.length === 0) {
+    return candidates;
+  }
+
+  return candidates.map((candidate) => {
+    const guidanceTokens = canonicalKey(candidate.trigger, candidate.guidance).split("-").filter(Boolean);
+    if (guidanceTokens.length === 0) {
+      return candidate;
+    }
+
+    const encoded = encodedInstincts.find((instinct) => {
+      const overlap = guidanceTokens.filter((token) => instinct.tokens.has(token)).length;
+      return overlap / guidanceTokens.length >= ENCODED_OVERLAP_THRESHOLD;
+    });
+    if (!encoded) {
+      return candidate;
+    }
+
+    return {
+      ...candidate,
+      artifact_kind: "none",
+      encoded_in: encoded.id,
+      recommendation: "dismiss",
+      status: "already_encoded",
+    };
+  });
 }
 
 function clusterSeeds(seeds: CandidateSeed[]): WorkflowCandidate[] {

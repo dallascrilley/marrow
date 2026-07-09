@@ -40,6 +40,7 @@ export type WorkflowCandidate = {
   cluster: WorkflowCluster;
   rule_id: string;
   contradicting_count: number;
+  encoded_in?: string;
   confidence: WorkflowConfidence;
   supporting_count: number;
   evidence_count: number;
@@ -48,6 +49,7 @@ export type WorkflowCandidate = {
   recommendation: WorkflowRecommendation;
   risk: "low" | "medium" | "high";
   trigger: string;
+  status?: "already_encoded";
 };
 
 export type WorkflowMineResult = {
