@@ -34,6 +34,13 @@ import { executeSkillEvidence } from "./commands/skill-evidence.js";
 import { executeSkillReport } from "./commands/skill-report.js";
 import { executeStats } from "./commands/stats.js";
 import { executeWorkflowMine } from "./commands/workflow-mine.js";
+import {
+  executeWorkflowAdopt,
+  executeWorkflowDefer,
+  executeWorkflowDismiss,
+  executeWorkflowReview,
+  executeWorkflowShow,
+} from "./commands/workflow-review.js";
 import { getRuntimeRoot } from "./config/paths.js";
 import { createLedger } from "./db/ledger.js";
 
@@ -226,6 +233,26 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "Emit read-only workflow guidance candidates from recent sessions. Flags: --days, --source, --limit, --json.",
         execute: async (context) => withLedger(context, executeWorkflowMine),
+      },
+      review: {
+        description: "List undecided workflow candidates. Flags: --days, --source, --json.",
+        execute: async (context) => withLedger(context, executeWorkflowReview),
+      },
+      show: {
+        description: "Show one workflow candidate by id, including excerpts and prior decision.",
+        execute: async (context) => withLedger(context, executeWorkflowShow),
+      },
+      adopt: {
+        description: "Append an adopt decision for a workflow candidate. Flags: --note.",
+        execute: async (context) => withLedger(context, executeWorkflowAdopt),
+      },
+      dismiss: {
+        description: "Append a dismiss decision for a workflow candidate. Flags: --note.",
+        execute: async (context) => withLedger(context, executeWorkflowDismiss),
+      },
+      defer: {
+        description: "Append a defer decision for a workflow candidate. Flags: --note.",
+        execute: async (context) => withLedger(context, executeWorkflowDefer),
       },
     },
   },

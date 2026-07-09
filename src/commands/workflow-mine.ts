@@ -2,7 +2,13 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
 import { mineWorkflowCandidates } from "../workflow/mine.js";
-import type { WorkflowCandidate } from "../workflow/schema.js";
+import {
+  type WorkflowCandidate,
+  type WorkflowCluster,
+  type WorkflowRecommendation,
+  workflowClusters,
+  workflowRecommendations,
+} from "../workflow/schema.js";
 
 export async function executeWorkflowMine(
   context: CommandContext,
@@ -11,9 +17,12 @@ export async function executeWorkflowMine(
   const options = parseWorkflowMineArgs(context.args);
   const result = await mineWorkflowCandidates({
     database,
+    cluster: options.cluster,
     days: options.days,
+    includeDecided: options.includeDecided,
     limit: options.limit,
     source: options.source,
+    recommendation: options.recommendation,
   });
 
   if (options.json) {
@@ -33,22 +42,33 @@ export async function executeWorkflowMine(
 }
 
 function parseWorkflowMineArgs(args: string[]): {
+  cluster: WorkflowCluster | null;
   days: number;
+  includeDecided: boolean;
   json: boolean;
   limit: number;
   source: string | null;
+  recommendation: WorkflowRecommendation | null;
 } {
   let days = 7;
   let json = false;
+  let includeDecided = false;
   let limit = 20;
   let source: string | null = null;
+  let cluster: WorkflowCluster | null = null;
 
+  let recommendation: WorkflowRecommendation | null = null;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === undefined) continue;
 
     if (arg === "--json") {
       json = true;
+      continue;
+    }
+
+    if (arg === "--include-decided") {
+      includeDecided = true;
       continue;
     }
 
@@ -90,10 +110,37 @@ function parseWorkflowMineArgs(args: string[]): {
       continue;
     }
 
+    if (arg === "--cluster" || arg.startsWith("--cluster=")) {
+      const value = arg === "--cluster" ? args[index + 1] : arg.slice("--cluster=".length);
+      if (!value || value.startsWith("--")) {
+        throw new Error("--cluster requires a value");
+      }
+      if (!workflowClusters.includes(value as WorkflowCluster)) {
+        throw new Error(`--cluster must be one of: ${workflowClusters.join(", ")}`);
+      }
+      cluster = value as WorkflowCluster;
+      if (arg === "--cluster") index += 1;
+      continue;
+    }
+
+    if (arg === "--recommendation" || arg.startsWith("--recommendation=")) {
+      const value =
+        arg === "--recommendation" ? args[index + 1] : arg.slice("--recommendation=".length);
+      if (!value || value.startsWith("--")) {
+        throw new Error("--recommendation requires a value");
+      }
+      if (!workflowRecommendations.includes(value as WorkflowRecommendation)) {
+        throw new Error(`--recommendation must be one of: ${workflowRecommendations.join(", ")}`);
+      }
+      recommendation = value as WorkflowRecommendation;
+      if (arg === "--recommendation") index += 1;
+      continue;
+    }
+
     throw new Error(`Unknown flag: ${arg}`);
   }
 
-  return { days, json, limit, source };
+  return { cluster, days, includeDecided, json, limit, recommendation, source };
 }
 
 function formatCandidate(candidate: WorkflowCandidate): string {

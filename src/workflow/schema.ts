@@ -27,6 +27,8 @@ export type WorkflowEvidenceKind =
 export type WorkflowEvidence = {
   asd_session_id: string;
   evidence_kind: WorkflowEvidenceKind;
+  excerpt: string;
+  matched_rule_id: string;
   source_tool: string;
   topic: string;
   updated_at: string;
@@ -36,12 +38,23 @@ export type WorkflowCandidate = {
   artifact_kind: WorkflowArtifactKind;
   candidate_id: string;
   cluster: WorkflowCluster;
+  rule_id: string;
+  contradicting_count: number;
+  decision?: {
+    decided_at: string;
+    decision: "adopt" | "dismiss" | "defer";
+    note?: string;
+  };
+  encoded_in?: string;
   confidence: WorkflowConfidence;
+  supporting_count: number;
+  evidence_count: number;
   evidence_sessions: WorkflowEvidence[];
   guidance: string;
   recommendation: WorkflowRecommendation;
   risk: "low" | "medium" | "high";
   trigger: string;
+  status?: "already_encoded";
 };
 
 export type WorkflowMineResult = {
