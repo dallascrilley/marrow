@@ -285,6 +285,62 @@ test("mineWorkflowCandidates uses contradiction ratio for confidence", async () 
   }
 });
 
+test("mineWorkflowCandidates counts a session with contradiction as contradicting only", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-mixed-1",
+      summary: summary("wf-mixed-1", {
+        what_worked: ["Always run verification before final summary."],
+        what_was_decided: ["Skip verification for this docs-only update."],
+      }),
+      turns: [turn("wf-mixed-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find(
+      (candidate) => candidate.rule_id === "validation-explicit-verify",
+    );
+
+    assert.ok(validation);
+    assert.equal(validation.supporting_count, 0);
+    assert.equal(validation.contradicting_count, 1);
+    assert.equal(validation.confidence, "contradicted");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("mineWorkflowCandidates keeps excerpts for cross-part matches", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-cross-part-1",
+      summary: summary("wf-cross-part-1", {
+        what_was_decided: ["Always run"],
+        project_learnings: ["verification before claiming completion."],
+      }),
+      turns: [turn("wf-cross-part-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find(
+      (candidate) => candidate.rule_id === "validation-explicit-verify",
+    );
+
+    assert.ok(validation);
+    assert.match(validation.evidence_sessions[0].excerpt, /Always run verification/);
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
 test("mineWorkflowCandidates redacts local paths from marker matching and evidence topics", async () => {
   const { runtimeRoot, sandbox } = await writeRuntime([
     {

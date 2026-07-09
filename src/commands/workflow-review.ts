@@ -3,6 +3,10 @@ import type { DatabaseSync } from "node:sqlite";
 import type { CommandContext } from "../cli.js";
 import { appendWorkflowDecision } from "../workflow/decisions.js";
 import { mineWorkflowCandidates } from "../workflow/mine.js";
+import type { WorkflowCandidate } from "../workflow/schema.js";
+
+const DECISION_LOOKUP_LIMIT = Number.MAX_SAFE_INTEGER;
+const MAX_DECISION_NOTE_CHARS = 500;
 
 type CommonOptions = {
   days: number;
@@ -47,14 +51,18 @@ export async function executeWorkflowShow(
     database,
     days: options.days,
     includeDecided: true,
-    limit: 1000,
+    limit: DECISION_LOOKUP_LIMIT,
     source: options.source,
   });
   const candidate = result.candidates.find((item) => item.candidate_id === options.candidateId);
   if (!candidate) {
     throw new Error(`Workflow candidate not found: ${options.candidateId}`);
   }
-  context.output.info(JSON.stringify(candidate, null, 2));
+  if (options.json) {
+    context.output.info(JSON.stringify(candidate, null, 2));
+    return 0;
+  }
+  context.output.info(formatCandidateDetail(candidate));
   return 0;
 }
 
@@ -89,7 +97,7 @@ async function executeWorkflowDecision(
     database,
     days: options.days,
     includeDecided: true,
-    limit: 1000,
+    limit: DECISION_LOOKUP_LIMIT,
     source: options.source,
   });
   const candidate = result.candidates.find((item) => item.candidate_id === options.candidateId);
@@ -99,11 +107,46 @@ async function executeWorkflowDecision(
   const entry = await appendWorkflowDecision({
     candidate_id: candidate.candidate_id,
     decision,
-    ...(options.note ? { note: options.note } : {}),
+    ...(options.note ? { note: sanitizeDecisionNote(options.note) } : {}),
     rule_id: candidate.rule_id,
   });
   context.output.info(JSON.stringify(entry, null, 2));
   return 0;
+}
+
+function formatCandidateDetail(candidate: WorkflowCandidate): string {
+  const evidence = candidate.evidence_sessions
+    .map(
+      (item) =>
+        `- ${item.asd_session_id} ${item.evidence_kind} ${item.matched_rule_id}: ${item.excerpt}`,
+    )
+    .join("\n");
+  return [
+    `Candidate: ${candidate.candidate_id}`,
+    `Rule: ${candidate.rule_id}`,
+    `Cluster: ${candidate.cluster}`,
+    `Confidence: ${candidate.confidence}`,
+    `Recommendation: ${candidate.recommendation}`,
+    `Artifact: ${candidate.artifact_kind}`,
+    `Trigger: ${candidate.trigger}`,
+    `Guidance: ${candidate.guidance}`,
+    `Evidence: ${candidate.supporting_count} supporting, ${candidate.contradicting_count} contradicting, ${candidate.evidence_count} total`,
+    evidence.length > 0 ? evidence : "Evidence: none",
+    candidate.decision
+      ? `Decision: ${candidate.decision.decision} at ${candidate.decision.decided_at}`
+      : "Decision: undecided",
+  ].join("\n");
+}
+
+function sanitizeDecisionNote(note: string): string {
+  const redacted = note
+    .replace(/(?:[A-Za-z]:)?\/?(?:Users|home)\/[^\s]+/g, "[local-path]")
+    .replace(/\b[A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY)\b\s*[=:]\s*\S+/gi, "[secret-ref]")
+    .replace(/\s+/g, " ")
+    .trim();
+  return redacted.length <= MAX_DECISION_NOTE_CHARS
+    ? redacted
+    : `${redacted.slice(0, MAX_DECISION_NOTE_CHARS - 1).trimEnd()}…`;
 }
 
 function parseCommonOptions(args: string[]): CommonOptions {

@@ -353,7 +353,7 @@ function clusterSeeds(seeds: CandidateSeed[]): WorkflowCandidate[] {
     .sort((left, right) => {
       return (
         confidenceRank(right.confidence) - confidenceRank(left.confidence) ||
-        right.evidence_sessions.length - left.evidence_sessions.length ||
+        right.evidence_count - left.evidence_count ||
         left.guidance.localeCompare(right.guidance)
       );
     });
@@ -438,9 +438,13 @@ function countEvidenceKinds(seeds: CandidateSeed[]): { contradicting: number; su
   for (const seed of seeds) {
     if (seed.kind === "contradiction") {
       contradictingSessions.add(seed.evidence.asd_session_id);
-    } else {
-      supportingSessions.add(seed.evidence.asd_session_id);
+      continue;
     }
+    supportingSessions.add(seed.evidence.asd_session_id);
+  }
+
+  for (const sessionId of contradictingSessions) {
+    supportingSessions.delete(sessionId);
   }
 
   return { contradicting: contradictingSessions.size, supporting: supportingSessions.size };
@@ -467,14 +471,14 @@ function buildCandidateId(cluster: WorkflowCluster, ruleId: string): string {
 }
 
 function extractEvidenceExcerpt(textParts: readonly string[], pattern: RegExp): string {
-  for (const part of textParts) {
-    const sanitizedPart = sanitizeEvidenceText(part);
-    const match = pattern.exec(sanitizedPart);
+  for (const text of [...textParts, textParts.join(" ")]) {
+    const sanitizedText = sanitizeEvidenceText(text);
+    const match = pattern.exec(sanitizedText);
     if (!match) {
       continue;
     }
 
-    const sentence = sentenceContainingMatch(sanitizedPart, match.index);
+    const sentence = sentenceContainingMatch(sanitizedText, match.index);
     const cleanExcerpt = sanitizeLearningStatement(sanitizeEvidenceText(sentence));
     if (cleanExcerpt.length > 0) {
       return cleanExcerpt.length <= MAX_EVIDENCE_EXCERPT_CHARS

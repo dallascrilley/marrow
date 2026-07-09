@@ -329,12 +329,20 @@ test("workflow decisions exclude dismissed candidates unless included", async ()
     const candidateId = JSON.parse(mineResult.stdout.trim()).candidates[0].candidate_id;
 
     const dismissResult = runCli(
-      ["workflow", "dismiss", candidateId, "--note", "already covered"],
+      [
+        "workflow",
+        "dismiss",
+        candidateId,
+        "--note",
+        "already covered at /Users/example/private/path with API_KEY=abc123",
+      ],
       {
         [runtimeOverrideEnvVar]: runtimeRoot,
       },
     );
     assert.equal(dismissResult.status, 0, dismissResult.stderr);
+    const dismissEntry = JSON.parse(dismissResult.stdout.trim());
+    assert.equal(dismissEntry.note, "already covered at [local-path] with [secret-ref]");
 
     const hiddenResult = runCli(["workflow", "mine", "--days=30", "--json"], {
       [runtimeOverrideEnvVar]: runtimeRoot,
@@ -351,6 +359,31 @@ test("workflow decisions exclude dismissed candidates unless included", async ()
     const includedCandidate = JSON.parse(includedResult.stdout.trim()).candidates[0];
     assert.equal(includedCandidate.candidate_id, candidateId);
     assert.equal(includedCandidate.decision.decision, "dismiss");
+
+    const showText = runCli(["workflow", "show", candidateId, "--days=30"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+    assert.equal(showText.status, 0, showText.stderr);
+    assert.match(showText.stdout, /Candidate:/);
+    assert.doesNotMatch(showText.stdout, /^\s*\{/);
+
+    const showJson = runCli(["workflow", "show", candidateId, "--days=30", "--json"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+    assert.equal(showJson.status, 0, showJson.stderr);
+    assert.equal(JSON.parse(showJson.stdout.trim()).candidate_id, candidateId);
+
+    const adoptResult = runCli(["workflow", "adopt", candidateId, "--days=30"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+    assert.equal(adoptResult.status, 0, adoptResult.stderr);
+    assert.equal(JSON.parse(adoptResult.stdout.trim()).decision, "adopt");
+
+    const readoptedShow = runCli(["workflow", "show", candidateId, "--days=30", "--json"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+    assert.equal(readoptedShow.status, 0, readoptedShow.stderr);
+    assert.equal(JSON.parse(readoptedShow.stdout.trim()).decision.decision, "adopt");
 
     const unknownShow = runCli(["workflow", "show", "wf_missing"], {
       [runtimeOverrideEnvVar]: runtimeRoot,
