@@ -289,7 +289,9 @@ async function extractInstinctSeeds(): Promise<CandidateSeed[]> {
         ({
           asd_session_id: observation.session,
           evidence_kind: observation.reinforcing ? "accepted_pattern" : "contradiction",
-          excerpt: sanitizeLearningStatement(observation.correction ?? instinct.finding),
+          excerpt: sanitizeLearningStatement(
+            sanitizeEvidenceText(observation.correction ?? instinct.finding),
+          ),
           matched_rule_id: ruleId,
           source_tool: "instinct",
           topic: sanitizeEvidenceText(instinct.trigger),
@@ -351,6 +353,8 @@ function suppressAlreadyEncodedCandidates(
   }
 
   return candidates.map((candidate) => {
+    // Instinct-tier candidates are sourced from the global store, so suppressing
+    // them against that same store would hide the reviewable instinct candidates.
     if (candidate.source_tier === "instinct") {
       return candidate;
     }
@@ -451,6 +455,8 @@ function classifyConfidence(
   evidenceSessions: WorkflowEvidence[],
   counts: { contradicting: number; supporting: number },
 ): WorkflowConfidence {
+  // Only instinct-tier seeds set explicit confidence; keyword seeds never do, so
+  // this short-circuit cannot fire for mixed keyword/instinct clusters.
   const explicitConfidence = seeds.find((seed) => seed.confidence)?.confidence;
   if (explicitConfidence) {
     return explicitConfidence;
