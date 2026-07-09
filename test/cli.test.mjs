@@ -395,6 +395,107 @@ test("workflow decisions exclude dismissed candidates unless included", async ()
   }
 });
 
+test("workflow apply writes dry-run drafts and refuses dismissed candidates", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-apply-"));
+  const runtimeRoot = join(sandbox, "runtime-root");
+  const sessionId = "workflow-apply-session";
+  const summaryDir = join(runtimeRoot, "summaries", "by-session", sessionId);
+  const stagingDir = join(runtimeRoot, "staging", sessionId);
+  const indexDir = join(runtimeRoot, "index");
+
+  try {
+    await mkdir(summaryDir, { recursive: true });
+    await mkdir(stagingDir, { recursive: true });
+    await mkdir(indexDir, { recursive: true });
+    const summaryPath = join(summaryDir, "summary.json");
+    await writeFile(
+      summaryPath,
+      `${JSON.stringify({
+        session_id: sessionId,
+        topic: "Workflow apply fixture",
+        topic_source: "deterministic",
+        what_worked: [],
+        what_failed: [],
+        what_was_decided: ["Always run verification before final summary."],
+        useful_commands: [],
+        files_of_interest: [],
+        next_step: "Continue.",
+        project_learnings: [],
+        user_learnings: [],
+        deletion_readiness: "ready",
+      })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      join(stagingDir, "reduced-session.json"),
+      `${JSON.stringify({ turns: [] })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      join(indexDir, "session-index.jsonl"),
+      `${JSON.stringify({
+        v: 1,
+        source_path: "/tmp/workflow-apply-session.jsonl",
+        source_uuid: sessionId,
+        source_tool: "cursor",
+        asd_session_id: sessionId,
+        topic: "Workflow apply fixture",
+        topic_source: "deterministic",
+        next_step: "Continue.",
+        summary_json_path: summaryPath,
+        updated_at: "2026-07-08T00:00:00.000Z",
+      })}\n`,
+      "utf8",
+    );
+
+    const mineResult = runCli(["workflow", "mine", "--days=30", "--json"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+    assert.equal(mineResult.status, 0, mineResult.stderr);
+    const candidateId = JSON.parse(mineResult.stdout.trim()).candidates.find(
+      (candidate) => candidate.rule_id === "validation-explicit-verify",
+    ).candidate_id;
+
+    const missingDryRun = runCli(["workflow", "apply", candidateId, "--target=rule"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+    assert.equal(missingDryRun.status, 1);
+    assert.match(missingDryRun.stderr, /draft-only --dry-run/);
+
+    const applyResult = runCli(
+      ["workflow", "apply", candidateId, "--target=rule", "--dry-run", "--days=30"],
+      { [runtimeOverrideEnvVar]: runtimeRoot },
+    );
+    assert.equal(applyResult.status, 0, applyResult.stderr);
+    const payload = JSON.parse(applyResult.stdout.trim());
+    assert.equal(payload.candidate_id, candidateId);
+    assert.equal(payload.target, "rule");
+    assert.equal(payload.dry_run, true);
+    assert.match(payload.draft_path, /workflow-drafts\/wf_[a-f0-9]+-rule\.md$/);
+
+    const draft = await readFile(payload.draft_path, "utf8");
+    assert.match(draft, /## Trigger/);
+    assert.match(draft, /## Guidance/);
+    assert.match(draft, /Run the relevant verification before claiming behavior works/);
+    const report = JSON.parse(await readFile(payload.apply_report_path, "utf8"));
+    assert.equal(report.draft_path, payload.draft_path);
+
+    const dismissResult = runCli(["workflow", "dismiss", candidateId, "--days=30"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+    assert.equal(dismissResult.status, 0, dismissResult.stderr);
+
+    const dismissedApply = runCli(
+      ["workflow", "apply", candidateId, "--target=rule", "--dry-run", "--days=30"],
+      { [runtimeOverrideEnvVar]: runtimeRoot },
+    );
+    assert.equal(dismissedApply.status, 1);
+    assert.match(dismissedApply.stderr, /dismissed/);
+  } finally {
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
 test("workflow mine filters by cluster and recommendation", async () => {
   const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-filter-"));
   const runtimeRoot = join(sandbox, "runtime-root");

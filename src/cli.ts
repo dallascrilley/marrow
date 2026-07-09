@@ -33,6 +33,7 @@ import { executeSearch } from "./commands/search.js";
 import { executeSkillEvidence } from "./commands/skill-evidence.js";
 import { executeSkillReport } from "./commands/skill-report.js";
 import { executeStats } from "./commands/stats.js";
+import { executeWorkflowApply } from "./commands/workflow-apply.js";
 import { executeWorkflowMine } from "./commands/workflow-mine.js";
 import {
   executeWorkflowAdopt,
@@ -253,6 +254,11 @@ const commandTree: Record<string, CommandDefinition> = {
       defer: {
         description: "Append a defer decision for a workflow candidate. Flags: --note.",
         execute: async (context) => withLedger(context, executeWorkflowDefer),
+      },
+      apply: {
+        description:
+          "Render a draft artifact for a workflow candidate. Flags: --target, --dry-run.",
+        execute: async (context) => withLedger(context, executeWorkflowApply),
       },
     },
   },
