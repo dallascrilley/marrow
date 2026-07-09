@@ -27,6 +27,8 @@ export type WorkflowEvidenceKind =
 export type WorkflowEvidence = {
   asd_session_id: string;
   evidence_kind: WorkflowEvidenceKind;
+  excerpt: string;
+  matched_rule_id: string;
   source_tool: string;
   topic: string;
   updated_at: string;
@@ -40,6 +42,7 @@ export type WorkflowCandidate = {
   contradicting_count: number;
   confidence: WorkflowConfidence;
   supporting_count: number;
+  evidence_count: number;
   evidence_sessions: WorkflowEvidence[];
   guidance: string;
   recommendation: WorkflowRecommendation;

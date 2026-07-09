@@ -281,6 +281,64 @@ test("mineWorkflowCandidates redacts local paths from marker matching and eviden
   }
 });
 
+test("mineWorkflowCandidates includes sanitized evidence excerpts", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-excerpt-1",
+      summary: summary("wf-excerpt-1", {
+        what_was_decided: [
+          "**Verified:** Always run script/cibuild before claiming CI is green for /Users/example/private/path. | secret | table | API_KEY=abc123",
+        ],
+      }),
+      turns: [turn("wf-excerpt-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
+
+    assert.ok(validation);
+    assert.equal(validation.evidence_count, 1);
+    assert.equal(validation.evidence_sessions[0].matched_rule_id, validation.rule_id);
+    assert.ok(validation.evidence_sessions[0].excerpt.length <= 200);
+    assert.doesNotMatch(validation.evidence_sessions[0].excerpt, /\/Users\/example/);
+    assert.doesNotMatch(validation.evidence_sessions[0].excerpt, /API_KEY=abc123/);
+    assert.doesNotMatch(validation.evidence_sessions[0].excerpt, /\*\*|\|/);
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("mineWorkflowCandidates caps evidence sessions and preserves evidence count", async () => {
+  const records = Array.from({ length: 15 }, (_, index) => ({
+    sessionId: `wf-cap-${String(index).padStart(2, "0")}`,
+    updatedAt: `2026-07-08T00:${String(index).padStart(2, "0")}:00.000Z`,
+    summary: summary(`wf-cap-${String(index).padStart(2, "0")}`, {
+      what_was_decided: ["Always run verification before final summary."],
+    }),
+    turns: [turn(`wf-cap-${String(index).padStart(2, "0")}`)],
+  }));
+  const { runtimeRoot, sandbox } = await writeRuntime(records);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
+
+    assert.ok(validation);
+    assert.equal(validation.evidence_count, 15);
+    assert.equal(validation.evidence_sessions.length, 10);
+    assert.equal(validation.evidence_sessions[0].asd_session_id, "wf-cap-14");
+    assert.equal(validation.evidence_sessions.at(-1).asd_session_id, "wf-cap-05");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
 test("mineWorkflowCandidates excludes malformed timestamps from day window", async () => {
   const { runtimeRoot, sandbox } = await writeRuntime([
     {

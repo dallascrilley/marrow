@@ -5,6 +5,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { type Summary, summarySchema, type Turn, turnSchema } from "../models/canonical.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
+import { sanitizeLearningStatement } from "../pipeline/prompt-sanitize.js";
 import { loadSessionIndexRecords, type SessionIndexRecord } from "../read/session-index.js";
 import type {
   WorkflowArtifactKind,
@@ -35,6 +36,8 @@ type CandidateSeed = {
 };
 
 const DEFAULT_DAYS = 7;
+const MAX_EVIDENCE_SESSIONS = 10;
+const MAX_EVIDENCE_EXCERPT_CHARS = 200;
 const DEFAULT_LIMIT = 20;
 
 const markerRules: Array<{
@@ -216,25 +219,29 @@ function extractSeeds(
     topic: sanitizeEvidenceText(record.topic),
     updated_at: record.updated_at,
   };
-  const text = sanitizeEvidenceText(
-    [
-      record.topic,
-      record.next_step,
-      ...(summary?.what_worked ?? []),
-      ...(summary?.what_failed ?? []),
-      ...(summary?.what_was_decided ?? []),
-      ...(summary?.project_learnings ?? []),
-      ...(summary?.user_learnings ?? []),
-      ...turns.flatMap((turn) => [turn.user_prompt, turn.assistant_summary]),
-    ].join("\n"),
-  );
+  const textParts = [
+    record.topic,
+    record.next_step,
+    ...(summary?.what_worked ?? []),
+    ...(summary?.what_failed ?? []),
+    ...(summary?.what_was_decided ?? []),
+    ...(summary?.project_learnings ?? []),
+    ...(summary?.user_learnings ?? []),
+    ...turns.flatMap((turn) => [turn.user_prompt, turn.assistant_summary]),
+  ];
+  const text = sanitizeEvidenceText(textParts.join("\n"));
 
   return markerRules
     .filter((rule) => rule.pattern.test(text))
     .map((rule) => ({
       artifactKind: rule.artifactKind,
       cluster: rule.cluster,
-      evidence: { ...evidenceBase, evidence_kind: rule.evidenceKind },
+      evidence: {
+        ...evidenceBase,
+        evidence_kind: rule.evidenceKind,
+        excerpt: extractEvidenceExcerpt(textParts, rule.pattern),
+        matched_rule_id: rule.ruleId,
+      },
       guidance: rule.guidance,
       ruleId: rule.ruleId,
       kind: rule.evidenceKind,
@@ -278,7 +285,8 @@ function buildCandidate(seeds: CandidateSeed[]): WorkflowCandidate {
     cluster: first.cluster,
     contradicting_count: counts.contradicting,
     confidence,
-    evidence_sessions: evidenceSessions,
+    evidence_count: evidenceSessions.length,
+    evidence_sessions: evidenceSessions.slice(0, MAX_EVIDENCE_SESSIONS),
     guidance: first.guidance,
     recommendation,
     risk: confidence === "contradicted" ? "high" : confidence === "weak" ? "medium" : "low",
@@ -356,14 +364,43 @@ function dedupeEvidence(evidence: WorkflowEvidence[]): WorkflowEvidence[] {
     }
   }
 
-  return Array.from(bySession.values()).sort((left, right) =>
-    left.asd_session_id.localeCompare(right.asd_session_id),
-  );
+  return Array.from(bySession.values()).sort((left, right) => {
+    const updatedAtOrder = Date.parse(right.updated_at) - Date.parse(left.updated_at);
+    return updatedAtOrder || left.asd_session_id.localeCompare(right.asd_session_id);
+  });
 }
 
 function buildCandidateId(cluster: WorkflowCluster, ruleId: string): string {
   const digest = createHash("sha256").update(`${cluster}\0${ruleId}`).digest("hex").slice(0, 10);
   return `wf_${digest}`;
+}
+
+function extractEvidenceExcerpt(textParts: readonly string[], pattern: RegExp): string {
+  for (const part of textParts) {
+    const sanitizedPart = sanitizeEvidenceText(part);
+    const match = pattern.exec(sanitizedPart);
+    if (!match) {
+      continue;
+    }
+
+    const sentence = sentenceContainingMatch(sanitizedPart, match.index);
+    const cleanExcerpt = sanitizeLearningStatement(sanitizeEvidenceText(sentence));
+    if (cleanExcerpt.length > 0) {
+      return cleanExcerpt.length <= MAX_EVIDENCE_EXCERPT_CHARS
+        ? cleanExcerpt
+        : `${cleanExcerpt.slice(0, MAX_EVIDENCE_EXCERPT_CHARS - 1).trimEnd()}…`;
+    }
+  }
+
+  return "";
+}
+
+function sentenceContainingMatch(text: string, matchIndex: number): string {
+  const start = Math.max(text.lastIndexOf(".", matchIndex), text.lastIndexOf("!", matchIndex), text.lastIndexOf("?", matchIndex), text.lastIndexOf("\n", matchIndex)) + 1;
+  const remaining = text.slice(matchIndex);
+  const endMatch = remaining.match(/[.?!\n]/);
+  const end = endMatch?.index === undefined ? text.length : matchIndex + endMatch.index + 1;
+  return text.slice(start, end).trim();
 }
 
 function sanitizeEvidenceText(text: string): string {
