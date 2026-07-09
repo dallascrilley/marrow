@@ -53,6 +53,7 @@ test("asd --help lists every Task 1 command", () => {
     "report",
     "stats",
     "explain",
+    "workflow mine",
   ];
 
   for (const command of expectedCommands) {
@@ -178,6 +179,93 @@ test("search reports missing session index", async () => {
     assert.match(result.stderr, /export-index/);
   } finally {
     await rm(runtimeRoot, { force: true, recursive: true });
+  }
+});
+
+test("workflow mine emits read-only JSON candidates", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-cli-"));
+  const runtimeRoot = join(sandbox, "runtime-root");
+  const sessionId = "workflow-cli-session";
+  const summaryDir = join(runtimeRoot, "summaries", "by-session", sessionId);
+  const stagingDir = join(runtimeRoot, "staging", sessionId);
+  const indexDir = join(runtimeRoot, "index");
+
+  try {
+    await mkdir(summaryDir, { recursive: true });
+    await mkdir(stagingDir, { recursive: true });
+    await mkdir(indexDir, { recursive: true });
+    const summaryPath = join(summaryDir, "summary.json");
+    await writeFile(
+      summaryPath,
+      `${JSON.stringify({
+        session_id: sessionId,
+        topic: "Workflow mining CLI fixture",
+        topic_source: "deterministic",
+        what_worked: [],
+        what_failed: [],
+        what_was_decided: ["Always run script/cibuild before claiming CI is green."],
+        useful_commands: [],
+        files_of_interest: [],
+        next_step: "Continue.",
+        project_learnings: [],
+        user_learnings: [],
+        deletion_readiness: "ready",
+      })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      join(stagingDir, "reduced-session.json"),
+      `${JSON.stringify({
+        turns: [
+          {
+            assistant_summary: "Captured validation preference.",
+            commands_seen: [],
+            ended_at: "2026-07-08T00:01:00.000Z",
+            files_touched: [],
+            index: 0,
+            session_id: sessionId,
+            started_at: "2026-07-08T00:00:00.000Z",
+            tool_stub_count: 0,
+            turn_id: `${sessionId}:turn-0000`,
+            user_prompt: "Always verify before saying it works.",
+            verification_seen: false,
+          },
+        ],
+      })}\n`,
+      "utf8",
+    );
+    await writeFile(
+      join(indexDir, "session-index.jsonl"),
+      `${JSON.stringify({
+        v: 1,
+        source_path: "/tmp/workflow-cli-session.jsonl",
+        source_uuid: sessionId,
+        source_tool: "cursor",
+        asd_session_id: sessionId,
+        topic: "Workflow mining CLI fixture",
+        topic_source: "deterministic",
+        next_step: "Continue.",
+        summary_json_path: summaryPath,
+        updated_at: "2026-07-08T00:00:00.000Z",
+      })}\n`,
+      "utf8",
+    );
+
+    const result = runCli(
+      ["workflow", "mine", "--days=30", "--source=cursor", "--limit=5", "--json"],
+      {
+        [runtimeOverrideEnvVar]: runtimeRoot,
+      },
+    );
+
+    assert.equal(result.status, 0, result.stderr);
+    const payload = JSON.parse(result.stdout.trim());
+    assert.equal(payload.sessions_scanned, 1);
+    assert.equal(payload.candidates[0].confidence, "strong");
+    assert.equal(payload.candidates[0].recommendation, "adopt");
+    assert.equal(payload.candidates[0].evidence_sessions[0].asd_session_id, sessionId);
+  } finally {
+    await rm(sandbox, { force: true, recursive: true });
   }
 });
 test("report --html writes a static dashboard artifact via CLI", async () => {
