@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 
 import { getRuntimePath } from "../config/paths.js";
 
-export type WorkflowDecisionKind = "adopt" | "dismiss" | "defer";
+export type WorkflowDecisionKind = "adopt" | "dismiss" | "defer" | "judged";
 
 export type WorkflowDecision = {
   candidate_id: string;
@@ -44,7 +44,8 @@ export async function readWorkflowDecisions(): Promise<WorkflowDecision[]> {
             typeof parsed.rule_id === "string" &&
             (parsed.decision === "adopt" ||
               parsed.decision === "dismiss" ||
-              parsed.decision === "defer") &&
+              parsed.decision === "defer" ||
+              parsed.decision === "judged") &&
             typeof parsed.decided_at === "string"
           ) {
             return [parsed];

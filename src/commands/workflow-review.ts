@@ -133,7 +133,7 @@ function formatCandidateDetail(candidate: WorkflowCandidate): string {
     `Evidence: ${candidate.supporting_count} supporting, ${candidate.contradicting_count} contradicting, ${candidate.evidence_count} total`,
     evidence.length > 0 ? evidence : "Evidence: none",
     candidate.decision
-      ? `Decision: ${candidate.decision.decision} at ${candidate.decision.decided_at}`
+      ? `Decision: ${candidate.decision.decision} at ${candidate.decision.decided_at}${candidate.decision.note ? `\nDecision note: ${candidate.decision.note}` : ""}`
       : "Decision: undecided",
   ].join("\n");
 }

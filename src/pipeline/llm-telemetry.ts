@@ -7,7 +7,8 @@ import type { LlmCallUsage } from "./llm-learning-review.js";
 export type LlmTelemetryOperation =
   | "learning_review"
   | "topic_generation"
-  | "global_promotion_judge";
+  | "global_promotion_judge"
+  | "workflow_judge";
 
 /**
  * One OpenRouter call's telemetry, shaped for OpenTelemetry GenAI semantic
