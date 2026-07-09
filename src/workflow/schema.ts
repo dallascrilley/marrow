@@ -44,7 +44,7 @@ export type WorkflowCandidate = {
   contradicting_count: number;
   decision?: {
     decided_at: string;
-    decision: "adopt" | "dismiss" | "defer";
+    decision: "adopt" | "dismiss" | "defer" | "judged";
     note?: string;
   };
   encoded_in?: string;

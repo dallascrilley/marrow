@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { z } from "zod";
 
 import { getRuntimeRoot } from "../../config/paths.js";
-import { type GlobalJudgeVerdict, globalJudgeVerdictSchema } from "./judge.js";
 
 export const JUDGE_CACHE_FILENAME = "promote-judge-cache.json";
 
@@ -17,7 +16,7 @@ export const JUDGE_CACHE_FILENAME = "promote-judge-cache.json";
  * model, or a bumped prompt correctly forces a re-judge.
  */
 const cacheEntrySchema = z.object({
-  verdict: globalJudgeVerdictSchema,
+  verdict: z.unknown(),
   model: z.string(),
   prompt_version: z.string(),
   at: z.string(),
@@ -27,7 +26,12 @@ const cacheFileSchema = z.object({
   entries: z.record(z.string(), cacheEntrySchema).default({}),
 });
 
-export type JudgeCacheEntry = z.infer<typeof cacheEntrySchema>;
+export type JudgeCacheEntry = {
+  verdict: unknown;
+  model: string;
+  prompt_version: string;
+  at: string;
+};
 export type JudgeCache = Map<string, JudgeCacheEntry>;
 
 export function getJudgeCachePath(): string {
@@ -60,7 +64,7 @@ export async function saveJudgeCache(cache: JudgeCache, path = getJudgeCachePath
 export function setCachedVerdict(
   cache: JudgeCache,
   key: string,
-  verdict: GlobalJudgeVerdict,
+  verdict: unknown,
   model: string,
   promptVersion: string,
   at: string,

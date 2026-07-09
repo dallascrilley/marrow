@@ -277,6 +277,7 @@ node dist/cli.js workflow mine --days 30 --source cursor --json
 node dist/cli.js workflow mine --days 30 --cluster validation --recommendation adopt --json
 node dist/cli.js workflow review --days 30
 node dist/cli.js workflow apply wf_cd61247b3c --target rule --dry-run --days 30
+node dist/cli.js workflow judge --limit 5 --max-per 5/24h --max-usd 1/24h
 ```
 
 The mining command is read-only. It ranks candidate skills, rules, or workflow
@@ -285,8 +286,10 @@ docs with confidence, recommendation, source tier, and parent-session evidence.
 is bounded by the built-in marker table, while established/proven global workflow
 instincts can add `source_tier: "instinct"` candidates. Weak candidates are
 dismissed by default; contradicted candidates require operator review before any
-artifact is written. `workflow apply` is draft-only: it requires `--dry-run` and
-writes Markdown/JSON drafts under `reports/workflow-drafts/`.
+artifact is written. `workflow judge` is LLM-gated and uses the shared count/USD
+budget, judge cache, and telemetry plumbing before appending `judged` decision
+notes. `workflow apply` is draft-only: it requires `--dry-run` and writes
+Markdown/JSON drafts under `reports/workflow-drafts/`.
 
 Audit summary and deletion-readiness quality across already-ingested sessions:
 

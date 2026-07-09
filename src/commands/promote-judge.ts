@@ -13,6 +13,7 @@ import { instinctSchema } from "../v2/instinct/schema.js";
 import { loadInstinct } from "../v2/instinct/store.js";
 import {
   type GlobalJudgeVerdict,
+  globalJudgeVerdictSchema,
   JUDGE_PROMPT_VERSION,
   judgeContentHash,
   judgeGlobalApplicability,
@@ -114,7 +115,7 @@ export async function executePromoteJudge(context: CommandContext): Promise<numb
     if (cached !== undefined) {
       // A prior run already judged this exact content with this model+prompt.
       // Reuse it — no LLM call, no spend, no budget consumed.
-      verdict = cached.verdict;
+      verdict = globalJudgeVerdictSchema.parse(cached.verdict);
       fromCache += 1;
     } else {
       // Re-check both budgets before every paid call so a mid-run exhaustion
