@@ -1,8 +1,8 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 
-import { getRuntimePath, getRuntimeRoot } from "../config/paths.js";
+import { getRuntimePath } from "../config/paths.js";
 import { learningSchema } from "../models/canonical.js";
 import { getProjectKnowledgeSessionPath } from "../writers/knowledge-writer.js";
 import { runDiscoverPhase, type SupportedSource, supportedSources } from "./discover.js";
@@ -14,6 +14,7 @@ import {
   type LlmBudgetStatus,
   type LlmUsdBudgetStatus,
 } from "./llm-budget.js";
+import { readLlmLearningReviewLedgerIds } from "./llm-learning-review-ledger.js";
 import {
   assessSessionIntegrity,
   type SessionIntegrityFindingCode,
@@ -142,9 +143,7 @@ export async function countPendingLlmReview(): Promise<{
   pending_sessions: number;
 }> {
   const projectsRoot = getRuntimePath("knowledgeProjects");
-  const reviewedRoot = join(getRuntimeRoot(), "knowledge", "projects-reviewed");
-  const sidecarPath = join(getRuntimePath("reports"), "llm-learning-review.jsonl");
-  const reviewedLearningIds = await readReviewedLearningIds(sidecarPath);
+  const reviewedLearningIds = await readLlmLearningReviewLedgerIds();
 
   let pendingLearnings = 0;
   let pendingSessions = 0;
@@ -157,7 +156,6 @@ export async function countPendingLlmReview(): Promise<{
     for (const sessionFile of sessionFiles) {
       const sessionId = sessionFile.replace(/\.jsonl$/, "");
       const projectPath = getProjectKnowledgeSessionPath(projectKey, sessionId);
-      const reviewedPath = join(reviewedRoot, projectKey, sessionFile);
       const learnings = await readLearningIds(projectPath);
       if (learnings.length === 0) {
         continue;
@@ -172,17 +170,6 @@ export async function countPendingLlmReview(): Promise<{
       }).length;
 
       if (pendingInSession === 0) {
-        const projectStat = await safeStat(projectPath);
-        const reviewedStat = await safeStat(reviewedPath);
-        if (
-          projectStat &&
-          reviewedStat &&
-          projectStat.mtimeMs > reviewedStat.mtimeMs &&
-          learnings.length > 0
-        ) {
-          pendingLearnings += learnings.length;
-          pendingSessions += 1;
-        }
         continue;
       }
 
@@ -195,32 +182,6 @@ export async function countPendingLlmReview(): Promise<{
     pending_learnings: pendingLearnings,
     pending_sessions: pendingSessions,
   };
-}
-
-async function readReviewedLearningIds(path: string): Promise<Set<string>> {
-  try {
-    const contents = await readFile(path, "utf8");
-    const ids = new Set<string>();
-    for (const line of contents.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (trimmed.length === 0) {
-        continue;
-      }
-
-      const parsed = JSON.parse(trimmed) as { learning_id?: unknown };
-      if (typeof parsed.learning_id === "string") {
-        ids.add(parsed.learning_id);
-      }
-    }
-
-    return ids;
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return new Set<string>();
-    }
-
-    throw error;
-  }
 }
 
 async function readLearningIds(path: string): Promise<string[]> {
@@ -253,18 +214,6 @@ async function listDirectories(path: string): Promise<string[]> {
   } catch (error) {
     if (isMissingFileError(error)) {
       return [];
-    }
-
-    throw error;
-  }
-}
-
-async function safeStat(path: string): Promise<{ mtimeMs: number } | null> {
-  try {
-    return await stat(path);
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return null;
     }
 
     throw error;
