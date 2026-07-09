@@ -9,6 +9,7 @@ import { getReducedArtifactPath } from "../pipeline/reduce.js";
 import { loadSessionIndexRecords, type SessionIndexRecord } from "../read/session-index.js";
 import { loadGlobalInstinct, loadGlobalInstinctIds } from "../v2/instinct/global-store.js";
 import { canonicalKey } from "../v2/instinct/id.js";
+import type { Instinct } from "../v2/instinct/schema.js";
 import { latestWorkflowDecisionMap, type WorkflowDecision } from "./decisions.js";
 import type {
   WorkflowArtifactKind,
@@ -19,6 +20,7 @@ import type {
   WorkflowEvidenceKind,
   WorkflowMineResult,
   WorkflowRecommendation,
+  WorkflowSourceTier,
 } from "./schema.js";
 
 export type MineWorkflowOptions = {
@@ -39,6 +41,8 @@ type CandidateSeed = {
   ruleId: string;
   kind: WorkflowEvidenceKind;
   trigger: string;
+  sourceTier: WorkflowSourceTier;
+  confidence?: WorkflowConfidence;
 };
 
 const DEFAULT_DAYS = 7;
@@ -189,6 +193,8 @@ export async function mineWorkflowCandidates(
     seeds.push(...extractSeeds(record, summary, turns));
   }
 
+  seeds.push(...(await extractInstinctSeeds()));
+
   const decisionMap = await latestWorkflowDecisionMap();
   const candidates = suppressAlreadyEncodedCandidates(
     clusterSeeds(seeds),
@@ -265,7 +271,57 @@ function extractSeeds(
       ruleId: rule.ruleId,
       kind: rule.evidenceKind,
       trigger: rule.trigger,
+      sourceTier: "keyword",
     }));
+}
+
+async function extractInstinctSeeds(): Promise<CandidateSeed[]> {
+  const seeds: CandidateSeed[] = [];
+  for (const id of await loadGlobalInstinctIds()) {
+    const instinct = await loadGlobalInstinct(id);
+    if (!isMineableWorkflowInstinct(instinct)) {
+      continue;
+    }
+    const confidence: WorkflowConfidence = instinct.maturity === "proven" ? "strong" : "medium";
+    const ruleId = `instinct-${canonicalKey(instinct.trigger, instinct.finding)}`;
+    const evidence = instinct.source.observations.map(
+      (observation) =>
+        ({
+          asd_session_id: observation.session,
+          evidence_kind: observation.reinforcing ? "accepted_pattern" : "contradiction",
+          excerpt: sanitizeLearningStatement(
+            sanitizeEvidenceText(observation.correction ?? instinct.finding),
+          ),
+          matched_rule_id: ruleId,
+          source_tool: "instinct",
+          topic: sanitizeEvidenceText(instinct.trigger),
+          updated_at: observation.at,
+        }) satisfies WorkflowEvidence,
+    );
+    for (const item of evidence) {
+      seeds.push({
+        artifactKind: "skill",
+        cluster: "capture",
+        evidence: item,
+        guidance: instinct.finding,
+        ruleId,
+        kind: item.evidence_kind,
+        trigger: instinct.trigger,
+        sourceTier: "instinct",
+        confidence,
+      });
+    }
+  }
+  return seeds;
+}
+
+function isMineableWorkflowInstinct(instinct: Instinct | null): instinct is Instinct {
+  return (
+    instinct !== null &&
+    instinct.scope === "global" &&
+    instinct.domain === "workflow" &&
+    (instinct.maturity === "established" || instinct.maturity === "proven")
+  );
 }
 
 type EncodedInstinct = {
@@ -297,6 +353,11 @@ function suppressAlreadyEncodedCandidates(
   }
 
   return candidates.map((candidate) => {
+    // Instinct-tier candidates are sourced from the global store, so suppressing
+    // them against that same store would hide the reviewable instinct candidates.
+    if (candidate.source_tier === "instinct") {
+      return candidate;
+    }
     const guidanceTokens = canonicalKey(candidate.trigger, candidate.guidance)
       .split("-")
       .filter(Boolean);
@@ -353,6 +414,7 @@ function clusterSeeds(seeds: CandidateSeed[]): WorkflowCandidate[] {
     .sort((left, right) => {
       return (
         confidenceRank(right.confidence) - confidenceRank(left.confidence) ||
+        sourceTierRank(right.source_tier) - sourceTierRank(left.source_tier) ||
         right.evidence_count - left.evidence_count ||
         left.guidance.localeCompare(right.guidance)
       );
@@ -372,7 +434,7 @@ function buildCandidate(seeds: CandidateSeed[]): WorkflowCandidate {
 
   return {
     artifact_kind: recommendation === "dismiss" ? "none" : first.artifactKind,
-    candidate_id: buildCandidateId(first.cluster, first.ruleId),
+    candidate_id: buildCandidateId(first.cluster, first.ruleId, first.sourceTier),
     cluster: first.cluster,
     contradicting_count: counts.contradicting,
     confidence,
@@ -384,6 +446,7 @@ function buildCandidate(seeds: CandidateSeed[]): WorkflowCandidate {
     rule_id: first.ruleId,
     supporting_count: counts.supporting,
     trigger: first.trigger,
+    source_tier: first.sourceTier,
   };
 }
 
@@ -392,6 +455,12 @@ function classifyConfidence(
   evidenceSessions: WorkflowEvidence[],
   counts: { contradicting: number; supporting: number },
 ): WorkflowConfidence {
+  // Only instinct-tier seeds set explicit confidence; keyword seeds never do, so
+  // this short-circuit cannot fire for mixed keyword/instinct clusters.
+  const explicitConfidence = seeds.find((seed) => seed.confidence)?.confidence;
+  if (explicitConfidence) {
+    return explicitConfidence;
+  }
   const hasCorrection = seeds.some((seed) => seed.kind === "correction");
   const hasExplicitPreference = seeds.some((seed) => seed.kind === "explicit_preference");
   const sessionCount = evidenceSessions.length;
@@ -431,6 +500,10 @@ function confidenceRank(confidence: WorkflowConfidence): number {
   }
 }
 
+function sourceTierRank(sourceTier: WorkflowSourceTier): number {
+  return sourceTier === "instinct" ? 2 : 1;
+}
+
 function countEvidenceKinds(seeds: CandidateSeed[]): { contradicting: number; supporting: number } {
   const contradictingSessions = new Set<string>();
   const supportingSessions = new Set<string>();
@@ -465,8 +538,16 @@ function dedupeEvidence(evidence: WorkflowEvidence[]): WorkflowEvidence[] {
   });
 }
 
-function buildCandidateId(cluster: WorkflowCluster, ruleId: string): string {
-  const digest = createHash("sha256").update(`${cluster}\0${ruleId}`).digest("hex").slice(0, 10);
+function buildCandidateId(
+  cluster: WorkflowCluster,
+  ruleId: string,
+  sourceTier: WorkflowSourceTier,
+): string {
+  const idInput =
+    sourceTier === "instinct"
+      ? `instinct\0${ruleId.replace(/^instinct-/u, "")}`
+      : `${cluster}\0${ruleId}`;
+  const digest = createHash("sha256").update(idInput).digest("hex").slice(0, 10);
   return `wf_${digest}`;
 }
 

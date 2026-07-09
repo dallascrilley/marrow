@@ -280,13 +280,13 @@ node dist/cli.js workflow apply wf_cd61247b3c --target rule --dry-run --days 30
 ```
 
 The mining command is read-only. It ranks candidate skills, rules, or workflow
-docs with confidence, recommendation, and parent-session evidence. `--cluster`
-and `--recommendation` filter before `--limit`; the keyword-rule tier is bounded
-by the built-in marker table, so large `--limit` values do not create more
-keyword candidates. Weak candidates are dismissed by default; contradicted
-candidates require operator review before any artifact is written. `workflow
-apply` is draft-only: it requires `--dry-run` and writes Markdown/JSON drafts
-under `reports/workflow-drafts/`.
+docs with confidence, recommendation, source tier, and parent-session evidence.
+`--cluster` and `--recommendation` filter before `--limit`; the keyword-rule tier
+is bounded by the built-in marker table, while established/proven global workflow
+instincts can add `source_tier: "instinct"` candidates. Weak candidates are
+dismissed by default; contradicted candidates require operator review before any
+artifact is written. `workflow apply` is draft-only: it requires `--dry-run` and
+writes Markdown/JSON drafts under `reports/workflow-drafts/`.
 
 Audit summary and deletion-readiness quality across already-ingested sessions:
 
