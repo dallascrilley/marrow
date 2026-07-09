@@ -3,8 +3,36 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-
+import { saveGlobalInstinct } from "../dist/v2/instinct/global-store.js";
 import { mineWorkflowCandidates } from "../dist/workflow/mine.js";
+
+function globalInstinct(overrides = {}) {
+  return {
+    schema_version: 1,
+    id: "run-verification-before-claiming-completion-1234abcd",
+    trigger: "Before claiming completion",
+    finding: "Run verification before claiming completion",
+    confidence: 0.8,
+    confidence_floor: 0.5,
+    domain: "workflow",
+    maturity: "proven",
+    scope: "global",
+    project_id: "",
+    source: {
+      first_session: "instinct-session",
+      first_observed_at: "2026-07-01T00:00:00.000Z",
+      source_refs: [],
+      observations: [
+        { session: "instinct-session", reinforcing: true, at: "2026-07-01T00:00:00.000Z" },
+      ],
+    },
+    related: [],
+    created_at: "2026-07-01T00:00:00.000Z",
+    updated_at: "2026-07-01T00:00:00.000Z",
+    last_promoted_at: "2026-07-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
 
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
 
@@ -119,6 +147,33 @@ test("mineWorkflowCandidates promotes explicit user validation preferences", asy
   }
 });
 
+test("mineWorkflowCandidates keys candidate ids on stable rule ids", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-rule-id-1",
+      summary: summary("wf-rule-id-1", {
+        what_was_decided: ["Always run script/cibuild before claiming CI is green."],
+      }),
+      turns: [turn("wf-rule-id-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const firstResult = await mineWorkflowCandidates({ days: 30 });
+    const firstCandidate = firstResult.candidates.find(
+      (candidate) => candidate.rule_id === "validation-explicit-verify",
+    );
+
+    assert.ok(firstCandidate);
+    assert.equal(firstCandidate.rule_id, "validation-explicit-verify");
+    assert.equal(firstCandidate.candidate_id, "wf_cd61247b3c");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
 test("mineWorkflowCandidates dismisses weak single-session agent patterns", async () => {
   const { runtimeRoot, sandbox } = await writeRuntime([
     {
@@ -171,6 +226,121 @@ test("mineWorkflowCandidates asks on contradicted validation guidance", async ()
   }
 });
 
+test("mineWorkflowCandidates signs negated verification as contradiction", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-negated-1",
+      summary: summary("wf-negated-1", {
+        what_was_decided: ["You never need to verify docs-only edits."],
+      }),
+      turns: [turn("wf-negated-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
+
+    assert.ok(validation);
+    assert.equal(validation.supporting_count, 0);
+    assert.equal(validation.contradicting_count, 1);
+    assert.equal(validation.evidence_sessions[0].evidence_kind, "contradiction");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("mineWorkflowCandidates uses contradiction ratio for confidence", async () => {
+  const records = Array.from({ length: 9 }, (_, index) => ({
+    sessionId: `wf-supported-${index}`,
+    summary: summary(`wf-supported-${index}`, {
+      what_was_decided: ["Always run verification before claiming completion."],
+    }),
+    turns: [turn(`wf-supported-${index}`)],
+  }));
+  records.push({
+    sessionId: "wf-one-contradiction",
+    summary: summary("wf-one-contradiction", {
+      what_was_decided: ["Skip verification for this docs-only update."],
+    }),
+    turns: [turn("wf-one-contradiction")],
+  });
+  const { runtimeRoot, sandbox } = await writeRuntime(records);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
+
+    assert.ok(validation);
+    assert.equal(validation.supporting_count, 9);
+    assert.equal(validation.contradicting_count, 1);
+    assert.equal(validation.confidence, "strong");
+    assert.equal(validation.recommendation, "adopt");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("mineWorkflowCandidates counts a session with contradiction as contradicting only", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-mixed-1",
+      summary: summary("wf-mixed-1", {
+        what_worked: ["Always run verification before final summary."],
+        what_was_decided: ["Skip verification for this docs-only update."],
+      }),
+      turns: [turn("wf-mixed-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find(
+      (candidate) => candidate.rule_id === "validation-explicit-verify",
+    );
+
+    assert.ok(validation);
+    assert.equal(validation.supporting_count, 0);
+    assert.equal(validation.contradicting_count, 1);
+    assert.equal(validation.confidence, "contradicted");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("mineWorkflowCandidates keeps excerpts for cross-part matches", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-cross-part-1",
+      summary: summary("wf-cross-part-1", {
+        what_was_decided: ["Always run"],
+        project_learnings: ["verification before claiming completion."],
+      }),
+      turns: [turn("wf-cross-part-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find(
+      (candidate) => candidate.rule_id === "validation-explicit-verify",
+    );
+
+    assert.ok(validation);
+    assert.match(validation.evidence_sessions[0].excerpt, /Always run verification/);
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
 test("mineWorkflowCandidates redacts local paths from marker matching and evidence topics", async () => {
   const { runtimeRoot, sandbox } = await writeRuntime([
     {
@@ -189,6 +359,130 @@ test("mineWorkflowCandidates redacts local paths from marker matching and eviden
     const serialized = JSON.stringify(result);
 
     assert.doesNotMatch(serialized, /\/Users\/example\/private/);
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("mineWorkflowCandidates includes sanitized evidence excerpts", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-excerpt-1",
+      summary: summary("wf-excerpt-1", {
+        what_was_decided: [
+          "**Verified:** Always run script/cibuild before claiming CI is green for /Users/example/private/path. | secret | table | API_KEY=abc123",
+        ],
+      }),
+      turns: [turn("wf-excerpt-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
+
+    assert.ok(validation);
+    assert.equal(validation.evidence_count, 1);
+    assert.equal(validation.evidence_sessions[0].matched_rule_id, validation.rule_id);
+    assert.ok(validation.evidence_sessions[0].excerpt.length <= 200);
+    assert.doesNotMatch(validation.evidence_sessions[0].excerpt, /\/Users\/example/);
+    assert.doesNotMatch(validation.evidence_sessions[0].excerpt, /API_KEY=abc123/);
+    assert.doesNotMatch(validation.evidence_sessions[0].excerpt, /\*\*|\|/);
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("mineWorkflowCandidates suppresses already encoded global instincts", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-encoded-1",
+      summary: summary("wf-encoded-1", {
+        what_was_decided: ["Always run verification before claiming completion."],
+      }),
+      turns: [turn("wf-encoded-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    await saveGlobalInstinct(
+      globalInstinct({
+        finding: "Run relevant verification before claiming behavior works or work is complete",
+        trigger: "Before claiming completion merge readiness or CI status",
+      }),
+    );
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
+
+    assert.ok(validation);
+    assert.equal(validation.status, "already_encoded");
+    assert.equal(validation.encoded_in, "run-verification-before-claiming-completion-1234abcd");
+    assert.equal(validation.recommendation, "dismiss");
+    assert.equal(validation.artifact_kind, "none");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("mineWorkflowCandidates does not suppress unrelated global instincts", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-unencoded-1",
+      summary: summary("wf-unencoded-1", {
+        what_was_decided: ["Always run verification before claiming completion."],
+      }),
+      turns: [turn("wf-unencoded-1")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    await saveGlobalInstinct(
+      globalInstinct({
+        id: "prefer-small-pull-requests-1234abcd",
+        trigger: "When preparing a branch",
+        finding: "Prefer small pull requests with focused commits",
+      }),
+    );
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
+
+    assert.ok(validation);
+    assert.equal(validation.status, undefined);
+    assert.equal(validation.encoded_in, undefined);
+    assert.equal(validation.recommendation, "adopt");
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("mineWorkflowCandidates caps evidence sessions and preserves evidence count", async () => {
+  const records = Array.from({ length: 15 }, (_, index) => ({
+    sessionId: `wf-cap-${String(index).padStart(2, "0")}`,
+    updatedAt: `2026-07-08T00:${String(index).padStart(2, "0")}:00.000Z`,
+    summary: summary(`wf-cap-${String(index).padStart(2, "0")}`, {
+      what_was_decided: ["Always run verification before final summary."],
+    }),
+    turns: [turn(`wf-cap-${String(index).padStart(2, "0")}`)],
+  }));
+  const { runtimeRoot, sandbox } = await writeRuntime(records);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+    const result = await mineWorkflowCandidates({ days: 30 });
+    const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
+
+    assert.ok(validation);
+    assert.equal(validation.evidence_count, 15);
+    assert.equal(validation.evidence_sessions.length, 10);
+    assert.equal(validation.evidence_sessions[0].asd_session_id, "wf-cap-14");
+    assert.equal(validation.evidence_sessions.at(-1).asd_session_id, "wf-cap-05");
   } finally {
     delete process.env[runtimeOverrideEnvVar];
     await rm(sandbox, { force: true, recursive: true });

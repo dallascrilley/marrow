@@ -4,8 +4,12 @@ import { readFile } from "node:fs/promises";
 import type { DatabaseSync } from "node:sqlite";
 
 import { type Summary, summarySchema, type Turn, turnSchema } from "../models/canonical.js";
+import { sanitizeLearningStatement } from "../pipeline/prompt-sanitize.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
 import { loadSessionIndexRecords, type SessionIndexRecord } from "../read/session-index.js";
+import { loadGlobalInstinct, loadGlobalInstinctIds } from "../v2/instinct/global-store.js";
+import { canonicalKey } from "../v2/instinct/id.js";
+import { latestWorkflowDecisionMap, type WorkflowDecision } from "./decisions.js";
 import type {
   WorkflowArtifactKind,
   WorkflowCandidate,
@@ -19,7 +23,10 @@ import type {
 
 export type MineWorkflowOptions = {
   database?: DatabaseSync;
+  cluster?: WorkflowCluster | null;
   days?: number;
+  recommendation?: WorkflowRecommendation | null;
+  includeDecided?: boolean;
   limit?: number;
   source?: string | null;
 };
@@ -29,11 +36,15 @@ type CandidateSeed = {
   cluster: WorkflowCluster;
   evidence: WorkflowEvidence;
   guidance: string;
+  ruleId: string;
   kind: WorkflowEvidenceKind;
   trigger: string;
 };
 
 const DEFAULT_DAYS = 7;
+const MAX_EVIDENCE_SESSIONS = 10;
+const MAX_EVIDENCE_EXCERPT_CHARS = 200;
+const ENCODED_OVERLAP_THRESHOLD = 0.6;
 const DEFAULT_LIMIT = 20;
 
 const markerRules: Array<{
@@ -41,6 +52,7 @@ const markerRules: Array<{
   cluster: WorkflowCluster;
   evidenceKind: WorkflowEvidenceKind;
   guidance: string;
+  ruleId: string;
   pattern: RegExp;
   trigger: string;
 }> = [
@@ -48,22 +60,27 @@ const markerRules: Array<{
     artifactKind: "rule",
     cluster: "validation",
     evidenceKind: "explicit_preference",
+    ruleId: "validation-explicit-verify",
     guidance: "Run the relevant verification before claiming behavior works or work is complete.",
-    pattern: /\b(always|must|never)\b[^.?!]*(verify|test|cibuild|ci|proof|passes|green)/i,
+    pattern:
+      /\b(?:always|must)\b[^.?!]*(verify|verification|test|cibuild|ci|proof|passes|green)|\bnever\b[^.?!]*(skip|ship|claim|finish|merge|complete)[^.?!]*(without\s+)?(verify|verification|test|cibuild|ci|proof)/i,
     trigger: "Before claiming completion, merge readiness, or CI status.",
   },
   {
     artifactKind: "rule",
     cluster: "validation",
     evidenceKind: "contradiction",
+    ruleId: "validation-explicit-verify",
     guidance: "Run the relevant verification before claiming behavior works or work is complete.",
-    pattern: /\b(skip|without|no need)\b[^.?!]*(verify|verification|test|cibuild|ci|proof)/i,
+    pattern:
+      /\b(?:without|no need|never need|never have to|do not need|don't need)\b[^.?!]*(verify|verification|test|cibuild|ci|proof)|\bskip\b[^.?!]*(verify|verification|test|cibuild|ci|proof)/i,
     trigger: "Before claiming completion, merge readiness, or CI status.",
   },
   {
     artifactKind: "rule",
     cluster: "validation",
     evidenceKind: "correction",
+    ruleId: "validation-scope-correction",
     guidance:
       "Treat user corrections like “not what I asked” as scope failures and realign before continuing.",
     pattern: /\b(not what i asked|didn'?t ask|wrong task|stop doing|stop)\b/i,
@@ -74,6 +91,7 @@ const markerRules: Array<{
     artifactKind: "skill",
     cluster: "review",
     evidenceKind: "accepted_pattern",
+    ruleId: "review-independent-closeout",
     guidance:
       "Use an independent review or explicit self-review path before closing review-gated work.",
     pattern: /\b(review|reviewer|approve|reject|self-review|qa)\b/i,
@@ -83,6 +101,7 @@ const markerRules: Array<{
     artifactKind: "workflow_doc",
     cluster: "shipping",
     evidenceKind: "accepted_pattern",
+    ruleId: "shipping-concrete-evidence",
     guidance:
       "Keep shipping evidence tied to concrete commands, commits, PRs, and CI state rather than local claims.",
     pattern: /\b(pr|pull request|push|commit|ci|branch|merge|ship|shipping)\b/i,
@@ -92,6 +111,7 @@ const markerRules: Array<{
     artifactKind: "skill",
     cluster: "debugging",
     evidenceKind: "accepted_pattern",
+    ruleId: "debugging-root-cause-evidence",
     guidance:
       "Debug from root cause and preserve the failing evidence before changing implementation.",
     pattern: /\b(debug|root cause|failure|failing|regression|logs?|trace)\b/i,
@@ -101,6 +121,7 @@ const markerRules: Array<{
     artifactKind: "rule",
     cluster: "capture",
     evidenceKind: "accepted_pattern",
+    ruleId: "capture-durable-guidance",
     guidance:
       "Capture durable workflow corrections as skills, rules, docs, or reviewable candidates instead of leaving them only in chat.",
     pattern:
@@ -111,6 +132,7 @@ const markerRules: Array<{
     artifactKind: "workflow_doc",
     cluster: "delegation",
     evidenceKind: "accepted_pattern",
+    ruleId: "delegation-quality-speed-check",
     guidance:
       "Delegate only when it improves speed, quality, or independent verification; keep deterministic small edits inline.",
     pattern: /\b(subagent|delegate|parallel|reviewer|agent)\b/i,
@@ -121,6 +143,7 @@ const markerRules: Array<{
     artifactKind: "rule",
     cluster: "communication",
     evidenceKind: "explicit_preference",
+    ruleId: "communication-evidence-first",
     guidance:
       "Keep user-facing updates concise, evidence-first, and focused on decisions, checks, and residual risk.",
     pattern: /\b(concise|terse|brief|evidence|summary|final)\b/i,
@@ -132,6 +155,7 @@ const markerRules: Array<{
     evidenceKind: "accepted_pattern",
     guidance:
       "Prefer the smallest maintainable change and avoid adding abstractions before the existing pattern requires them.",
+    ruleId: "simplification-smallest-maintainable",
     pattern: /\b(simple|simplify|smallest|refactor|abstraction|over-?engineer)\b/i,
     trigger: "When choosing between a direct fix and a broader abstraction.",
   },
@@ -143,6 +167,9 @@ export async function mineWorkflowCandidates(
   const days = options.days ?? DEFAULT_DAYS;
   const limit = options.limit ?? DEFAULT_LIMIT;
   const source = options.source ?? null;
+  const cluster = options.cluster ?? null;
+  const recommendation = options.recommendation ?? null;
+  const includeDecided = options.includeDecided ?? false;
   const loadOptions = options.database
     ? { database: options.database, fallbackToBuild: true }
     : { fallbackToBuild: true };
@@ -162,7 +189,16 @@ export async function mineWorkflowCandidates(
     seeds.push(...extractSeeds(record, summary, turns));
   }
 
-  const candidates = clusterSeeds(seeds).slice(0, limit);
+  const decisionMap = await latestWorkflowDecisionMap();
+  const candidates = suppressAlreadyEncodedCandidates(
+    clusterSeeds(seeds),
+    await loadEncodedInstincts(),
+  )
+    .map((candidate) => annotateDecision(candidate, decisionMap.get(candidate.candidate_id)))
+    .filter((candidate) => includeDecided || candidate.decision === undefined)
+    .filter((candidate) => !cluster || candidate.cluster === cluster)
+    .filter((candidate) => !recommendation || candidate.recommendation === recommendation)
+    .slice(0, limit);
 
   return {
     candidates,
@@ -202,45 +238,122 @@ function extractSeeds(
     topic: sanitizeEvidenceText(record.topic),
     updated_at: record.updated_at,
   };
-  const text = sanitizeEvidenceText(
-    [
-      record.topic,
-      record.next_step,
-      ...(summary?.what_worked ?? []),
-      ...(summary?.what_failed ?? []),
-      ...(summary?.what_was_decided ?? []),
-      ...(summary?.project_learnings ?? []),
-      ...(summary?.user_learnings ?? []),
-      ...turns.flatMap((turn) => [turn.user_prompt, turn.assistant_summary]),
-    ].join("\n"),
-  );
+  const textParts = [
+    record.topic,
+    record.next_step,
+    ...(summary?.what_worked ?? []),
+    ...(summary?.what_failed ?? []),
+    ...(summary?.what_was_decided ?? []),
+    ...(summary?.project_learnings ?? []),
+    ...(summary?.user_learnings ?? []),
+    ...turns.flatMap((turn) => [turn.user_prompt, turn.assistant_summary]),
+  ];
+  const text = sanitizeEvidenceText(textParts.join("\n"));
 
   return markerRules
     .filter((rule) => rule.pattern.test(text))
     .map((rule) => ({
       artifactKind: rule.artifactKind,
       cluster: rule.cluster,
-      evidence: { ...evidenceBase, evidence_kind: rule.evidenceKind },
+      evidence: {
+        ...evidenceBase,
+        evidence_kind: rule.evidenceKind,
+        excerpt: extractEvidenceExcerpt(textParts, rule.pattern),
+        matched_rule_id: rule.ruleId,
+      },
       guidance: rule.guidance,
+      ruleId: rule.ruleId,
       kind: rule.evidenceKind,
       trigger: rule.trigger,
     }));
 }
 
-function clusterSeeds(seeds: CandidateSeed[]): WorkflowCandidate[] {
-  const byGuidance = new Map<string, CandidateSeed[]>();
+type EncodedInstinct = {
+  id: string;
+  tokens: Set<string>;
+};
 
-  for (const seed of seeds) {
-    const key = `${seed.cluster}\0${seed.guidance}`;
-    byGuidance.set(key, [...(byGuidance.get(key) ?? []), seed]);
+async function loadEncodedInstincts(): Promise<EncodedInstinct[]> {
+  const instincts = [];
+  for (const id of await loadGlobalInstinctIds()) {
+    const instinct = await loadGlobalInstinct(id);
+    if (!instinct || instinct.maturity === "deprecated") {
+      continue;
+    }
+    const tokens = canonicalKey(instinct.trigger, instinct.finding).split("-").filter(Boolean);
+    if (tokens.length > 0) {
+      instincts.push({ id: instinct.id, tokens: new Set(tokens) });
+    }
+  }
+  return instincts;
+}
+
+function suppressAlreadyEncodedCandidates(
+  candidates: WorkflowCandidate[],
+  encodedInstincts: EncodedInstinct[],
+): WorkflowCandidate[] {
+  if (encodedInstincts.length === 0) {
+    return candidates;
   }
 
-  return Array.from(byGuidance.values())
+  return candidates.map((candidate) => {
+    const guidanceTokens = canonicalKey(candidate.trigger, candidate.guidance)
+      .split("-")
+      .filter(Boolean);
+    if (guidanceTokens.length === 0) {
+      return candidate;
+    }
+
+    const encoded = encodedInstincts.find((instinct) => {
+      const overlap = guidanceTokens.filter((token) => instinct.tokens.has(token)).length;
+      return overlap / guidanceTokens.length >= ENCODED_OVERLAP_THRESHOLD;
+    });
+    if (!encoded) {
+      return candidate;
+    }
+
+    return {
+      ...candidate,
+      artifact_kind: "none",
+      encoded_in: encoded.id,
+      recommendation: "dismiss",
+      status: "already_encoded",
+    };
+  });
+}
+
+function annotateDecision(
+  candidate: WorkflowCandidate,
+  decision: WorkflowDecision | undefined,
+): WorkflowCandidate {
+  if (!decision) {
+    return candidate;
+  }
+
+  return {
+    ...candidate,
+    decision: {
+      decided_at: decision.decided_at,
+      decision: decision.decision,
+      ...(decision.note ? { note: decision.note } : {}),
+    },
+  };
+}
+
+function clusterSeeds(seeds: CandidateSeed[]): WorkflowCandidate[] {
+  const byRule = new Map<string, CandidateSeed[]>();
+
+  for (const seed of seeds) {
+    const key = `${seed.cluster}\0${seed.ruleId}`;
+    byRule.set(key, [...(byRule.get(key) ?? []), seed]);
+  }
+
+  return Array.from(byRule.values())
     .map(buildCandidate)
     .sort((left, right) => {
       return (
         confidenceRank(right.confidence) - confidenceRank(left.confidence) ||
-        right.evidence_sessions.length - left.evidence_sessions.length ||
+        right.evidence_count - left.evidence_count ||
         left.guidance.localeCompare(right.guidance)
       );
     });
@@ -253,18 +366,23 @@ function buildCandidate(seeds: CandidateSeed[]): WorkflowCandidate {
   }
 
   const evidenceSessions = dedupeEvidence(seeds.map((seed) => seed.evidence));
-  const confidence = classifyConfidence(seeds, evidenceSessions);
+  const counts = countEvidenceKinds(seeds);
+  const confidence = classifyConfidence(seeds, evidenceSessions, counts);
   const recommendation = recommendationFor(confidence);
 
   return {
     artifact_kind: recommendation === "dismiss" ? "none" : first.artifactKind,
-    candidate_id: buildCandidateId(first.cluster, first.guidance),
+    candidate_id: buildCandidateId(first.cluster, first.ruleId),
     cluster: first.cluster,
+    contradicting_count: counts.contradicting,
     confidence,
-    evidence_sessions: evidenceSessions,
+    evidence_count: evidenceSessions.length,
+    evidence_sessions: evidenceSessions.slice(0, MAX_EVIDENCE_SESSIONS),
     guidance: first.guidance,
     recommendation,
     risk: confidence === "contradicted" ? "high" : confidence === "weak" ? "medium" : "low",
+    rule_id: first.ruleId,
+    supporting_count: counts.supporting,
     trigger: first.trigger,
   };
 }
@@ -272,13 +390,13 @@ function buildCandidate(seeds: CandidateSeed[]): WorkflowCandidate {
 function classifyConfidence(
   seeds: CandidateSeed[],
   evidenceSessions: WorkflowEvidence[],
+  counts: { contradicting: number; supporting: number },
 ): WorkflowConfidence {
-  const hasContradiction = seeds.some((seed) => seed.kind === "contradiction");
   const hasCorrection = seeds.some((seed) => seed.kind === "correction");
   const hasExplicitPreference = seeds.some((seed) => seed.kind === "explicit_preference");
   const sessionCount = evidenceSessions.length;
 
-  if (hasContradiction) {
+  if (counts.contradicting / Math.max(1, counts.supporting + counts.contradicting) > 0.2) {
     return "contradicted";
   }
 
@@ -313,6 +431,25 @@ function confidenceRank(confidence: WorkflowConfidence): number {
   }
 }
 
+function countEvidenceKinds(seeds: CandidateSeed[]): { contradicting: number; supporting: number } {
+  const contradictingSessions = new Set<string>();
+  const supportingSessions = new Set<string>();
+
+  for (const seed of seeds) {
+    if (seed.kind === "contradiction") {
+      contradictingSessions.add(seed.evidence.asd_session_id);
+      continue;
+    }
+    supportingSessions.add(seed.evidence.asd_session_id);
+  }
+
+  for (const sessionId of contradictingSessions) {
+    supportingSessions.delete(sessionId);
+  }
+
+  return { contradicting: contradictingSessions.size, supporting: supportingSessions.size };
+}
+
 function dedupeEvidence(evidence: WorkflowEvidence[]): WorkflowEvidence[] {
   const bySession = new Map<string, WorkflowEvidence>();
 
@@ -322,14 +459,49 @@ function dedupeEvidence(evidence: WorkflowEvidence[]): WorkflowEvidence[] {
     }
   }
 
-  return Array.from(bySession.values()).sort((left, right) =>
-    left.asd_session_id.localeCompare(right.asd_session_id),
-  );
+  return Array.from(bySession.values()).sort((left, right) => {
+    const updatedAtOrder = Date.parse(right.updated_at) - Date.parse(left.updated_at);
+    return updatedAtOrder || left.asd_session_id.localeCompare(right.asd_session_id);
+  });
 }
 
-function buildCandidateId(cluster: WorkflowCluster, guidance: string): string {
-  const digest = createHash("sha256").update(`${cluster}\0${guidance}`).digest("hex").slice(0, 10);
+function buildCandidateId(cluster: WorkflowCluster, ruleId: string): string {
+  const digest = createHash("sha256").update(`${cluster}\0${ruleId}`).digest("hex").slice(0, 10);
   return `wf_${digest}`;
+}
+
+function extractEvidenceExcerpt(textParts: readonly string[], pattern: RegExp): string {
+  for (const text of [...textParts, textParts.join(" ")]) {
+    const sanitizedText = sanitizeEvidenceText(text);
+    const match = pattern.exec(sanitizedText);
+    if (!match) {
+      continue;
+    }
+
+    const sentence = sentenceContainingMatch(sanitizedText, match.index);
+    const cleanExcerpt = sanitizeLearningStatement(sanitizeEvidenceText(sentence));
+    if (cleanExcerpt.length > 0) {
+      return cleanExcerpt.length <= MAX_EVIDENCE_EXCERPT_CHARS
+        ? cleanExcerpt
+        : `${cleanExcerpt.slice(0, MAX_EVIDENCE_EXCERPT_CHARS - 1).trimEnd()}…`;
+    }
+  }
+
+  return "";
+}
+
+function sentenceContainingMatch(text: string, matchIndex: number): string {
+  const start =
+    Math.max(
+      text.lastIndexOf(".", matchIndex),
+      text.lastIndexOf("!", matchIndex),
+      text.lastIndexOf("?", matchIndex),
+      text.lastIndexOf("\n", matchIndex),
+    ) + 1;
+  const remaining = text.slice(matchIndex);
+  const endMatch = remaining.match(/[.?!\n]/);
+  const end = endMatch?.index === undefined ? text.length : matchIndex + endMatch.index + 1;
+  return text.slice(start, end).trim();
 }
 
 function sanitizeEvidenceText(text: string): string {

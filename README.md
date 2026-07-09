@@ -274,12 +274,15 @@ Mine reviewable workflow guidance candidates from recent distilled sessions:
 ```bash
 node dist/cli.js workflow mine --days 7
 node dist/cli.js workflow mine --days 30 --source cursor --json
+node dist/cli.js workflow mine --days 30 --cluster validation --recommendation adopt --json
 ```
 
 The command is read-only. It ranks candidate skills, rules, or workflow docs with
-confidence, recommendation, and parent-session evidence. Weak candidates are
-dismissed by default; contradicted candidates require operator review before any
-artifact is written.
+confidence, recommendation, and parent-session evidence. `--cluster` and
+`--recommendation` filter before `--limit`; the keyword-rule tier is bounded by
+the built-in marker table, so large `--limit` values do not create more keyword
+candidates. Weak candidates are dismissed by default; contradicted candidates
+require operator review before any artifact is written.
 
 Audit summary and deletion-readiness quality across already-ingested sessions:
 
