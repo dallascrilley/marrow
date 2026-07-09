@@ -69,6 +69,8 @@ export async function executeQualityApplyLearningReview(
     instinct_count: number;
   }> = [];
 
+  const batchReviewedAt = new Date().toISOString();
+
   for (const [sessionId, learnings] of reviewedLearningsBySession) {
     const session = sessionsById.get(sessionId);
     if (session === undefined || learnings.length === 0) {
@@ -79,7 +81,7 @@ export async function executeQualityApplyLearningReview(
     const outputPath = getReviewedProjectKnowledgePath(projectId, sessionId);
     await writeJsonlFile(outputPath, learnings);
 
-    const reviewedAt = new Date().toISOString();
+    const reviewedAt = batchReviewedAt;
     const syncResult = await syncReviewedLearningsToInstinctStore({
       session,
       learnings,
@@ -96,7 +98,7 @@ export async function executeQualityApplyLearningReview(
   }
 
   if (instinctSync.length > 0) {
-    await refreshPromotionQueue(new Date().toISOString());
+    await refreshPromotionQueue(batchReviewedAt);
   }
 
   const reportPath = join(getRuntimePath("reports"), "llm-learning-review-apply.json");
