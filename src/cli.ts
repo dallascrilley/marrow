@@ -33,6 +33,7 @@ import { executeSearch } from "./commands/search.js";
 import { executeSkillEvidence } from "./commands/skill-evidence.js";
 import { executeSkillReport } from "./commands/skill-report.js";
 import { executeStats } from "./commands/stats.js";
+import { executeWorkflowMine } from "./commands/workflow-mine.js";
 import { getRuntimeRoot } from "./config/paths.js";
 import { createLedger } from "./db/ledger.js";
 
@@ -215,6 +216,16 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "Score SKILL.md checklist adherence across relevant sessions and emit improvement suggestions.",
         execute: async (context) => withLedger(context, executeSkillReport),
+      },
+    },
+  },
+  workflow: {
+    description: "Mine distilled sessions for reviewable workflow guidance candidates.",
+    subcommands: {
+      mine: {
+        description:
+          "Emit read-only workflow guidance candidates from recent sessions. Flags: --days, --source, --limit, --json.",
+        execute: async (context) => withLedger(context, executeWorkflowMine),
       },
     },
   },

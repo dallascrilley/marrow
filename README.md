@@ -31,6 +31,7 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 | Re-extract stale artifacts (deterministic, no LLM) | `asd pipeline reextract --process-chatter-only --dry-run` then drop `--dry-run` to apply (or `--session-id <id>`) |
 | Skill usage evidence in corpus | `asd skill evidence <skill-id>` (after `export-index`) |
 | Skill adherence report | `asd skill report <skill-id>` — [`docs/recipes/skill-adherence-report.md`](docs/recipes/skill-adherence-report.md) |
+| Workflow guidance candidates | `asd workflow mine --days 7 --json` — [`docs/recipes/workflow-mining.md`](docs/recipes/workflow-mining.md) |
 
 ## Requirements
 
@@ -224,6 +225,18 @@ node dist/cli.js report --html --out /tmp/asd-dashboard.html
 ```
 
 By default this writes `reports/dashboard.html` under the runtime root. The output is self-contained and works offline: session list, source/lifecycle filters, pipeline-health metrics, knowledge/instinct explorer cards with back-links, cross-harness comparison cards for volume/topic yield/LLM cost, a read-only review-queue snapshot with CLI follow-up hints, search, and per-session drill-down into summary and reduced timeline.
+
+Mine reviewable workflow guidance candidates from recent distilled sessions:
+
+```bash
+node dist/cli.js workflow mine --days 7
+node dist/cli.js workflow mine --days 30 --source cursor --json
+```
+
+The command is read-only. It ranks candidate skills, rules, or workflow docs with
+confidence, recommendation, and parent-session evidence. Weak candidates are
+dismissed by default; contradicted candidates require operator review before any
+artifact is written.
 
 Audit summary and deletion-readiness quality across already-ingested sessions:
 
