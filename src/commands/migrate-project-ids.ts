@@ -101,6 +101,9 @@ async function collectMigrationEntries(database: DatabaseSync): Promise<Migratio
   try {
     const projectDirs = await readdir(getRuntimePath("knowledgeProjects"));
     for (const oldKey of projectDirs) {
+      // `resolvedNewIds` skips targets for sessions still in the ledger; the
+      // ADR-0002 shape check also skips migrated target dirs whose source session
+      // was later pruned from the DB.
       if (byOldKey.has(oldKey) || resolvedNewIds.has(oldKey) || looksLikeAdrProjectId(oldKey)) {
         continue;
       }
