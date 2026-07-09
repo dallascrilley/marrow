@@ -9,9 +9,9 @@ Uses the v1 CLI surface today; v2 instinct sync happens inside
 ```text
 ingest sync --resume --source <adapter>
   → check                                  # read-only integrity; exit non-zero on violations
-  → pipeline gate --skip-ingest --max-per 5/24h   # after ingest; LLM + budget + integrity rollup
+  → pipeline gate --skip-ingest             # after ingest; LLM + budget + integrity rollup
   → quality audit --limit 100
-  → [optional] quality review-learnings --if-new --max-per 5/24h   # requires OPENROUTER_API_KEY
+  → [optional] quality review-learnings --if-new --max-total-learnings 100   # requires OPENROUTER_API_KEY
   → quality apply-learning-review         # writes projects-reviewed + v2 instincts
   → memory export-wiki
   → memory push-wiki                      # requires ~/vault or ASD_VAULT_ROOT
@@ -47,11 +47,11 @@ enabled (default unless `resummarize-corpus.mjs --no-llm-topic`).
 | `quality review-learnings` | One command run that reviewed at least one learning (may include many OpenRouter calls) |
 | `quality resummarize --llm-topic` | One successful LLM topic generation (`topic_source: "llm"`) |
 
-When the budget is exhausted, `review-learnings` exits early with
-`skipped: true`. Resummarize continues with deterministic topics only (no
-whole-command skip).
-
-Run this on a weekly or monthly cadence — not on the same 6-hour ingest cron.
+When the count budget is exhausted, `review-learnings` exits early with
+`skipped: true`. The default count cap is intentionally generous (`50/24h`) and
+only smooths bursts; the tighter financial guard is `ASD_LLM_MAX_USD` (default
+`1/24h`). Resummarize continues with deterministic topics only when its LLM
+topic budget is exhausted.
 
 ## Environment
 
@@ -60,8 +60,8 @@ Run this on a weekly or monthly cadence — not on the same 6-hour ingest cron.
 | `AGENT_SESSION_DISTILLERY_ROOT` | Runtime dir (default `~/.agent-session-distillery`) |
 | `ASD_VAULT_ROOT` | Vault root for `memory push-wiki` (default `~/vault`) |
 | `OPENROUTER_API_KEY` | Required only when running `quality review-learnings`; source from 1Password **OpenRouter API Credentials - agent-session-distillery** |
-| `ASD_LLM_MAX_PER` | Sliding-window LLM budget shared by review-learnings and corpus resummarize (default `5/24h`) |
-| `ASD_LLM_MAX_USD` | USD ceiling for LLM review spend (the real financial guard; count caps only smooth bursts) |
+| `ASD_LLM_MAX_PER` | Sliding-window LLM count budget shared by review-learnings and corpus resummarize (default `50/24h`; use smaller `--max-per` values for deliberate trials) |
+| `ASD_LLM_MAX_USD` | USD ceiling for LLM review spend (default `1/24h`; the real financial guard) |
 | `OPENROUTER_MODEL` | Model for `quality review-learnings` (launcher default: `google/gemini-3-flash-preview`) |
 
 Build the CLI once after checkout updates:
