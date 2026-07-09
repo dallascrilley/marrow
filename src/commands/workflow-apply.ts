@@ -8,6 +8,8 @@ import {
 } from "../workflow/draft.js";
 import { mineWorkflowCandidates } from "../workflow/mine.js";
 
+const DEFAULT_APPLY_DAYS = 30;
+// Apply resolves a specific candidate id from a prior review/mine result, so it must not truncate.
 const APPLY_LOOKUP_LIMIT = Number.MAX_SAFE_INTEGER;
 
 type ApplyOptions = {
@@ -59,8 +61,11 @@ function parseApplyOptions(args: string[]): ApplyOptions {
   if (!candidateId || candidateId.startsWith("--")) {
     throw new Error("workflow apply requires a candidate id");
   }
+  if (!/^wf_[0-9a-f]+$/u.test(candidateId)) {
+    throw new Error("workflow apply candidate id must match wf_<hex>");
+  }
 
-  let days = 7;
+  let days = DEFAULT_APPLY_DAYS;
   let dryRun = false;
   let source: string | null = null;
   let target: WorkflowDraftTarget | undefined;

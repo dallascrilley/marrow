@@ -2,7 +2,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { getRuntimePath } from "../config/paths.js";
-import { validateSuggestedStatement } from "../pipeline/prompt-sanitize.js";
+import {
+  sanitizeLearningStatement,
+  validateSuggestedStatement,
+} from "../pipeline/prompt-sanitize.js";
 import type { WorkflowCandidate } from "./schema.js";
 
 export const workflowDraftTargets = ["rule", "skill", "doc"] as const;
@@ -15,7 +18,6 @@ export type WorkflowDraftResult = {
   draft_path: string;
   dry_run: true;
   target: WorkflowDraftTarget;
-  validation_flags: string[];
 };
 
 export function isWorkflowDraftTarget(value: string): value is WorkflowDraftTarget {
@@ -47,7 +49,6 @@ export async function writeWorkflowDraft(
     draft_path: draftPath,
     dry_run: true,
     target,
-    validation_flags: validationFlags,
   };
 
   await mkdir(dirname(draftPath), { recursive: true });
@@ -69,11 +70,11 @@ function renderDraft(candidate: WorkflowCandidate, target: WorkflowDraftTarget):
     "",
     "## Trigger",
     "",
-    candidate.trigger,
+    sanitizeDraftText(candidate.trigger),
     "",
     "## Guidance",
     "",
-    candidate.guidance,
+    sanitizeDraftText(candidate.guidance),
     "",
     "## Evidence",
     "",
@@ -81,7 +82,11 @@ function renderDraft(candidate: WorkflowCandidate, target: WorkflowDraftTarget):
     "",
     ...candidate.evidence_sessions.map(
       (item) =>
-        `- ${item.asd_session_id} (${item.evidence_kind}, ${item.matched_rule_id}): ${item.excerpt}`,
+        `- ${sanitizeDraftText(item.asd_session_id)} (${item.evidence_kind}, ${sanitizeDraftText(item.matched_rule_id)}): ${sanitizeDraftText(item.excerpt)}`,
     ),
   ].join("\n");
+}
+
+function sanitizeDraftText(value: string): string {
+  return sanitizeLearningStatement(value).replace(/\s+/g, " ").trim();
 }

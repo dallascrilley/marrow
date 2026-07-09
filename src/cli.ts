@@ -257,7 +257,7 @@ const commandTree: Record<string, CommandDefinition> = {
       },
       apply: {
         description:
-          "Render a draft artifact for a workflow candidate. Flags: --target, --dry-run.",
+          "Render a draft artifact for a workflow candidate. Flags: --target, --dry-run, --days, --source.",
         execute: async (context) => withLedger(context, executeWorkflowApply),
       },
     },

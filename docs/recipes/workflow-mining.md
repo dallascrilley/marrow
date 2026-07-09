@@ -37,8 +37,8 @@ filters to one recommendation before `--limit`. `--limit` truncates the final
 candidate list only. Keyword-tier mining is bounded by the built-in marker rule
 table, so `--limit` is mostly useful once instinct-sourced candidates are present.
 
-The command is intentionally read-only. Use it to prepare a candidate list, then
-write or update skills/rules/docs through the normal reviewed workflow.
+`workflow mine` is intentionally read-only. Use it to prepare a candidate list,
+then write or update skills/rules/docs through the normal reviewed workflow.
 
 `workflow apply` is draft-only in v1. It requires `--dry-run` and writes a
 Markdown draft plus JSON apply report under `reports/workflow-drafts/` without
