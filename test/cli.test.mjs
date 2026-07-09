@@ -305,7 +305,11 @@ test("workflow mine filters by cluster and recommendation", async () => {
         })}\n`,
         "utf8",
       );
-      await writeFile(join(stagingDir, "reduced-session.json"), `${JSON.stringify({ turns: [] })}\n`, "utf8");
+      await writeFile(
+        join(stagingDir, "reduced-session.json"),
+        `${JSON.stringify({ turns: [] })}\n`,
+        "utf8",
+      );
       indexRecords.push({
         v: 1,
         source_path: `/tmp/${session.id}.jsonl`,
@@ -319,11 +323,18 @@ test("workflow mine filters by cluster and recommendation", async () => {
         updated_at: "2026-07-08T00:00:00.000Z",
       });
     }
-    await writeFile(join(indexDir, "session-index.jsonl"), `${indexRecords.map((record) => JSON.stringify(record)).join("\n")}\n`, "utf8");
+    await writeFile(
+      join(indexDir, "session-index.jsonl"),
+      `${indexRecords.map((record) => JSON.stringify(record)).join("\n")}\n`,
+      "utf8",
+    );
 
-    const clusterResult = runCli(["workflow", "mine", "--days=30", "--cluster=validation", "--json"], {
-      [runtimeOverrideEnvVar]: runtimeRoot,
-    });
+    const clusterResult = runCli(
+      ["workflow", "mine", "--days=30", "--cluster=validation", "--json"],
+      {
+        [runtimeOverrideEnvVar]: runtimeRoot,
+      },
+    );
     assert.equal(clusterResult.status, 0, clusterResult.stderr);
     const clusterPayload = JSON.parse(clusterResult.stdout.trim());
     assert.ok(clusterPayload.candidates.length > 0);

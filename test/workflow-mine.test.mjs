@@ -3,9 +3,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-
-import { mineWorkflowCandidates } from "../dist/workflow/mine.js";
 import { saveGlobalInstinct } from "../dist/v2/instinct/global-store.js";
+import { mineWorkflowCandidates } from "../dist/workflow/mine.js";
 
 function globalInstinct(overrides = {}) {
   return {
@@ -23,7 +22,9 @@ function globalInstinct(overrides = {}) {
       first_session: "instinct-session",
       first_observed_at: "2026-07-01T00:00:00.000Z",
       source_refs: [],
-      observations: [{ session: "instinct-session", reinforcing: true, at: "2026-07-01T00:00:00.000Z" }],
+      observations: [
+        { session: "instinct-session", reinforcing: true, at: "2026-07-01T00:00:00.000Z" },
+      ],
     },
     related: [],
     created_at: "2026-07-01T00:00:00.000Z",

@@ -4,11 +4,11 @@ import { readFile } from "node:fs/promises";
 import type { DatabaseSync } from "node:sqlite";
 
 import { type Summary, summarySchema, type Turn, turnSchema } from "../models/canonical.js";
-import { getReducedArtifactPath } from "../pipeline/reduce.js";
 import { sanitizeLearningStatement } from "../pipeline/prompt-sanitize.js";
+import { getReducedArtifactPath } from "../pipeline/reduce.js";
+import { loadSessionIndexRecords, type SessionIndexRecord } from "../read/session-index.js";
 import { loadGlobalInstinct, loadGlobalInstinctIds } from "../v2/instinct/global-store.js";
 import { canonicalKey } from "../v2/instinct/id.js";
-import { loadSessionIndexRecords, type SessionIndexRecord } from "../read/session-index.js";
 import type {
   WorkflowArtifactKind,
   WorkflowCandidate,
@@ -186,7 +186,10 @@ export async function mineWorkflowCandidates(
     seeds.push(...extractSeeds(record, summary, turns));
   }
 
-  const candidates = suppressAlreadyEncodedCandidates(clusterSeeds(seeds), await loadEncodedInstincts())
+  const candidates = suppressAlreadyEncodedCandidates(
+    clusterSeeds(seeds),
+    await loadEncodedInstincts(),
+  )
     .filter((candidate) => !cluster || candidate.cluster === cluster)
     .filter((candidate) => !recommendation || candidate.recommendation === recommendation)
     .slice(0, limit);
@@ -288,7 +291,9 @@ function suppressAlreadyEncodedCandidates(
   }
 
   return candidates.map((candidate) => {
-    const guidanceTokens = canonicalKey(candidate.trigger, candidate.guidance).split("-").filter(Boolean);
+    const guidanceTokens = canonicalKey(candidate.trigger, candidate.guidance)
+      .split("-")
+      .filter(Boolean);
     if (guidanceTokens.length === 0) {
       return candidate;
     }
@@ -458,7 +463,13 @@ function extractEvidenceExcerpt(textParts: readonly string[], pattern: RegExp): 
 }
 
 function sentenceContainingMatch(text: string, matchIndex: number): string {
-  const start = Math.max(text.lastIndexOf(".", matchIndex), text.lastIndexOf("!", matchIndex), text.lastIndexOf("?", matchIndex), text.lastIndexOf("\n", matchIndex)) + 1;
+  const start =
+    Math.max(
+      text.lastIndexOf(".", matchIndex),
+      text.lastIndexOf("!", matchIndex),
+      text.lastIndexOf("?", matchIndex),
+      text.lastIndexOf("\n", matchIndex),
+    ) + 1;
   const remaining = text.slice(matchIndex);
   const endMatch = remaining.match(/[.?!\n]/);
   const end = endMatch?.index === undefined ? text.length : matchIndex + endMatch.index + 1;

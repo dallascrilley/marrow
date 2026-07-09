@@ -3,11 +3,11 @@ import type { DatabaseSync } from "node:sqlite";
 import type { CommandContext } from "../cli.js";
 import { mineWorkflowCandidates } from "../workflow/mine.js";
 import {
-  workflowClusters,
-  workflowRecommendations,
   type WorkflowCandidate,
   type WorkflowCluster,
   type WorkflowRecommendation,
+  workflowClusters,
+  workflowRecommendations,
 } from "../workflow/schema.js";
 
 export async function executeWorkflowMine(
