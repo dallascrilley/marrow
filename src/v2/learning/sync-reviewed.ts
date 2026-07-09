@@ -4,8 +4,15 @@ import { replayBundles, saveSessionBundle } from "../instinct/bundle.js";
 import { buildSessionBundleFromLearnings } from "../instinct/from-learning.js";
 import { saveAllInstincts } from "../instinct/store.js";
 import { resolveProjectIdForSession } from "../project/resolve.js";
-import { refreshPromotionQueue } from "../promotion/queue.js";
 
+/**
+ * Writes reviewed learnings into the per-project instinct store.
+ *
+ * This function intentionally does not refresh the global promotion queue.
+ * Batch callers that receive any `bundleWritten: true` result must call
+ * `refreshPromotionQueue` once after the batch, so applying N reviewed sessions
+ * performs one cross-project promotion scan instead of N scans.
+ */
 export async function syncReviewedLearningsToInstinctStore(input: {
   session: SourceSession;
   learnings: readonly Learning[];
@@ -27,7 +34,6 @@ export async function syncReviewedLearningsToInstinctStore(input: {
 
   const instincts = await replayBundles(projectId);
   await saveAllInstincts(projectId, instincts);
-  await refreshPromotionQueue(input.reviewedAt);
 
   return { bundleWritten: true, instinctCount: instincts.size, projectId };
 }
