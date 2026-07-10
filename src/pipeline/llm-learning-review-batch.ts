@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 
@@ -174,6 +174,43 @@ export async function writeLearningReviewBatch(input: {
   }
 
   return { batch, batchPath, latestPointerPath };
+}
+
+export async function listLearningReviewBatches(
+  reportsDir: string,
+): Promise<Array<{ batch: LearningReviewBatch; batchPath: string }>> {
+  const batchDir = join(reportsDir, "llm-learning-review-batches");
+  let files: string[];
+  try {
+    files = (await readdir(batchDir)).filter((name) => name.endsWith(".json")).sort();
+  } catch (error) {
+    if (isMissingFileError(error)) return [];
+    throw error;
+  }
+
+  const batches = [];
+  const reviewsByBatchId = new Map<string, string>();
+  for (const file of files) {
+    const batchPath = join(batchDir, file);
+    const batch = parseLearningReviewBatch(await readFile(batchPath, "utf8"));
+    const serializedReviews = stableStringify(batch.reviews);
+    const existing = reviewsByBatchId.get(batch.batch_id);
+    if (existing !== undefined && existing !== serializedReviews) {
+      throw new Error(`Conflicting immutable batches share batch_id ${batch.batch_id}`);
+    }
+    reviewsByBatchId.set(batch.batch_id, serializedReviews);
+    batches.push({ batch, batchPath });
+  }
+  return batches;
+}
+
+function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as NodeJS.ErrnoException).code === "ENOENT"
+  );
 }
 
 function sha256Hex(input: string): string {

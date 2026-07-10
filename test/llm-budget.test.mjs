@@ -195,3 +195,29 @@ test("assessLlmBudget tracks sliding-window uses", async () => {
     assert.equal(status.allowed, false);
   });
 });
+
+test("recordLlmBudgetUse deduplicates batch ids and preserves historical timestamps", async () => {
+  await withRuntimeRoot(async () => {
+    const maxPer = "1/1h";
+    const historical = "2020-01-01T00:00:00.000Z";
+
+    let status = await recordLlmBudgetUse(maxPer, {
+      usageId: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      usedAt: historical,
+    });
+    assert.equal(status.used_in_window, 0);
+    assert.equal(status.remaining, 1);
+
+    status = await recordLlmBudgetUse(maxPer, {
+      usageId: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      usedAt: new Date().toISOString(),
+    });
+    assert.equal(status.used_in_window, 0, "reconciliation does not restamp an old batch");
+
+    status = await recordLlmBudgetUse(maxPer, {
+      usageId: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    });
+    assert.equal(status.used_in_window, 1);
+    assert.equal(status.remaining, 0);
+  });
+});

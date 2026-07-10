@@ -22,6 +22,7 @@ import {
 import {
   buildLearningReviewBatch,
   buildLearningReviewInputContentHash,
+  listLearningReviewBatches,
   writeLearningReviewBatch,
 } from "../pipeline/llm-learning-review-batch.js";
 import {
@@ -35,10 +36,21 @@ import { isLowSignalTopic } from "../pipeline/summarize.js";
 import { getProjectKnowledgeSessionPath } from "../writers/knowledge-writer.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
 
+type QualityReviewLearningsDependencies = {
+  appendLedgerEntries?: typeof appendLlmLearningReviewLedgerEntries;
+  writeBatch?: typeof writeLearningReviewBatch;
+};
+
 export async function executeQualityReviewLearnings(
   context: CommandContext,
   database: DatabaseSync,
+  dependencies: QualityReviewLearningsDependencies = {},
 ): Promise<number> {
+  const appendLedgerEntries =
+    dependencies.appendLedgerEntries ?? appendLlmLearningReviewLedgerEntries;
+  const writeBatch = dependencies.writeBatch ?? writeLearningReviewBatch;
+  const reportsDir = getRuntimePath("reports");
+  await reconcilePublishedLearningReviewBatches({ appendLedgerEntries, reportsDir });
   const options = parseOptions(context.args);
 
   if (options.ifNew) {
@@ -88,7 +100,6 @@ export async function executeQualityReviewLearnings(
   const reviewedLearningIds = await readLlmLearningReviewLedgerIds();
   const sourceLedgerWatermark = await readLlmLearningReviewLedgerWatermark();
   const reviewed = [];
-  const pendingLedgerEntries = [];
   const failures: Array<{ learning_id: string; reason: string; session_id: string }> = [];
   // Pre-LLM filter state: skips collected across the run, and a set of
   // normalized statements seen so far so cross-session duplicates are dropped.
@@ -205,14 +216,6 @@ export async function executeQualityReviewLearnings(
         }),
       );
     }
-    pendingLedgerEntries.push(
-      ...sessionReviews.map((review) => ({
-        learning_id: review.learning.learning_id,
-        verdict: review.review.verdict,
-        reviewed_at: new Date().toISOString(),
-        session_id: session.session_id,
-      })),
-    );
     for (const review of sessionReviews) {
       reviewedLearningIds.add(review.learning.learning_id);
     }
@@ -228,7 +231,7 @@ export async function executeQualityReviewLearnings(
   let generatedBatch: Awaited<ReturnType<typeof writeLearningReviewBatch>> | undefined;
   if (reviewed.length > 0) {
     const createdAt = new Date().toISOString();
-    generatedBatch = await writeLearningReviewBatch({
+    generatedBatch = await writeBatch({
       batch: buildLearningReviewBatch({
         createdAt,
         model,
@@ -236,10 +239,19 @@ export async function executeQualityReviewLearnings(
         runId: `${createdAt.replace(/[:.]/g, "-")}-${randomUUID()}`,
         sourceLedgerWatermark,
       }),
-      reportsDir: getRuntimePath("reports"),
+      reportsDir,
     });
-    await appendLlmLearningReviewLedgerEntries(pendingLedgerEntries);
-    await recordLlmBudgetUse(maxPer);
+    const publishedBatch = generatedBatch.batch;
+    await appendLedgerEntries(
+      publishedBatch.reviews.map((review) => ({
+        batch_id: publishedBatch.batch_id,
+        learning_id: review.learning_id,
+        verdict: review.verdict,
+        reviewed_at: publishedBatch.created_at,
+        session_id: review.session_id,
+      })),
+    );
+    await recordLlmBudgetUse(maxPer, { usageId: generatedBatch.batch.batch_id });
   }
 
   const providerFailed = reviewed.length === 0 && failures.length > 0;
@@ -286,6 +298,27 @@ export async function executeQualityReviewLearnings(
   );
 
   return 0;
+}
+
+async function reconcilePublishedLearningReviewBatches(input: {
+  appendLedgerEntries: typeof appendLlmLearningReviewLedgerEntries;
+  reportsDir: string;
+}): Promise<void> {
+  for (const { batch } of await listLearningReviewBatches(input.reportsDir)) {
+    await input.appendLedgerEntries(
+      batch.reviews.map((review) => ({
+        batch_id: batch.batch_id,
+        learning_id: review.learning_id,
+        verdict: review.verdict,
+        reviewed_at: batch.created_at,
+        session_id: review.session_id,
+      })),
+    );
+    await recordLlmBudgetUse(getDefaultMaxPerWindow(), {
+      usageId: batch.batch_id,
+      usedAt: batch.created_at,
+    });
+  }
 }
 
 type ReviewLearningsOptions = {

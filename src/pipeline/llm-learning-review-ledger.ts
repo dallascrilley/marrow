@@ -4,6 +4,7 @@ import { getRuntimePath } from "../config/paths.js";
 import type { LearningReviewVerdict } from "./llm-learning-review.js";
 
 export type LlmLearningReviewLedgerEntry = {
+  batch_id?: string;
   learning_id: string;
   verdict: LearningReviewVerdict;
   reviewed_at: string;
@@ -87,18 +88,25 @@ export async function readLlmLearningReviewLedgerIds(): Promise<Set<string>> {
 
 export async function appendLlmLearningReviewLedgerEntries(
   entries: readonly LlmLearningReviewLedgerEntry[],
-): Promise<void> {
+): Promise<number> {
   if (entries.length === 0) {
-    return;
+    return 0;
+  }
+
+  const existingIds = await readLlmLearningReviewLedgerIds();
+  const pendingEntries = entries.filter((entry) => !existingIds.has(entry.learning_id));
+  if (pendingEntries.length === 0) {
+    return 0;
   }
 
   const ledgerPath = getLlmLearningReviewLedgerPath();
   await mkdir(dirname(ledgerPath), { recursive: true });
   await appendFile(
     ledgerPath,
-    `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`,
+    `${pendingEntries.map((entry) => JSON.stringify(entry)).join("\n")}\n`,
     "utf8",
   );
+  return pendingEntries.length;
 }
 
 function isMissingFileError(error: unknown): boolean {
