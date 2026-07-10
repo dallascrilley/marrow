@@ -170,20 +170,28 @@ test("review-learnings excludes ledgered ids before caps and appends all verdict
         "ledger-session-2:learning-1",
       ]);
 
-      const sidecarLines = (
-        await readFile(join(runtimeRoot, "reports", "llm-learning-review.jsonl"), "utf8")
-      )
-        .trim()
-        .split("\n")
-        .map((line) => JSON.parse(line));
+      const payload = JSON.parse(messages.find((message) => message.includes('"count"')));
+      assert.equal(payload.generated_batch, true);
+      assert.match(payload.batch_id, /^sha256:[a-f0-9]{64}$/);
+      const batch = JSON.parse(await readFile(payload.batch_path, "utf8"));
+      assert.equal(batch.status, "generated");
+
+      const latestPointer = JSON.parse(await readFile(payload.latest_pointer, "utf8"));
+      assert.equal(latestPointer.batch_id, payload.batch_id);
+      assert.equal(latestPointer.batch_path, payload.batch_path);
       assert.deepEqual(
-        sidecarLines.map((entry) => entry.learning_id),
+        batch.reviews.map((entry) => entry.learning_id),
         ["ledger-session-1:learning-3", "ledger-session-2:learning-1"],
       );
       assert.equal(
-        sidecarLines[0].trigger,
+        batch.reviews[0].trigger,
         "When applying reviewed trigger for ledger-session-1:learning-3.",
       );
+      assert.deepEqual(batch.source_ledger_watermark, {
+        entry_count: 2,
+        last_learning_id: "ledger-session-1:learning-2",
+        last_reviewed_at: "2026-07-06T00:00:01.000Z",
+      });
 
       const ledgerLines = (await readFile(ledgerPath, "utf8"))
         .trim()
@@ -202,7 +210,6 @@ test("review-learnings excludes ledgered ids before caps and appends all verdict
       assert.equal(ledgerLines.at(-1).session_id, "ledger-session-2");
       assert.match(ledgerLines.at(-1).reviewed_at, /^\d{4}-\d{2}-\d{2}T/);
 
-      const payload = JSON.parse(messages.find((message) => message.includes('"count"')));
       assert.equal(payload.count, 2);
       assert.equal(payload.rejected, 1);
       assert.equal(payload.total_reviewed_learnings, 2);

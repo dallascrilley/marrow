@@ -10,8 +10,53 @@ export type LlmLearningReviewLedgerEntry = {
   session_id: string;
 };
 
+export type LlmLearningReviewLedgerWatermark = {
+  entry_count: number;
+  last_learning_id: string | null;
+  last_reviewed_at: string | null;
+};
+
 export function getLlmLearningReviewLedgerPath(): string {
   return join(getRuntimePath("reports"), "llm-learning-review-ledger.jsonl");
+}
+
+export async function readLlmLearningReviewLedgerWatermark(): Promise<LlmLearningReviewLedgerWatermark> {
+  try {
+    const contents = await readFile(getLlmLearningReviewLedgerPath(), "utf8");
+    let entryCount = 0;
+    let lastLearningId: string | null = null;
+    let lastReviewedAt: string | null = null;
+    for (const line of contents.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (trimmed.length === 0) {
+        continue;
+      }
+
+      const parsed = JSON.parse(trimmed) as {
+        learning_id?: unknown;
+        reviewed_at?: unknown;
+      };
+      entryCount += 1;
+      lastLearningId = typeof parsed.learning_id === "string" ? parsed.learning_id : null;
+      lastReviewedAt = typeof parsed.reviewed_at === "string" ? parsed.reviewed_at : null;
+    }
+
+    return {
+      entry_count: entryCount,
+      last_learning_id: lastLearningId,
+      last_reviewed_at: lastReviewedAt,
+    };
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return {
+        entry_count: 0,
+        last_learning_id: null,
+        last_reviewed_at: null,
+      };
+    }
+
+    throw error;
+  }
 }
 
 export async function readLlmLearningReviewLedgerIds(): Promise<Set<string>> {
