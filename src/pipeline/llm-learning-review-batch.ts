@@ -20,11 +20,11 @@ const ledgerWatermarkSchema = z.object({
   last_reviewed_at: z.string().nullable(),
 });
 
-const sha256Schema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
+export const learningReviewSha256Schema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 
 const batchReviewSchema = z.object({
   durability: z.string(),
-  input_content_hash: sha256Schema,
+  input_content_hash: learningReviewSha256Schema,
   keep: z.boolean(),
   learning_id: z.string().min(1),
   reason: z.string(),
@@ -38,7 +38,7 @@ const batchReviewSchema = z.object({
 
 export const learningReviewBatchSchema = z.object({
   schema_version: z.literal(learningReviewBatchSchemaVersion),
-  batch_id: sha256Schema,
+  batch_id: learningReviewSha256Schema,
   run_id: z.string().regex(/^[A-Za-z0-9._-]+$/),
   created_at: z.iso.datetime(),
   status: z.literal(learningReviewBatchStatus),
@@ -97,19 +97,14 @@ export function buildLearningReviewBatch(input: {
     reject: reviews.filter((review) => review.verdict === "reject").length,
     rewrite: reviews.filter((review) => review.verdict === "rewrite").length,
   };
-  const batchId = `sha256:${sha256Hex(
-    stableStringify({
-      schema_version: learningReviewBatchSchemaVersion,
-      model: input.model,
-      prompt_version: promptVersion,
-      validator_version: validatorVersion,
-      cache_schema_version: cacheSchemaVersion,
-      ordered_inputs: reviews.map((review) => ({
-        learning_id: review.learning_id,
-        input_content_hash: review.input_content_hash,
-      })),
-    }),
-  )}`;
+  const batchId = buildLearningReviewBatchId({
+    schemaVersion: learningReviewBatchSchemaVersion,
+    model: input.model,
+    promptVersion,
+    validatorVersion,
+    cacheSchemaVersion,
+    reviews,
+  });
 
   return learningReviewBatchSchema.parse({
     schema_version: learningReviewBatchSchemaVersion,
@@ -128,13 +123,83 @@ export function buildLearningReviewBatch(input: {
   });
 }
 
+function buildLearningReviewBatchId(input: {
+  schemaVersion: string;
+  model: string;
+  promptVersion: string;
+  validatorVersion: string;
+  cacheSchemaVersion: string;
+  reviews: readonly LearningReviewBatchReview[];
+}): string {
+  return `sha256:${sha256Hex(
+    stableStringify({
+      schema_version: input.schemaVersion,
+      model: input.model,
+      prompt_version: input.promptVersion,
+      validator_version: input.validatorVersion,
+      cache_schema_version: input.cacheSchemaVersion,
+      reviews: input.reviews,
+    }),
+  )}`;
+}
+
+function validateLearningReviewBatchIdentity(batch: LearningReviewBatch): LearningReviewBatch {
+  const expectedBatchId = buildLearningReviewBatchId({
+    schemaVersion: batch.schema_version,
+    model: batch.model,
+    promptVersion: batch.prompt_version,
+    validatorVersion: batch.validator_version,
+    cacheSchemaVersion: batch.cache_schema_version,
+    reviews: batch.reviews,
+  });
+  if (batch.batch_id !== expectedBatchId) {
+    throw new Error(
+      `Review batch content does not match batch_id ${batch.batch_id}; regenerate legacy or corrupted batches with quality review-learnings`,
+    );
+  }
+  return batch;
+}
+
 export function serializeLearningReviewBatch(batchInput: LearningReviewBatch): string {
-  const batch = learningReviewBatchSchema.parse(batchInput);
+  const batch = validateLearningReviewBatchIdentity(learningReviewBatchSchema.parse(batchInput));
   return `${JSON.stringify(batch, null, 2)}\n`;
 }
 
 export function parseLearningReviewBatch(contents: string): LearningReviewBatch {
-  return learningReviewBatchSchema.parse(JSON.parse(contents));
+  return validateLearningReviewBatchIdentity(learningReviewBatchSchema.parse(JSON.parse(contents)));
+}
+
+export async function readLearningReviewBatch(batchPath: string): Promise<LearningReviewBatch> {
+  return parseLearningReviewBatch(await readFile(batchPath, "utf8"));
+}
+
+export async function readLatestLearningReviewBatch(
+  reportsDir: string,
+): Promise<{ batch: LearningReviewBatch; batchPath: string }> {
+  const latestPointerPath = join(reportsDir, "llm-learning-review-latest.json");
+  const pointerSchema = z.object({
+    schema_version: z.literal(learningReviewBatchSchemaVersion),
+    batch_id: learningReviewSha256Schema,
+    run_id: z.string().regex(/^[A-Za-z0-9._-]+$/),
+    batch_path: z.string().min(1),
+    created_at: z.iso.datetime(),
+  });
+  const pointer = pointerSchema.parse(JSON.parse(await readFile(latestPointerPath, "utf8")));
+  let batch: LearningReviewBatch;
+  try {
+    batch = await readLearningReviewBatch(pointer.batch_path);
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      throw new Error(
+        `Latest review batch pointer references missing file ${pointer.batch_path}; pass --batch <path> to select an existing batch`,
+      );
+    }
+    throw error;
+  }
+  if (batch.batch_id !== pointer.batch_id || batch.run_id !== pointer.run_id) {
+    throw new Error(`Latest review batch pointer does not match ${pointer.batch_path}`);
+  }
+  return { batch, batchPath: pointer.batch_path };
 }
 
 export async function writeLearningReviewBatch(input: {
@@ -145,7 +210,7 @@ export async function writeLearningReviewBatch(input: {
   batchPath: string;
   latestPointerPath: string;
 }> {
-  const batch = learningReviewBatchSchema.parse(input.batch);
+  const batch = validateLearningReviewBatchIdentity(learningReviewBatchSchema.parse(input.batch));
   const batchPath = join(input.reportsDir, "llm-learning-review-batches", `${batch.run_id}.json`);
   const latestPointerPath = join(input.reportsDir, "llm-learning-review-latest.json");
   await mkdir(dirname(batchPath), { recursive: true });

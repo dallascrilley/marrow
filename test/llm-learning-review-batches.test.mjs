@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -10,6 +10,7 @@ import {
   buildLearningReviewInputContentHash,
   listLearningReviewBatches,
   parseLearningReviewBatch,
+  readLatestLearningReviewBatch,
   serializeLearningReviewBatch,
   writeLearningReviewBatch,
 } from "../dist/pipeline/llm-learning-review-batch.js";
@@ -102,6 +103,21 @@ test("review batch identity changes when ordered inputs change", () => {
   assert.notEqual(first.batch_id, reordered.batch_id);
 });
 
+test("review batch identity changes when reviewed decisions change", () => {
+  const first = build();
+  const changedDecision = build({
+    reviews: [
+      {
+        ...reviewedEntries[0],
+        suggested_statement: "Different reviewed statement A.",
+      },
+      reviewedEntries[1],
+    ],
+  });
+
+  assert.notEqual(first.batch_id, changedDecision.batch_id);
+});
+
 test("review batch identity changes with prompt contract version", () => {
   const first = build();
   const changedPrompt = build({ promptVersion: "llm-learning-review-prompt-v3" });
@@ -122,6 +138,25 @@ test("review batch serialization preserves metadata and verdict counts", () => {
     last_learning_id: "prior-learning",
     last_reviewed_at: "2026-07-09T19:00:00.000Z",
   });
+});
+
+test("review batch parsing rejects decisions that do not match batch identity", () => {
+  const batch = build();
+  const tampered = {
+    ...batch,
+    reviews: [
+      {
+        ...batch.reviews[0],
+        suggested_statement: "Tampered reviewed statement.",
+      },
+      batch.reviews[1],
+    ],
+  };
+
+  assert.throws(
+    () => parseLearningReviewBatch(`${JSON.stringify(tampered)}\n`),
+    /does not match batch_id/,
+  );
 });
 
 test("identical content from repeated runs writes distinct immutable artifacts", async () => {
@@ -153,6 +188,33 @@ test("identical content from repeated runs writes distinct immutable artifacts",
       writeLearningReviewBatch({ batch: first.batch, reportsDir }),
       (error) => error?.code === "EEXIST",
       "an existing run artifact is never overwritten",
+    );
+  } finally {
+    await rm(reportsDir, { force: true, recursive: true });
+  }
+});
+
+test("latest review batch reports a missing target with recovery guidance", async () => {
+  const reportsDir = await mkdtemp(join(tmpdir(), "asd-review-latest-missing-"));
+  try {
+    const batch = build();
+    const missingPath = join(reportsDir, "llm-learning-review-batches", "missing.json");
+    await mkdir(reportsDir, { recursive: true });
+    await writeFile(
+      join(reportsDir, "llm-learning-review-latest.json"),
+      `${JSON.stringify({
+        schema_version: batch.schema_version,
+        batch_id: batch.batch_id,
+        run_id: batch.run_id,
+        batch_path: missingPath,
+        created_at: batch.created_at,
+      })}\n`,
+      "utf8",
+    );
+
+    await assert.rejects(
+      readLatestLearningReviewBatch(reportsDir),
+      /pointer references missing file.*pass --batch/s,
     );
   } finally {
     await rm(reportsDir, { force: true, recursive: true });

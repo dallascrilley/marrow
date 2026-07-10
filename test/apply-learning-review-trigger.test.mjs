@@ -7,6 +7,11 @@ import test from "node:test";
 import { executeQualityApplyLearningReview } from "../dist/commands/quality-apply-learning-review.js";
 import { createLedger, upsertSourceSession } from "../dist/db/ledger.js";
 import { learningFixture, sourceSessionFixture } from "../dist/models/canonical.js";
+import {
+  buildLearningReviewBatch,
+  buildLearningReviewInputContentHash,
+  writeLearningReviewBatch,
+} from "../dist/pipeline/llm-learning-review-batch.js";
 import { hashToProjectId } from "../dist/v2/project/resolve.js";
 import { getProjectKnowledgeSessionPath } from "../dist/writers/knowledge-writer.js";
 
@@ -48,29 +53,39 @@ test("apply-learning-review persists reconstructed triggers", async () => {
     await mkdir(dirname(learningPath), { recursive: true });
     await writeFile(learningPath, `${JSON.stringify(original)}\n`, "utf8");
 
-    const sidecarPath = join(runtimeRoot, "reports", "llm-learning-review.jsonl");
-    await mkdir(dirname(sidecarPath), { recursive: true });
-    await writeFile(
-      sidecarPath,
-      `${JSON.stringify({
-        durability: "durable",
-        keep: true,
-        learning_id: original.learning_id,
-        reason: "Reviewed trigger reconstruction.",
-        scope_key: original.scope_key,
-        session_id: session.session_id,
-        statement: original.statement,
-        suggested_statement: "Use reconstructed triggers when applying reviewed learnings.",
-        trigger: "When applying reviewed project learnings to the instinct store.",
-        verdict: "rewrite",
-      })}\n`,
-      "utf8",
-    );
+    const generated = await writeLearningReviewBatch({
+      batch: buildLearningReviewBatch({
+        createdAt: "2026-07-09T23:00:00.000Z",
+        model: "openrouter/auto",
+        reviews: [
+          {
+            durability: "durable",
+            input_content_hash: buildLearningReviewInputContentHash(original),
+            keep: true,
+            learning_id: original.learning_id,
+            reason: "Reviewed trigger reconstruction.",
+            scope_key: original.scope_key,
+            session_id: session.session_id,
+            statement: original.statement,
+            suggested_statement: "Use reconstructed triggers when applying reviewed learnings.",
+            trigger: "When applying reviewed project learnings to the instinct store.",
+            verdict: "rewrite",
+          },
+        ],
+        runId: "apply-trigger",
+        sourceLedgerWatermark: {
+          entry_count: 0,
+          last_learning_id: null,
+          last_reviewed_at: null,
+        },
+      }),
+      reportsDir: join(runtimeRoot, "reports"),
+    });
 
     const messages = [];
     const exitCode = await executeQualityApplyLearningReview(
       {
-        args: ["--input", sidecarPath],
+        args: ["--batch", generated.batchPath],
         commandPath: ["quality", "apply-learning-review"],
         output: {
           error: (message) => messages.push(message),

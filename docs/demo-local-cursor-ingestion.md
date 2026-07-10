@@ -41,8 +41,9 @@ cp test/fixtures/cursor/transcripts/session-e2e.jsonl \
   history, review queue state, deletion candidate, and summary preview.
 - `delete candidates` includes a raw `candidates` array and a `decisions` array.
   The fixture should be `ready`, with no missing required artifacts.
-- `memory:pipeline:dry-run` prints JSON with `success: true`, audit and export
-  steps, and `export_path`.
+- `memory:pipeline:dry-run` prints JSON with `success: true`, a skipped apply
+  step unless `--review-batch <path>` is supplied, the audit/export steps, and
+  `export_path`.
 
 ## Generated Paths
 

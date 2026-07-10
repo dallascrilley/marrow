@@ -10,7 +10,7 @@ const cliPath = join(projectRoot, "dist", "cli.js");
 const options = {
   limit: parseOption("--limit") ?? "100",
   requireReview: args.includes("--require-review"),
-  reviewInput: parseOption("--review-input"),
+  reviewBatch: parseOption("--review-batch"),
   root: parseOption("--root"),
 };
 
@@ -21,38 +21,43 @@ if (options.root) {
 
 const runtimeRoot =
   env.AGENT_SESSION_DISTILLERY_ROOT || join(process.env.HOME ?? "", ".agent-session-distillery");
-const defaultReviewInput = join(runtimeRoot, "reports", "llm-learning-review.jsonl");
-const reviewInput = options.reviewInput ? resolve(options.reviewInput) : defaultReviewInput;
+const reviewBatch = options.reviewBatch ? resolve(options.reviewBatch) : undefined;
 
 await assertBuiltCli();
 
 const steps = [];
 steps.push(runStep("quality audit", ["quality", "audit", "--limit", options.limit]));
 
-const reviewSidecarExists = await pathExists(reviewInput);
+const reviewBatchExists = reviewBatch !== undefined && (await pathExists(reviewBatch));
 let applyOccurred = false;
-if (reviewSidecarExists) {
+if (reviewBatchExists) {
   steps.push(
-    runStep("apply learning review", ["quality", "apply-learning-review", "--input", reviewInput]),
+    runStep("apply learning review", ["quality", "apply-learning-review", "--batch", reviewBatch]),
   );
   applyOccurred = steps.at(-1)?.status === "passed";
 } else if (options.requireReview) {
   steps.push({
-    command: `test -f ${reviewInput}`,
+    command: reviewBatch === undefined ? "test -n $REVIEW_BATCH" : `test -f ${reviewBatch}`,
     exit_code: 1,
     name: "apply learning review",
     status: "failed",
-    stderr: `Missing review sidecar: ${reviewInput}`,
+    stderr:
+      reviewBatch === undefined
+        ? "Missing --review-batch <path>"
+        : `Missing review batch: ${reviewBatch}`,
     stdout: "",
   });
 } else {
   steps.push({
-    command: `test -f ${reviewInput}`,
+    command: reviewBatch === undefined ? "test -n $REVIEW_BATCH" : `test -f ${reviewBatch}`,
     exit_code: 0,
     name: "apply learning review",
     status: "skipped",
     stderr: "",
-    stdout: `No review sidecar found at ${reviewInput}; export will use reviewed learnings only if they already exist, otherwise deterministic project learnings.`,
+    stdout:
+      reviewBatch === undefined
+        ? "No review batch selected; export will use existing reviewed learnings when available, otherwise deterministic project learnings."
+        : `No review batch found at ${reviewBatch}; export will use existing reviewed learnings when available, otherwise deterministic project learnings.`,
   });
 }
 
@@ -63,7 +68,7 @@ const summary = {
   apply_occurred: applyOccurred,
   dry_run: true,
   export_path: join(runtimeRoot, "exports", "wiki-memory", "reviewed-memory.jsonl"),
-  review_input: reviewInput,
+  review_batch: reviewBatch ?? null,
   root: runtimeRoot,
   steps,
   success: failed.length === 0,

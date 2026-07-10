@@ -7,6 +7,11 @@ import test from "node:test";
 import { executeQualityApplyLearningReview } from "../dist/commands/quality-apply-learning-review.js";
 import { createLedger, upsertSourceSession } from "../dist/db/ledger.js";
 import { learningFixture, sourceSessionFixture } from "../dist/models/canonical.js";
+import {
+  buildLearningReviewBatch,
+  buildLearningReviewInputContentHash,
+  writeLearningReviewBatch,
+} from "../dist/pipeline/llm-learning-review-batch.js";
 import { saveInstinct } from "../dist/v2/instinct/store.js";
 import { syncReviewedLearningsToInstinctStore } from "../dist/v2/learning/sync-reviewed.js";
 import {
@@ -285,13 +290,14 @@ test("apply-learning-review refreshes the promotion queue once after the batch",
       await saveInstinct("proj-beta0002", makeInstinct("proj-beta0002", { confidence: 0.87 }));
       assert.deepEqual(await readPromotionQueue(), []);
 
-      const sidecarEntries = [];
+      const reviews = [];
       for (const session of sessions) {
         upsertSourceSession(database, session);
         const learning = makeReviewedLearning(session, `${session.session_id}:learning-1`);
         await writeProjectLearning(session.project_key, session.session_id, learning);
-        sidecarEntries.push({
+        reviews.push({
           durability: "durable",
+          input_content_hash: buildLearningReviewInputContentHash(learning),
           keep: true,
           learning_id: learning.learning_id,
           reason: "Durable project rule.",
@@ -304,16 +310,24 @@ test("apply-learning-review refreshes the promotion queue once after the batch",
         });
       }
 
-      const sidecarPath = join(runtimeRoot, "reports", "llm-learning-review.jsonl");
-      await mkdir(dirname(sidecarPath), { recursive: true });
-      await writeFile(
-        sidecarPath,
-        `${sidecarEntries.map((entry) => JSON.stringify(entry)).join("\n")}\n`,
-      );
+      const generated = await writeLearningReviewBatch({
+        batch: buildLearningReviewBatch({
+          createdAt: fixedNow,
+          model: "openrouter/auto",
+          reviews,
+          runId: "promotion-refresh",
+          sourceLedgerWatermark: {
+            entry_count: 0,
+            last_learning_id: null,
+            last_reviewed_at: null,
+          },
+        }),
+        reportsDir: join(runtimeRoot, "reports"),
+      });
 
       const exitCode = await executeQualityApplyLearningReview(
         {
-          args: ["--input", sidecarPath],
+          args: ["--batch", generated.batchPath],
           commandPath: ["quality", "apply-learning-review"],
           output: { error: () => {}, info: () => {} },
         },

@@ -102,12 +102,12 @@ const commandTree: Record<string, CommandDefinition> = {
       },
       "review-learnings": {
         description:
-          "Review project learnings with OpenRouter LLM memory lint and write a sidecar report. Pass --if-new to skip when nothing is pending; --max-per 5/24h for sliding-window budget.",
+          "Review project learnings with OpenRouter LLM memory lint and write an immutable batch. Pass --if-new to skip when nothing is pending; --max-per 5/24h for sliding-window budget.",
         execute: async (context) => withLedger(context, executeQualityReviewLearnings),
       },
       "apply-learning-review": {
         description:
-          "Apply an LLM learning-review sidecar into knowledge/projects-reviewed without mutating originals.",
+          "Apply an explicit immutable review batch into knowledge/projects-reviewed. Pass --batch <path> or --latest.",
         execute: async (context) => withLedger(context, executeQualityApplyLearningReview),
       },
       "cost-report": {
