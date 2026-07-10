@@ -1,6 +1,6 @@
 # Launch Proof Index
 
-Date: 2026-06-16
+Date: 2026-07-09
 Repo: `/Users/dallascrilley/Code/agent-session-distillery`
 
 Operator-facing index for v1 local transcript launch proof and v2 atomic-instinct
@@ -12,6 +12,10 @@ memory pipeline proof. Canonical gate definitions:
 **v1:** P0 validated — six local Cursor transcript gates.
 
 **v2:** P0 validated — five atomic-instinct + vault-render gates.
+
+**Reviewed-memory reliability:** immutable exact-batch selection, stable duplicate
+apply, interrupted retry convergence, and a bounded live provider batch — validated
+2026-07-09.
 
 **P1 (session index):** export-index, LLM topic low-signal gate, resummarize corpus upgrade (incl. `npm run corpus:resummarize`), ingest batch resilience — validated 2026-05-23 via unit tests.
 
@@ -29,6 +33,7 @@ Remaining out of scope: remote Cursor background-agent chats.
 | Deletion-readiness safety | Ready/blocked candidates with dry-run delete apply. | `/tmp/agent-session-distillery/2026-05-18_deletion-readiness/SUMMARY.md` |
 | Quality audit signal | Audit counts, recommendations, worst-session checks. | `/tmp/agent-session-distillery/2026-05-18_quality-audit/SUMMARY.md` |
 | Reviewed memory export | apply-learning-review + export-wiki JSONL. | `/tmp/agent-session-distillery/2026-05-18_reviewed-memory-export/SUMMARY.md` |
+| Exactly-once reviewed-memory apply | Duplicate hashes/timestamps stable; skipped generation unchanged; retry converges; one-learning live batch is exact-bound. | `docs/ops/proofs/2026-07-09-review-apply-exactly-once.md` |
 | v2 memory pipeline e2e | ingest → apply-learning-review → instinct store → export-wiki → push-wiki + MEMORY.md. | `/tmp/agent-session-distillery/2026-05-22_v2-memory-pipeline/SUMMARY.md` |
 | v2 unit tests | Instinct store, project-id, bundle replay, render, decay. | `npm test` (`test/v2-*.test.mjs`) |
 | Session index export | `export-index` writes `asd.session_index.v1`. | `test/cli.test.mjs` |
@@ -57,14 +62,15 @@ npm install
 npm run build
 npm run proof:smoke          # v1 + v2
 node scripts/proof-smoke.mjs --suite v2   # v2 only
+node scripts/proof-review-apply-exactly-once.mjs --live
 ```
 
 Scheduled pipeline recipe: [`docs/recipes/scheduled-memory-pipeline.md`](recipes/scheduled-memory-pipeline.md).
 
 ## CI note
 
-GitHub Actions workflow removed 2026-05-22 per operator preference. Local proof
-is authoritative: `npm test` and `npm run proof:smoke`.
+Local behavioral proof complements the pull-request CI gate. Run `script/cibuild`
+before opening a PR and confirm the PR's `ci` check is green before merging.
 
 ## Notes
 
