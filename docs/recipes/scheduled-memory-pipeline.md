@@ -179,3 +179,14 @@ Or v2-only:
 ```bash
 node scripts/proof-smoke.mjs --suite v2
 ```
+
+To revalidate the immutable-batch and transaction-ledger guarantees, run the
+bounded proof separately. It uses an isolated runtime; `--live` reviews at most
+one fixture learning with a `1/24h` count cap and `$0.05/24h` spend cap.
+
+```bash
+OPENROUTER_API_KEY=<secret> node scripts/proof-review-apply-exactly-once.mjs --live
+```
+
+The latest checked-in receipt is
+[`docs/ops/proofs/2026-07-09-review-apply-exactly-once.md`](../ops/proofs/2026-07-09-review-apply-exactly-once.md).
