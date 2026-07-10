@@ -1,8 +1,8 @@
 ---
 project: agent-session-distillery
 owner: dallascrilley
-last_reviewed: 2026-06-14
-version: 1.1.0
+last_reviewed: 2026-07-09
+version: 1.2.0
 ---
 
 # Launch Criteria
@@ -60,12 +60,21 @@ retention workflows.
 
 - id: memory-export-reviewed
   feature: Reviewed memory records can be exported for downstream wiki ingestion without mutating deterministic project-learning originals.
-  test: Run `node dist/cli.js quality apply-learning-review`, then `node dist/cli.js memory export-wiki` against a sandbox with reviewed project learnings.
+  test: Run `node dist/cli.js quality apply-learning-review --batch <batch-path>`, then `node dist/cli.js memory export-wiki` against a sandbox with reviewed project learnings.
   proof_required: Command output plus generated `knowledge/projects-reviewed/` and wiki export JSONL artifact paths.
   proof_level: B
   status: validated
   validated_on: 2026-05-18
   proof: /tmp/agent-session-distillery/2026-05-18_reviewed-memory-export/SUMMARY.md
+
+- id: review-apply-exactly-once
+  feature: Reviewed-memory application is bound to an immutable batch, repeated application is a stable no-op, and interrupted application converges through an append-only ledger.
+  test: Run `node scripts/proof-review-apply-exactly-once.mjs --live` with the OpenRouter credential sourced from the operator secret store.
+  proof_required: Duplicate output hashes and timestamps, a skipped-generation no-change snapshot, failed/retry ledger transitions, and a one-learning live batch with count and spend caps.
+  proof_level: B
+  status: validated
+  validated_on: 2026-07-09
+  proof: docs/ops/proofs/2026-07-09-review-apply-exactly-once.md
 
 ## P1 - Launch-week polish
 
