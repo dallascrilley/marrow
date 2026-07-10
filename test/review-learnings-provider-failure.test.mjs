@@ -84,8 +84,10 @@ test("review-learnings does not poison the sidecar or budget when the provider f
       assert.equal(payload.skipped, true);
       assert.equal(payload.skip_reason, "llm_provider_error");
       assert.equal(payload.total_reviewed_learnings, 0, "budget counter not inflated by failures");
+      assert.equal(payload.generated_batch, false);
+      assert.equal(payload.batch_path, null);
 
-      // The sidecar must not be created/clobbered with fake rejections.
+      // No review artifact is created for a failed run.
       const sidecarPath = join(runtimeRoot, "reports", "llm-learning-review.jsonl");
       assert.equal(await fileExists(sidecarPath), false, "sidecar not written on total failure");
 
@@ -201,10 +203,10 @@ test("review-learnings records telemetry for successful calls before a later pro
       assert.equal(payload.total_reviewed_learnings, 1);
       assert.equal(payload.skipped, undefined);
 
-      const sidecarPath = join(runtimeRoot, "reports", "llm-learning-review.jsonl");
-      const sidecarLines = (await readFile(sidecarPath, "utf8")).trim().split("\n");
-      assert.equal(sidecarLines.length, 1);
-      assert.equal(JSON.parse(sidecarLines[0]).learning_id, "learning-1");
+      assert.equal(payload.generated_batch, true);
+      const batch = JSON.parse(await readFile(payload.batch_path, "utf8"));
+      assert.equal(batch.count, 1);
+      assert.equal(batch.reviews[0].learning_id, "learning-1");
 
       const telemetryPath = join(runtimeRoot, "reports", "llm-telemetry.jsonl");
       const telemetryLines = (await readFile(telemetryPath, "utf8")).trim().split("\n");

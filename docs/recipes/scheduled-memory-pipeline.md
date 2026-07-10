@@ -11,8 +11,8 @@ ingest sync --resume --source <adapter>
   → check                                  # read-only integrity; exit non-zero on violations
   → pipeline gate --skip-ingest             # after ingest; LLM + budget + integrity rollup
   → quality audit --limit 100
-  → [optional] quality review-learnings --if-new --max-total-learnings 100   # requires OPENROUTER_API_KEY
-  → quality apply-learning-review         # writes projects-reviewed + v2 instincts
+  → [optional] quality review-learnings --if-new --max-total-learnings 100   # emits immutable batch_path
+  → quality apply-learning-review --batch <that-batch-path>                 # only when this run generated one
   → memory export-wiki
   → memory push-wiki                      # requires ~/vault or ASD_VAULT_ROOT
 ```
@@ -122,6 +122,12 @@ launchctl load ~/Library/LaunchAgents/com.dallascrilley.asd-memory-pipeline.plis
 
 `scripts/scheduled-memory-pipeline.sh` runs the steps above and exits
 non-zero on the first failure so cron/launchd can surface regressions.
+The wrapper captures the review command's JSON result and passes its exact
+`batch_path` to apply. A skipped, budget-blocked, failed, or zero-review run
+never falls back to an older batch. Apply retries remain safe because completed
+batches are no-ops and incomplete batches converge through the append-only
+apply ledger.
+
 
 ## Operator-local launcher (paid tier)
 
@@ -154,7 +160,9 @@ Consequences:
 
 - **Integrity check fails:** `check` exits non-zero on duplicate/orphan findings; the scheduled wrapper stops before audit/LLM steps. Inspect with `asd check` (human output) or `asd check --json`. `pipeline gate` also surfaces `session_integrity` and sets `recommendations.run_check` when violations exist.
 - **Ingest fails:** later steps still see stale data; check adapter paths and `ingest sync` logs.
-- **review-learnings skipped:** `apply-learning-review` only promotes rows already in `reports/llm-learning-review.jsonl` or existing reviewed sidecars.
+- **review-learnings skipped or budget-blocked:** no batch is generated, so the scheduled wrapper skips apply and continues with the existing reviewed-memory export.
+- **apply interrupted:** rerun the explicit `quality apply-learning-review --batch <batch-path>` command shown in the prior pipeline log; the apply ledger records `applying`/`failed`/`applied` transitions and the retry merges by learning id.
+- **credentials absent:** the wrapper skips both review and apply; it never applies a previous batch implicitly.
 - **Vault missing:** `memory push-wiki` exits 0 with a notice; export JSONL still updates under the runtime root.
 - **Partial adapter failure:** run adapters independently; one bad source should not block others.
 

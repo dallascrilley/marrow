@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
@@ -14,10 +15,20 @@ import {
   getDefaultMaxUsd,
   recordLlmBudgetUse,
 } from "../pipeline/llm-budget.js";
-import { reviewLearningsBatchedWithOpenRouter } from "../pipeline/llm-learning-review.js";
+import {
+  defaultOpenRouterLearningReviewModel,
+  reviewLearningsBatchedWithOpenRouter,
+} from "../pipeline/llm-learning-review.js";
+import {
+  buildLearningReviewBatch,
+  buildLearningReviewInputContentHash,
+  listLearningReviewBatches,
+  writeLearningReviewBatch,
+} from "../pipeline/llm-learning-review-batch.js";
 import {
   appendLlmLearningReviewLedgerEntries,
   readLlmLearningReviewLedgerIds,
+  readLlmLearningReviewLedgerWatermark,
 } from "../pipeline/llm-learning-review-ledger.js";
 import { appendLlmTelemetry, buildLlmTelemetryRecord } from "../pipeline/llm-telemetry.js";
 import { countPendingLlmReview } from "../pipeline/pipeline-gate.js";
@@ -25,11 +36,23 @@ import { isLowSignalTopic } from "../pipeline/summarize.js";
 import { getProjectKnowledgeSessionPath } from "../writers/knowledge-writer.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
 
+type QualityReviewLearningsDependencies = {
+  appendLedgerEntries?: typeof appendLlmLearningReviewLedgerEntries;
+  writeBatch?: typeof writeLearningReviewBatch;
+};
+
 export async function executeQualityReviewLearnings(
   context: CommandContext,
   database: DatabaseSync,
+  dependencies: QualityReviewLearningsDependencies = {},
 ): Promise<number> {
+  const appendLedgerEntries =
+    dependencies.appendLedgerEntries ?? appendLlmLearningReviewLedgerEntries;
+  const writeBatch = dependencies.writeBatch ?? writeLearningReviewBatch;
+  const reportsDir = getRuntimePath("reports");
   const options = parseOptions(context.args);
+  const maxPer = options.maxPer ?? getDefaultMaxPerWindow();
+  await reconcilePublishedLearningReviewBatches({ appendLedgerEntries, maxPer, reportsDir });
 
   if (options.ifNew) {
     const pending = await countPendingLlmReview();
@@ -50,7 +73,6 @@ export async function executeQualityReviewLearnings(
     }
   }
 
-  const maxPer = options.maxPer ?? getDefaultMaxPerWindow();
   const maxUsd = options.maxUsd ?? getDefaultMaxUsd();
   const budget = await assessLlmBudget(maxPer);
   const usdBudget = await assessUsdBudget(maxUsd);
@@ -76,6 +98,7 @@ export async function executeQualityReviewLearnings(
 
   const sessions = listSourceSessions(database).slice(0, options.limit);
   const reviewedLearningIds = await readLlmLearningReviewLedgerIds();
+  const sourceLedgerWatermark = await readLlmLearningReviewLedgerWatermark();
   const reviewed = [];
   const failures: Array<{ learning_id: string; reason: string; session_id: string }> = [];
   // Pre-LLM filter state: skips collected across the run, and a set of
@@ -171,6 +194,7 @@ export async function executeQualityReviewLearnings(
 
     for (const review of sessionReviews) {
       reviewed.push({
+        input_content_hash: buildLearningReviewInputContentHash(review.learning),
         learning_id: review.learning.learning_id,
         reason: review.review.reason,
         scope_key: review.learning.scope_key,
@@ -192,14 +216,6 @@ export async function executeQualityReviewLearnings(
         }),
       );
     }
-    await appendLlmLearningReviewLedgerEntries(
-      sessionReviews.map((review) => ({
-        learning_id: review.learning.learning_id,
-        verdict: review.review.verdict,
-        reviewed_at: new Date().toISOString(),
-        session_id: session.session_id,
-      })),
-    );
     for (const review of sessionReviews) {
       reviewedLearningIds.add(review.learning.learning_id);
     }
@@ -210,21 +226,32 @@ export async function executeQualityReviewLearnings(
     }
   }
 
-  if (reviewedLearningCount > 0) {
-    await recordLlmBudgetUse(maxPer);
-  }
-
-  const outputPath = join(getRuntimePath("reports"), "llm-learning-review.jsonl");
-  // Only overwrite the sidecar when there are real reviews. If every call
-  // failed (e.g. provider quota), preserve any prior good sidecar instead of
-  // clobbering it with an empty file.
+  const model =
+    options.model ?? process.env.OPENROUTER_MODEL ?? defaultOpenRouterLearningReviewModel;
+  let generatedBatch: Awaited<ReturnType<typeof writeLearningReviewBatch>> | undefined;
   if (reviewed.length > 0) {
-    await mkdir(dirname(outputPath), { recursive: true });
-    await writeFile(
-      outputPath,
-      `${reviewed.map((entry) => JSON.stringify(entry)).join("\n")}\n`,
-      "utf8",
+    const createdAt = new Date().toISOString();
+    generatedBatch = await writeBatch({
+      batch: buildLearningReviewBatch({
+        createdAt,
+        model,
+        reviews: reviewed,
+        runId: `${createdAt.replace(/[:.]/g, "-")}-${randomUUID()}`,
+        sourceLedgerWatermark,
+      }),
+      reportsDir,
+    });
+    const publishedBatch = generatedBatch.batch;
+    await appendLedgerEntries(
+      publishedBatch.reviews.map((review) => ({
+        batch_id: publishedBatch.batch_id,
+        learning_id: review.learning_id,
+        verdict: review.verdict,
+        reviewed_at: publishedBatch.created_at,
+        session_id: review.session_id,
+      })),
     );
+    await recordLlmBudgetUse(maxPer, { usageId: generatedBatch.batch.batch_id });
   }
 
   const providerFailed = reviewed.length === 0 && failures.length > 0;
@@ -245,8 +272,12 @@ export async function executeQualityReviewLearnings(
               failure_reason: (terminalFailureReason ?? failures[0]?.reason ?? "").slice(0, 200),
             }
           : {}),
-        model: options.model ?? process.env.OPENROUTER_MODEL ?? "openai/gpt-5-nano",
-        path: outputPath,
+        model,
+        batch_id: generatedBatch?.batch.batch_id ?? null,
+        batch_path: generatedBatch?.batchPath ?? null,
+        batch_status: generatedBatch?.batch.status ?? null,
+        generated_batch: generatedBatch !== undefined,
+        latest_pointer: generatedBatch?.latestPointerPath ?? null,
         rejected: reviewed.filter((entry) => !entry.keep).length,
         rewrites: reviewed.filter((entry) => entry.verdict === "rewrite").length,
         skipped_pre_llm: prefilterSkipped.length,
@@ -267,6 +298,28 @@ export async function executeQualityReviewLearnings(
   );
 
   return 0;
+}
+
+async function reconcilePublishedLearningReviewBatches(input: {
+  appendLedgerEntries: typeof appendLlmLearningReviewLedgerEntries;
+  maxPer: string;
+  reportsDir: string;
+}): Promise<void> {
+  for (const { batch } of await listLearningReviewBatches(input.reportsDir)) {
+    await input.appendLedgerEntries(
+      batch.reviews.map((review) => ({
+        batch_id: batch.batch_id,
+        learning_id: review.learning_id,
+        verdict: review.verdict,
+        reviewed_at: batch.created_at,
+        session_id: review.session_id,
+      })),
+    );
+    await recordLlmBudgetUse(input.maxPer, {
+      usageId: batch.batch_id,
+      usedAt: batch.created_at,
+    });
+  }
 }
 
 type ReviewLearningsOptions = {

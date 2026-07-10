@@ -24,18 +24,26 @@ echo "[asd] pipeline gate (--skip-ingest; ingest already ran above)"
 echo "[asd] quality audit"
 "${CLI[@]}" quality audit --limit 100
 
-REVIEW_INPUT="${AGENT_SESSION_DISTILLERY_ROOT:-$HOME/.agent-session-distillery}/reports/llm-learning-review.jsonl"
 if [[ -n "${OPENROUTER_API_KEY:-}" ]]; then
   echo "[asd] quality review-learnings (--if-new --max-per ${ASD_LLM_MAX_PER:-5/24h})"
-  "${CLI[@]}" quality review-learnings --if-new --max-per "${ASD_LLM_MAX_PER:-5/24h}"
-elif [[ -f "$REVIEW_INPUT" ]]; then
-  echo "[asd] skipping review-learnings (no OPENROUTER_API_KEY; sidecar present)"
+  REVIEW_OUTPUT="$("${CLI[@]}" quality review-learnings --if-new --max-per "${ASD_LLM_MAX_PER:-5/24h}")"
+  printf '%s\n' "$REVIEW_OUTPUT"
+  BATCH_PATH="$(node -e '
+const fs = require("node:fs");
+const payload = JSON.parse(fs.readFileSync(0, "utf8"));
+if (payload.generated_batch === true && typeof payload.batch_path === "string") {
+  process.stdout.write(payload.batch_path);
+}
+' <<<"$REVIEW_OUTPUT")"
+  if [[ -n "$BATCH_PATH" ]]; then
+    echo "[asd] quality apply-learning-review --batch '$BATCH_PATH'"
+    "${CLI[@]}" quality apply-learning-review --batch "$BATCH_PATH"
+  else
+    echo "[asd] no batch generated; skipping apply-learning-review"
+  fi
 else
-  echo "[asd] skipping review-learnings (no OPENROUTER_API_KEY; no sidecar)"
+  echo "[asd] skipping review-learnings and apply-learning-review (no OPENROUTER_API_KEY)"
 fi
-
-echo "[asd] quality apply-learning-review"
-"${CLI[@]}" quality apply-learning-review
 
 echo "[asd] memory export-wiki"
 "${CLI[@]}" memory export-wiki

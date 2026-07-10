@@ -307,7 +307,7 @@ The default audit reports deletion-readiness counts, blocked reasons, issue coun
 recommendations, deterministic project-learning distribution metrics, knowledge
 artifact presence, and the worst sessions by deterministic output-quality checks.
 
-Review deterministic project learnings with an OpenRouter memory-lint sidecar:
+Review deterministic project learnings with OpenRouter memory lint:
 
 ```bash
 # Source the key from 1Password: "OpenRouter API Credentials - agent-session-distillery"
@@ -320,29 +320,35 @@ node dist/cli.js quality review-learnings --refresh-llm
 node dist/cli.js quality review-learnings --max-usd 1/24h --batch-size 10
 ```
 
-This writes `reports/llm-learning-review.jsonl` as the per-run input for
-`quality apply-learning-review`; the apply command does not read the ledger.
-Each LLM-reviewed learning id is also appended to the durable
+Each non-empty review run writes a unique immutable JSON batch under
+`reports/llm-learning-review-batches/`, updates
+`reports/llm-learning-review-latest.json`, and prints `batch_id`, `batch_path`,
+and `generated_batch` in its JSON result. Skipped, budget-blocked, failed, and
+zero-review runs report `generated_batch: false` and do not publish a batch.
+Each reviewed learning id is also appended to the durable
 `reports/llm-learning-review-ledger.jsonl`, so later sweeps skip already
 reviewed learnings before applying review caps. The ledger filter is separate
 from the LLM response cache: `--no-cache` bypasses cache reads/writes but still
 skips ledgered ids, while `--refresh-llm` refreshes cache entries only for ids
 not already in the ledger. LLM reviews are cached by exact
 learning/model/prompt/validator input under `cache/llm-learning-review/` by
-default. Provider or transport failures are reported in the command output and
-left pending for retry; they are not written as rejected review entries. If the
-append-only ledger is manually corrupted or truncated, unreadable entries fail
-open as unreviewed work and may be reviewed again.
+default. Provider or transport failures stay pending for retry.
 
 **Cost controls.** Reviews use a minimal OpenRouter reasoning effort (the memory-lint is a trivial classify task, so reasoning tokens are pure waste) and run only when **both** budgets allow: the call-count cap (`--max-per` / `ASD_LLM_MAX_PER`, default `5/24h`) and a hard USD ceiling (`--max-usd` / `ASD_LLM_MAX_USD`, default `1/24h`). The USD ceiling sums the **effective** (upstream-aware) cost of telemetry receipts in the trailing window, so it still fires for BYOK keys whose OpenRouter `usage.cost` is 0; over the cap the command skips with `skip_reason: "llm_usd_budget_exhausted"`. Before paying for any review the command drops deterministic junk and duplicate statements (reported as `skipped_pre_llm`), then reviews the remaining cache-miss learnings in batches of `--batch-size` (default 10, `1` disables batching) — one OpenRouter call per batch, demultiplexed by learning id, with cache hits served without a call.
 
-Apply the LLM review into a separate reviewed namespace:
+Apply one immutable review batch into a separate reviewed namespace:
 
 ```bash
-node dist/cli.js quality apply-learning-review
+node dist/cli.js quality apply-learning-review --batch <batch-path>
+# Operator-only convenience; validates the latest pointer before applying.
+node dist/cli.js quality apply-learning-review --latest
 ```
 
-This writes `knowledge/projects-reviewed/` and `reports/llm-learning-review-apply.json` without mutating `knowledge/projects/`. The apply step keeps only durable keep/rewrite verdicts that pass strict post-validation.
+This writes `knowledge/projects-reviewed/`, the atomic
+`reports/llm-learning-review-apply.json` receipt, and append-only transaction
+history in `reports/llm-learning-review-apply-ledger.jsonl` without mutating
+`knowledge/projects/`. Reapplying a completed batch is a no-op. Retries merge
+accepted entries by learning id, preserving unrelated prior reviewed memory.
 
 Export reviewed memory records for downstream wiki ingestion:
 
@@ -385,12 +391,15 @@ Run the local memory value loop as a single dry-run command:
 
 ```bash
 npm --silent run memory:pipeline:dry-run -- --root /tmp/asd-memory-demo --limit 100
+npm --silent run memory:pipeline:dry-run -- --root /tmp/asd-memory-demo \
+  --review-batch /path/to/llm-learning-review-batches/<run-id>.json --require-review
 ```
 
-The dry run executes `quality audit`, applies `reports/llm-learning-review.jsonl`
-only when that review sidecar already exists, then runs `memory export-wiki`.
-It prints a JSON step report with command output, failure points, whether apply
-occurred, and the wiki export path.
+The dry run executes `quality audit`, applies only the explicit immutable batch
+passed with `--review-batch`, then runs `memory export-wiki`. Without a selected
+batch it skips apply and exports existing reviewed memory when available. It
+prints a JSON step report with command output, failure points, whether apply
+occurred, the selected batch path, and the wiki export path.
 
 Wiki export contract: [`docs/wiki-memory-export-contract.md`](docs/wiki-memory-export-contract.md)
 

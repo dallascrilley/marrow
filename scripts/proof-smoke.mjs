@@ -12,6 +12,11 @@ import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/pro
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  buildLearningReviewBatch,
+  buildLearningReviewInputContentHash,
+  writeLearningReviewBatch,
+} from "../dist/pipeline/llm-learning-review-batch.js";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptDir, "..");
@@ -149,29 +154,42 @@ async function runV2MemoryPipelineProof() {
       .split("\n")
       .map((line) => JSON.parse(line));
 
-    const reviewPath = join(runtimeRoot, "reports/llm-learning-review.jsonl");
-    await mkdir(dirname(reviewPath), { recursive: true });
-    await writeFile(
-      reviewPath,
-      `${JSON.stringify({
-        session_id: "session-e2e",
-        learning_id: learning.learning_id,
-        scope_key: learning.scope_key,
-        statement: learning.statement,
-        suggested_statement: "Prefer reviewed project learnings for v2 instinct sync proof.",
-        verdict: "keep",
-        keep: true,
-        durability: "durable",
-        reason: "Proof sidecar for v2 memory pipeline.",
-      })}\n`,
-      "utf8",
-    );
-    artifacts.review_sidecar = reviewPath;
+    const generatedBatch = await writeLearningReviewBatch({
+      batch: buildLearningReviewBatch({
+        createdAt: new Date().toISOString(),
+        model: "proof-fixture",
+        reviews: [
+          {
+            session_id: "session-e2e",
+            learning_id: learning.learning_id,
+            input_content_hash: buildLearningReviewInputContentHash(learning),
+            scope_key: learning.scope_key,
+            statement: learning.statement,
+            suggested_statement: "Prefer reviewed project learnings for v2 instinct sync proof.",
+            trigger: learning.trigger,
+            verdict: "rewrite",
+            keep: true,
+            durability: "durable",
+            reason: "Proof batch for v2 memory pipeline.",
+          },
+        ],
+        runId: `proof-v2-${Date.now()}`,
+        sourceLedgerWatermark: {
+          entry_count: 0,
+          last_learning_id: null,
+          last_reviewed_at: null,
+        },
+      }),
+      reportsDir: join(runtimeRoot, "reports"),
+    });
+    artifacts.review_batch = generatedBatch.batchPath;
 
     steps.push(
-      runCliStep("quality apply-learning-review", ["quality", "apply-learning-review"], {
-        AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
-      }),
+      runCliStep(
+        "quality apply-learning-review",
+        ["quality", "apply-learning-review", "--batch", generatedBatch.batchPath],
+        { AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot },
+      ),
     );
 
     const applyReport = JSON.parse(

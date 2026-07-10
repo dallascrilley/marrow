@@ -22,7 +22,7 @@ export type LlmBudgetStatus = {
 };
 
 type BudgetState = {
-  uses: string[];
+  uses: Array<{ id: string | null; used_at: string }>;
 };
 
 // Courtesy throttle on LLM review-call count. The financial guardrail is the
@@ -72,7 +72,7 @@ export async function assessLlmBudget(
   const state = await readBudgetState(statePath);
   const now = Date.now();
   const windowStart = now - window.windowMs;
-  const usesInWindow = state.uses.filter((iso) => Date.parse(iso) >= windowStart);
+  const usesInWindow = state.uses.filter((use) => Date.parse(use.used_at) >= windowStart);
   const usedInWindow = usesInWindow.length;
   const remaining = Math.max(0, window.max - usedInWindow);
 
@@ -89,12 +89,18 @@ export async function assessLlmBudget(
 
 export async function recordLlmBudgetUse(
   maxPerSpec: string = getDefaultMaxPerWindow(),
+  options: { usageId?: string; usedAt?: string } = {},
 ): Promise<LlmBudgetStatus> {
   const statePath = getLlmBudgetStatePath();
   const state = await readBudgetState(statePath);
-  state.uses.push(new Date().toISOString());
-  await mkdir(dirname(statePath), { recursive: true });
-  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  if (options.usageId === undefined || !state.uses.some((use) => use.id === options.usageId)) {
+    state.uses.push({
+      id: options.usageId ?? null,
+      used_at: options.usedAt ?? new Date().toISOString(),
+    });
+    await mkdir(dirname(statePath), { recursive: true });
+    await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  }
   return assessLlmBudget(maxPerSpec);
 }
 
@@ -236,7 +242,25 @@ async function readBudgetState(path: string): Promise<BudgetState> {
     }
 
     return {
-      uses: parsed.uses.filter((value): value is string => typeof value === "string"),
+      uses: parsed.uses.flatMap((value) => {
+        if (typeof value === "string") {
+          return [{ id: null, used_at: value }];
+        }
+        if (
+          typeof value === "object" &&
+          value !== null &&
+          "used_at" in value &&
+          typeof value.used_at === "string"
+        ) {
+          return [
+            {
+              id: "id" in value && typeof value.id === "string" ? value.id : null,
+              used_at: value.used_at,
+            },
+          ];
+        }
+        return [];
+      }),
     };
   } catch (error) {
     if (isMissingFileError(error)) {
