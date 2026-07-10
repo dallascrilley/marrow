@@ -198,6 +198,9 @@ export async function listLearningReviewBatches(
     if (existing !== undefined && existing !== serializedReviews) {
       throw new Error(`Conflicting immutable batches share batch_id ${batch.batch_id}`);
     }
+    if (existing !== undefined) {
+      continue;
+    }
     reviewsByBatchId.set(batch.batch_id, serializedReviews);
     batches.push({ batch, batchPath });
   }

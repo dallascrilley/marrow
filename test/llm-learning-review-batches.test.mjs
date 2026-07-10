@@ -8,6 +8,7 @@ import { learningFixture } from "../dist/models/canonical.js";
 import {
   buildLearningReviewBatch,
   buildLearningReviewInputContentHash,
+  listLearningReviewBatches,
   parseLearningReviewBatch,
   serializeLearningReviewBatch,
   writeLearningReviewBatch,
@@ -143,6 +144,10 @@ test("identical content from repeated runs writes distinct immutable artifacts",
     assert.equal(latest.batch_id, second.batch.batch_id);
     assert.equal(latest.run_id, "run-002");
     assert.equal(latest.batch_path, second.batchPath);
+
+    const batches = await listLearningReviewBatches(reportsDir);
+    assert.equal(batches.length, 1, "identical batch ids reconcile once");
+    assert.equal(batches[0].batch.batch_id, first.batch.batch_id);
 
     await assert.rejects(
       writeLearningReviewBatch({ batch: first.batch, reportsDir }),

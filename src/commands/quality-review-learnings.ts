@@ -50,8 +50,9 @@ export async function executeQualityReviewLearnings(
     dependencies.appendLedgerEntries ?? appendLlmLearningReviewLedgerEntries;
   const writeBatch = dependencies.writeBatch ?? writeLearningReviewBatch;
   const reportsDir = getRuntimePath("reports");
-  await reconcilePublishedLearningReviewBatches({ appendLedgerEntries, reportsDir });
   const options = parseOptions(context.args);
+  const maxPer = options.maxPer ?? getDefaultMaxPerWindow();
+  await reconcilePublishedLearningReviewBatches({ appendLedgerEntries, maxPer, reportsDir });
 
   if (options.ifNew) {
     const pending = await countPendingLlmReview();
@@ -72,7 +73,6 @@ export async function executeQualityReviewLearnings(
     }
   }
 
-  const maxPer = options.maxPer ?? getDefaultMaxPerWindow();
   const maxUsd = options.maxUsd ?? getDefaultMaxUsd();
   const budget = await assessLlmBudget(maxPer);
   const usdBudget = await assessUsdBudget(maxUsd);
@@ -302,6 +302,7 @@ export async function executeQualityReviewLearnings(
 
 async function reconcilePublishedLearningReviewBatches(input: {
   appendLedgerEntries: typeof appendLlmLearningReviewLedgerEntries;
+  maxPer: string;
   reportsDir: string;
 }): Promise<void> {
   for (const { batch } of await listLearningReviewBatches(input.reportsDir)) {
@@ -314,7 +315,7 @@ async function reconcilePublishedLearningReviewBatches(input: {
         session_id: review.session_id,
       })),
     );
-    await recordLlmBudgetUse(getDefaultMaxPerWindow(), {
+    await recordLlmBudgetUse(input.maxPer, {
       usageId: batch.batch_id,
       usedAt: batch.created_at,
     });

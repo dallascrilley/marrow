@@ -309,7 +309,7 @@ test("review-learnings recovers a published batch after the reviewed-id append f
       const retryMessages = [];
       const retryExitCode = await executeQualityReviewLearnings(
         {
-          args: ["--no-cache", "--max-total-learnings", "1"],
+          args: ["--no-cache", "--max-per", "1/1m", "--max-total-learnings", "1"],
           commandPath: ["quality", "review-learnings"],
           output: {
             error: (message) => retryMessages.push(message),
@@ -338,6 +338,14 @@ test("review-learnings recovers a published batch after the reviewed-id append f
       );
       assert.equal(budget.uses.length, 1);
       assert.match(budget.uses[0].id, /^sha256:[a-f0-9]{64}$/);
+      assert.equal(budget.uses[0].used_at, ledgerLines[0].reviewed_at);
+
+      const retryPayload = JSON.parse(
+        retryMessages.find((message) => message.includes('"llm_budget"')),
+      );
+      assert.equal(retryPayload.llm_budget.max_per_window, "1/1m");
+      assert.equal(retryPayload.llm_budget.used_in_window, 1);
+      assert.equal(retryPayload.llm_budget.remaining, 0);
     } finally {
       globalThis.fetch = previousFetch;
       database.close();
