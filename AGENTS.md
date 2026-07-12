@@ -1,148 +1,102 @@
----
-ijfw_version: 1.3.2
-ijfw_schema: 1
-type: software
-primary_type: software
-secondary_types: []
-confidence: 0.907
-detected_at: 2026-06-15T01:03:13.259Z
-signals:
-  - kind: manifest
-    weight: 0.9
-    manifests: [package.json]
-  - kind: dir_business
-    weight: 0.4
-    name: ops
-  - kind: file_extension_ratio
-    weight: 0.7
-    domain: software
-    ratio: 1
-    count: 159
----
-# AGENTS.md — agent-session-distillery
+# Repository Guidelines
 
-Agent-facing contract for this repo. Human docs live in `README.md`; project
-facts live in `PROJECT_CONTEXT.md`.
+## Project Overview
 
-## Commands (use these, not raw tooling)
+`agent-session-distillery` is a local, CLI-only TypeScript application (`asd`) that ingests on-disk agent transcripts from Cursor, Claude Code, Codex CLI, Kimi, and Pi. It turns them into durable summaries, extracted learnings, review state, archival artifacts, and safe deletion receipts under `~/.agent-session-distillery` by default. See `PROJECT_CONTEXT.md` and `README.md` for the supported source locations and runtime layout.
 
-This project follows **Scripts to Rule Them All** — `script/*` are the canonical
-entrypoints, and `just <recipe>` is a thin alias for each.
+## Architecture & Data Flow
 
-| Task | Command | `just` |
-|------|---------|--------|
-| Install toolchain | `script/bootstrap` | `just bootstrap` |
-| Get runnable | `script/setup` | `just setup` |
-| Refresh after pull | `script/update` | `just update` |
-| CLI help (after build) | `script/server` | `just server` |
-| Run tests | `script/test` | `just test` |
-| What CI runs | `script/cibuild` | `just cibuild` |
-| REPL / console | `script/console` | `just console` |
+**Architecture:** command-oriented CLI over a local SQLite-backed runtime; there is no HTTP server or hosted service.
 
-`script/cibuild` is the single source of truth for CI — if it passes locally, CI passes.
+1. `src/cli.ts` maps `asd <command>` to an `execute*` command handler and opens the ledger with `withLedger` for database-backed commands.
+2. Ingestion handlers such as `src/commands/ingest-backfill.ts` choose an adapter, then run the ordered pipeline: **discover → parse → reduce → summarize → extract → archive**.
+3. `src/adapters/{cursor,claude-code,codex-cli,kimi,pi}/` convert source-specific transcript formats into shared canonical records from `src/models/canonical.ts`.
+4. `src/pipeline/` owns phase behavior, quality checks, provenance, retention/deletion safety, and optional LLM review. `src/writers/` persists summaries, knowledge JSONL, manifests, and reports.
+5. The ledger and runtime artifacts are read through `src/read/`, static reports in `src/report/`, MCP in `src/commands/mcp.ts`, and v2 project/instinct/vault features in `src/v2/`.
 
-> **CI only runs on pull requests and pushes to `main`.** A feature branch that
-> is committed but never pushed (or has no open PR) gets **zero CI**. Local
-> `npm test` builds + runs the suite but does **not** lint; only `script/cibuild`
-> lints. A `pre-push` hook (`script/hooks/pre-push`, installed by `script/setup`
-> via `core.hooksPath`) runs lint + test before every push so broken work cannot
-> reach `origin`. Escape hatch: `ASD_SKIP_PREPUSH=1 git push` / `--no-verify`.
+Keep the presentation and integration surfaces read-oriented. Reuse the shared read or ledger layer rather than introducing a parallel query path. Deletion is intentionally gated on required artifacts and receipts; never bypass lifecycle checks.
 
-## Stack
+## Key Directories
 
-Node.js / TypeScript (npm)
+- `src/cli.ts` — CLI entry point and command tree.
+- `src/commands/` — command handlers; parse CLI options and orchestrate domain services.
+- `src/adapters/` — source discovery and parsing per supported harness.
+- `src/pipeline/` — deterministic ingestion phases, extraction, archive/retention, quality, and LLM-review gates.
+- `src/models/` — shared Zod schemas and canonical TypeScript contracts.
+- `src/db/` — SQLite ledger lifecycle and query helpers.
+- `src/read/` — reusable read model for CLI, MCP, and reports.
+- `src/writers/` — durable JSONL/summary/manifest/report outputs.
+- `src/v2/` — project-ID resolution, instincts, promotion, vault rendering, and memory pipeline.
+- `src/report/` — static offline HTML dashboard rendering; do not add a dev server.
+- `test/` — Node built-in test runner suites; `test/fixtures/` holds transcript fixtures, including `cursor/live-regression/`.
+- `script/` — canonical developer and CI entry points; `scripts/` contains operational, proof, and dry-run utilities.
+- `docs/decisions/` and `docs/recipes/` — architectural decisions and operator workflows.
 
-## Git & PR standards (universal)
+## Development Commands
 
-- **Branches:** never commit directly to `main`; branch as `type/short-slug`.
-- **Commits:** [Conventional Commits](https://www.conventionalcommits.org) —
-  `type(scope): summary`. Types: `feat, fix, refactor, docs, test, chore, perf, ci`.
-- **PRs:** fill `.github/PULL_REQUEST_TEMPLATE.md`; keep them small and focused;
-  `script/cibuild` must pass before requesting review.
-- **Definition of done:** a task is not reviewable until its commits are pushed
-  to `origin` **and** CI is green on the PR. "Passes on my machine" is not done —
-  unpushed work has never touched CI. Verify with `git log origin/<branch>..HEAD`
-  (must be empty) and check the PR's CI status.
-- **Secrets:** never commit secrets. Use env vars / a secret manager. `.env` is gitignored. For OpenRouter, use the 1Password item **OpenRouter API Credentials - agent-session-distillery** (`op read 'op://Private/OpenRouter API Credentials - agent-session-distillery/credential'`).
+Use `script/*` (or the equivalent `just` recipe) for canonical project workflows:
 
-## Working agreement
+```bash
+script/setup                 # require Node 22, install npm dependencies, install tracked hooks
+script/test                  # build, then run all Node tests sequentially
+script/cibuild               # npm ci + Biome lint + tests + TypeScript build; CI parity
+script/server --help         # build, then invoke the CLI (despite the name, no server starts)
+script/console               # Node REPL
 
-- Make the smallest maintainable change that satisfies the task; match existing patterns.
-- Validate before claiming done: run `script/test` (or `script/cibuild`) and read the result.
-- Update `docs/` (ADR in `docs/decisions/`, learnings in `docs/lessons.md` and
-  `docs/solutions/`) when behavior or architecture changes.
+npm run build                # compile src/ to ignored dist/
+npm run lint                 # biome check src test scripts
+npm run format               # apply Biome formatting
+node dist/cli.js --help      # run compiled CLI directly
+node dist/cli.js ingest sync --source cursor --resume
+```
 
-## Task Tracking (td)
+Use `npm run asd -- <args>` when you want build-and-run behavior. CI runs `script/cibuild` for pull requests and pushes to `main` (`.github/workflows/ci.yml`).
 
-Applies when this repo is td-initialized (`.todos/` present). Bootstrap runs
-`td init` when missing.
+## Code Conventions & Common Patterns
 
-- **Session start:** `td usage --new-session`
-- **Capture first:** record tasks, bugs, and ideas in td before editing — the
-  tracker, not chat, is the source of truth.
-- **While working:** `td start` before edits; `td log --decision` for choices;
-  `td block --reason` when stuck.
-- **Before exit:** hand off in-progress items and run `td check-handoff`.
-- **Full workflow:** `td-task-management` skill.
+- **TypeScript/ESM:** Use NodeNext-compatible imports with explicit `.js` suffixes (for example, `import { createLedger } from "./db/ledger.js"`). Keep code under `src/`; `dist/` is generated.
+- **Strict contracts:** `tsconfig.json` enables `strict`, `noUncheckedIndexedAccess`, and `exactOptionalPropertyTypes`. Define or reuse Zod schemas and inferred/shared types in `src/models/` at external-data boundaries; do not pass unvalidated transcript shapes through the pipeline.
+- **Command shape:** Follow `executeFeature(context, database): Promise<number>` for ledger-backed CLI commands. Return an exit code; send user-facing output through `context.output`; let `src/cli.ts` centralize unknown-command and top-level error handling.
+- **Pipeline shape:** Keep phase behavior in focused `run*Phase` functions. Preserve the ordered phase lifecycle, `source_hash` resume invalidation, ledger checkpoints, manifests, and retention receipts when changing ingest behavior.
+- **Failures:** Isolate failure to the affected session when processing a batch, record failure state/history in the ledger, and continue other sessions when safe. Do not hide errors or silently skip a destructive safety check.
+- **Formatting:** Biome uses 2-space indentation, 100-column lines, double quotes, semicolons, trailing commas, recommended lint rules, and import organization. Run `npm run format` rather than hand-formatting broad files.
+- **State:** The runtime directory and SQLite ledger are the source of durable state. Use `AGENT_SESSION_DISTILLERY_ROOT` to isolate tests, proofs, and experiments instead of mutating the operator runtime.
+- **LLM work:** Keep LLM-dependent commands explicitly gated and budgeted. `OPENROUTER_API_KEY` is optional and must come from the secret manager, never source control.
+- **Vault writes:** Preserve the narrow v2 vault carve-out enforced by `src/pipeline/vault-push.ts` and `src/v2/vault/render-memory.ts`; do not add a generic vault writer.
 
-## Knowledge routing
+## Important Files
 
-- Search `docs/solutions/` before debugging recurring issues:
-  `grep -ril "<terms>" docs/solutions/`
-- Capture non-obvious fixes via `ce-compound` → `docs/solutions/<category>/`
-- Maintain stale solution docs via `ce-compound-refresh`
+- `package.json` — npm scripts, Node `22.x` requirement, `asd` bin mapping, and dependencies.
+- `tsconfig.json` — strict NodeNext compilation from `src/` to `dist/`.
+- `biome.json` — formatter/linter policy and excluded generated/runtime paths.
+- `src/cli.ts` — command registry, dispatch, help, and ledger lifetime management.
+- `src/commands/ingest-backfill.ts` — reference implementation for the end-to-end ingest flow.
+- `src/models/canonical.ts` — canonical event, session, learning, and lifecycle schemas.
+- `src/config/paths.ts` — runtime-root resolution.
+- `script/lib/profile.sh` — actual implementation behind `script/*` commands.
+- `PROJECT_CONTEXT.md` — durable architectural constraints, runtime locations, and secret names.
+- `README.md` — source-adapter inputs, runtime artifacts, and operator command examples.
+- `LAUNCH_CRITERIA.md` — launch/readiness criteria; check before declaring a feature ship-ready.
 
-## Recommended agents & skills
+## Runtime/Tooling Preferences
 
-These live in the shared agent hub and are referenced (not vendored) by default.
-Run `project-bootstrap --vendor` to copy local snapshots into `.claude/` for a
-self-contained repo.
+- Required runtime: **Node.js 22.x**. `script/bootstrap` rejects other major versions.
+- Package manager: **npm**; respect `package-lock.json`. Do not switch package managers or hand-edit the lockfile as a side effect of normal work.
+- Module system: ESM with TypeScript `module`/`moduleResolution` set to `NodeNext`.
+- Formatting and linting: `@biomejs/biome`; `dist/`, runtime artifacts, coverage, and dependency folders are excluded.
+- Runtime root: `~/.agent-session-distillery`; set `AGENT_SESSION_DISTILLERY_ROOT=/tmp/asd-proof` for an isolated run.
+- Secrets/configuration: `OPENROUTER_API_KEY` enables optional LLM learning review; `ASD_VAULT_ROOT` overrides the vault target. Never print or commit secret values.
 
-- **Agents:** `code-reviewer`, `architect`, `tdd-guide`, `e2e-runner`, `doc-updater`
-- **Skills:** `prime`, `library`, `handoff`, `git` (commit / PR / PR-comments),
-  `td-task-management`, `subagent-driven-development`, `secrets-management`,
-  `prompt-optimizer`, `docs-lifecycle` (generate/audit project docs)
+## Testing & QA
 
-Use `/library load <id>` for on-demand hub skills. **Project-relevant skills**
-discovered during bootstrap are appended below this baseline as a
-`### Project-relevant skills` subsection (structured entries with path and load command).
+Tests use Node's built-in `node:test` with strict assertions. Test files are `test/*.test.mjs`; many exercise the compiled `dist/` modules and CLI, so build before running focused tests:
 
-## Repo-specific guidance
+```bash
+npm run build
+node --test --test-concurrency=1 test/cli.test.mjs
+node --test --test-concurrency=1 test/extract.test.mjs
+```
 
-- **Vault writes:** [`CLAUDE.md`](CLAUDE.md) defines the v2 carve-out — only the eight
-  named paths under `~/vault/wiki/projects/<project-id>/`. Do not expand silently.
-- **Launch state:** check [`LAUNCH_CRITERIA.md`](LAUNCH_CRITERIA.md) before treating
-  features as ship-ready.
-- **Legacy scripts:** `scripts/` holds proof and dry-run utilities; prefer `script/*`
-  and `npm run` for bootstrap/CI parity.
-- **Hooks:** `asd hooks install` registers Claude Code SessionEnd → ingest sync
-  ([`docs/recipes/session-end-ingest-hook.md`](docs/recipes/session-end-ingest-hook.md)).
-- **Skill evidence:** `asd skill evidence <id>` scans indexed summaries for skill mentions
-  (v1 of td-02cfd4 adherence analysis).
-- **Skill report:** `asd skill report <id>` scores checklist adherence and suggests SKILL.md
-  improvements ([`docs/recipes/skill-adherence-report.md`](docs/recipes/skill-adherence-report.md)).
+Follow the existing Arrange–Act–Assert style. Use `mkdtemp` and `AGENT_SESSION_DISTILLERY_ROOT` for isolated filesystem/runtime tests, and clean temporary roots in `finally` blocks. Prefer production-shaped fixtures in `test/fixtures/` for adapter or extraction regressions.
 
-### Project-relevant skills
-
-- **`continuous-learning-systems`** — Design and configure capture → instinct → evolution pipelines.
-  - **Why this project:** asd is the ingestion/distillation layer for exactly these pipelines; v2 instincts and vault export depend on this mental model.
-  - **Path:** `~/.claude/skills/continuous-learning-systems/SKILL.md`
-  - **Load:** `/library load continuous-learning-systems`
-
-- **`ce-compound`** — Capture non-obvious fixes into `docs/solutions/`.
-  - **Why this project:** adapter/parser edge cases and retention bugs belong in `docs/solutions/` for the next ingest/debug session.
-  - **Path:** `~/.claude/skills/ce-compound/SKILL.md`
-  - **Load:** `/library load ce-compound`
-
-- **`vault`** — Read/recall/capture in `~/vault` with correct write boundaries.
-  - **Why this project:** `memory push-wiki` and v2 renderers touch vault project pages; agents must respect carve-out vs vault-owned paths.
-  - **Path:** `~/.claude/skills/vault/SKILL.md`
-  - **Load:** `/library load vault`
-
-<!-- IJFW-MEMORY-START -->
-Project memory at .ijfw/memory/. Call `ijfw_memory_prelude` for full context.
-<!-- IJFW-MEMORY-END -->
-
-<!-- IJFW-AGENTS-START -->
-No project agents yet. Run `ijfw team` to set them up.
-<!-- IJFW-AGENTS-END -->
+Before a PR or push, run `script/cibuild`; it is the complete CI-equivalent gate. No coverage reporter or enforced threshold is configured in `package.json` or CI. For new behavior, add focused tests for the happy path, boundaries, and error handling; target at least 80% coverage. For a docs-only change, re-read the generated documentation and verify every documented command/path against the current repository configuration rather than running unrelated code tests.
