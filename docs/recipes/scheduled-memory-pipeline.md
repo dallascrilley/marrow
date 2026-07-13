@@ -20,6 +20,25 @@ ingest sync --resume --source <adapter>
 Repeat `ingest sync` per adapter you care about (`cursor`, `claude-code`,
 `codex-cli`, `pi`, `kimi`).
 
+## Operator health snapshot
+
+Use the read-only health summary before a manual run, after a failed scheduled run, or in
+a lightweight monitor:
+
+```bash
+node dist/cli.js health
+node dist/cli.js health --json
+```
+
+The human output includes system health, the last recall delivery, blockers, review
+freshness, count/USD budget headroom, storage pressure, and one copyable next command.
+It does not invoke the OpenRouter provider probe; `Provider: not checked` is intentional.
+Run `node dist/cli.js doctor provider` only when provider-specific diagnostics are needed.
+
+`health` exits `0` when healthy, `1` when degraded, and `2` when the model cannot be
+read. `--json` emits the typed health model on successful reads and an explicit
+`{ "status": "unverifiable", "error": "..." }` report when a reader fails.
+
 ## Optional corpus health (weekly or before full resummarize)
 
 After `quality audit`, you can check whether archived sessions still have

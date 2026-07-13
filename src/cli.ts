@@ -9,6 +9,7 @@ import { executeDeleteCandidates } from "./commands/delete-candidates.js";
 import { executeDoctorProvider } from "./commands/doctor-provider.js";
 import { executeExplain } from "./commands/explain.js";
 import { executeExportIndex } from "./commands/export-index.js";
+import { executeHealth } from "./commands/health.js";
 import { executeHooksInstall } from "./commands/hooks-install.js";
 import { executeIngestBackfill } from "./commands/ingest-backfill.js";
 import { executeIngestSync } from "./commands/ingest-sync.js";
@@ -181,6 +182,11 @@ const commandTree: Record<string, CommandDefinition> = {
   "export-index": {
     description: "Write a consolidated session index JSONL for summarized sessions.",
     execute: async (context) => withLedger(context, executeExportIndex),
+  },
+  health: {
+    description:
+      "Summarize operational health, blockers, budgets, delivery, storage, and one next command.",
+    execute: async (context) => executeHealth(context),
   },
   stats: {
     description: "Report high-level distillery runtime statistics.",
