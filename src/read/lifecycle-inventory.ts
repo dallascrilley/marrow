@@ -1,5 +1,5 @@
 import type { Dir } from "node:fs";
-import { opendir, stat } from "node:fs/promises";
+import { access, opendir, stat } from "node:fs/promises";
 import { relative, sep } from "node:path";
 
 import type { DatabaseSync } from "node:sqlite";
@@ -8,6 +8,19 @@ import { getRuntimeRoot } from "../config/paths.js";
 import { listDeletionCandidates, listSourceSessions } from "../db/ledger.js";
 import type { DeletionCandidateRow, SourceSessionRow } from "../db/queries.js";
 import { ingestStatuses } from "../models/canonical.js";
+import {
+  getProjectKnowledgeSessionPath,
+  getUserKnowledgeSessionPath,
+} from "../writers/knowledge-writer.js";
+import {
+  getSessionManifestPath,
+  getSessionManifestPathForRevision,
+} from "../writers/manifest-writer.js";
+import { getRetentionReceiptPath } from "../writers/report-writer.js";
+import {
+  getSessionSummaryJsonPath,
+  getSessionSummaryMarkdownPath,
+} from "../writers/summary-writer.js";
 
 const millisecondsPerDay = 24 * 60 * 60 * 1000;
 const unknownLifecycleState = "unknown";
@@ -67,6 +80,22 @@ export interface RuntimeLifecycleInventoryOptions {
   now?: Date;
   olderThanDays?: number;
   state?: RuntimeInventoryLifecycleState;
+}
+
+export interface ParsedIntermediateCleanupCandidate {
+  bytes: number;
+  device: number;
+  inode: number;
+  lifecycle_state: RuntimeInventoryLifecycleState;
+  modified_at: string;
+  path: string;
+  reason: string;
+  session_id: string;
+}
+
+export interface ParsedIntermediateCleanupOptions {
+  now?: Date;
+  olderThanDays: number;
 }
 
 type KnownArtifact = {
@@ -170,6 +199,59 @@ export async function listRuntimeLifecycleInventory(
       count: artifacts.reduce((sum, artifact) => sum + artifact.count, 0),
     },
   };
+}
+
+/**
+ * Select individual parsed intermediates only when the same retention policy used by
+ * the inventory confirms they are reclaimable. Callers own destructive application.
+ */
+export async function listParsedIntermediateCleanupCandidates(
+  database: DatabaseSync,
+  options: ParsedIntermediateCleanupOptions,
+): Promise<ParsedIntermediateCleanupCandidate[]> {
+  const runtimeRoot = getRuntimeRoot();
+  const now = options.now ?? new Date();
+  const cutoff = now.getTime() - options.olderThanDays * millisecondsPerDay;
+  const context = buildInventoryContext(database);
+  const candidates: ParsedIntermediateCleanupCandidate[] = [];
+
+  for await (const file of walkRuntimeFiles(runtimeRoot)) {
+    if (file.modifiedAt.getTime() > cutoff) {
+      continue;
+    }
+
+    const classified = classifyRuntimeArtifact(file.path, runtimeRoot, context);
+    if (
+      classified.kind !== "staging_parsed" ||
+      classified.retention !== "reclaimable" ||
+      classified.sessionId === null ||
+      !isExactParsedIntermediatePath(file.path, runtimeRoot)
+    ) {
+      continue;
+    }
+
+    const session = context.sessionsById.get(classified.sessionId);
+    const candidate =
+      session === undefined
+        ? undefined
+        : context.deletionCandidatesBySourceSessionId.get(session.id);
+    if (candidate === undefined || !(await hasRequiredRetentionArtifacts(candidate))) {
+      continue;
+    }
+
+    candidates.push({
+      bytes: file.bytes,
+      device: file.device,
+      inode: file.inode,
+      lifecycle_state: classified.lifecycleState,
+      modified_at: file.modifiedAt.toISOString(),
+      path: file.path,
+      reason: classified.reason,
+      session_id: classified.sessionId,
+    });
+  }
+
+  return candidates.sort((left, right) => left.path.localeCompare(right.path));
 }
 
 export function isRuntimeInventoryLifecycleState(
@@ -276,10 +358,20 @@ function classifyByDirectory(relativePath: string, context: InventoryContext): K
   ) {
     return { kind: "summary", sessionId: third ?? null };
   }
-  if (first === "staging" && second !== undefined && segments.at(-1) === "parsed-records.json") {
+  if (
+    first === "staging" &&
+    second !== undefined &&
+    segments.length === 3 &&
+    segments[2] === "parsed-records.json"
+  ) {
     return { kind: "staging_parsed", sessionId: second };
   }
-  if (first === "staging" && second !== undefined && segments.at(-1) === "reduced-session.json") {
+  if (
+    first === "staging" &&
+    second !== undefined &&
+    segments.length === 3 &&
+    segments[2] === "reduced-session.json"
+  ) {
     return { kind: "staging_reduced", sessionId: second };
   }
   if (first === "knowledge" && second === "projects-reviewed") {
@@ -302,6 +394,58 @@ function sessionIdFromKnownFilename(
   const firstDot = filename.indexOf(".");
   const candidate = firstDot >= 0 ? filename.slice(0, firstDot) : filename;
   return sessionsById.has(candidate) ? candidate : null;
+}
+
+function isExactParsedIntermediatePath(path: string, runtimeRoot: string): boolean {
+  const segments = relative(runtimeRoot, path).split(sep);
+  return (
+    segments.length === 3 &&
+    segments[0] === "staging" &&
+    segments[1] !== undefined &&
+    segments[2] === "parsed-records.json"
+  );
+}
+
+async function hasRequiredRetentionArtifacts(candidate: DeletionCandidateRow): Promise<boolean> {
+  const manifestPresent =
+    (await pathExists(
+      getSessionManifestPathForRevision(candidate.session_id, candidate.source_hash),
+    )) || (await pathExists(getSessionManifestPath(candidate.session_id)));
+  const [
+    projectKnowledgePresent,
+    receiptPresent,
+    summaryJsonPresent,
+    summaryMarkdownPresent,
+    userKnowledgePresent,
+  ] = await Promise.all([
+    pathExists(getProjectKnowledgeSessionPath(candidate.project_key, candidate.session_id)),
+    pathExists(getRetentionReceiptPath(candidate.session_id)),
+    pathExists(getSessionSummaryJsonPath(candidate.session_id)),
+    pathExists(getSessionSummaryMarkdownPath(candidate.session_id)),
+    pathExists(getUserKnowledgeSessionPath("operator", candidate.session_id)),
+  ]);
+
+  return (
+    manifestPresent &&
+    receiptPresent &&
+    summaryJsonPresent &&
+    summaryMarkdownPresent &&
+    (candidate.candidate_state === "discardable_no_signal" ||
+      projectKnowledgePresent ||
+      userKnowledgePresent)
+  );
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 function classifyRetention(
@@ -368,9 +512,13 @@ function classifyRetention(
   return { reason: reasons[kind], retention: "required" };
 }
 
-async function* walkRuntimeFiles(
-  root: string,
-): AsyncGenerator<{ bytes: number; modifiedAt: Date; path: string }> {
+async function* walkRuntimeFiles(root: string): AsyncGenerator<{
+  bytes: number;
+  device: number;
+  inode: number;
+  modifiedAt: Date;
+  path: string;
+}> {
   const pendingDirectories = [root];
 
   while (pendingDirectories.length > 0) {
@@ -401,7 +549,13 @@ async function* walkRuntimeFiles(
 
       try {
         const metadata = await stat(entryPath);
-        yield { bytes: metadata.size, modifiedAt: metadata.mtime, path: entryPath };
+        yield {
+          bytes: metadata.size,
+          device: metadata.dev,
+          inode: metadata.ino,
+          modifiedAt: metadata.mtime,
+          path: entryPath,
+        };
       } catch (error) {
         if (!isMissingPathError(error)) {
           throw error;

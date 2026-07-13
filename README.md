@@ -273,6 +273,18 @@ High-level runtime stats:
 node dist/cli.js stats
 ```
 
+Prune only old parsed intermediates that already have a safe deletion candidate:
+
+```bash
+node dist/cli.js storage cleanup-parsed
+node dist/cli.js storage cleanup-parsed --apply
+```
+
+The default is a 30-day dry run. `--apply` deletes only
+`staging/<session>/parsed-records.json` records whose safe candidate confirms durable
+downstream retention, writes a receipt under `deletes/receipts/`, and never removes
+`reduced-session.json`. Use `--older-than-days <n>` to tighten or loosen the age gate.
+
 Read-only runtime lifecycle and storage inventory:
 
 ```bash
