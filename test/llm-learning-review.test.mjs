@@ -7,6 +7,7 @@ import test from "node:test";
 import { sourceSessionFixture } from "../dist/models/canonical.js";
 import {
   buildLearningReviewCacheKey,
+  completeOpenRouterJson,
   defaultOpenRouterLearningReviewModel,
   generateTopicWithOpenRouter,
   reviewLearningWithOpenRouter,
@@ -41,6 +42,31 @@ function learning(overrides = {}) {
 
 test("learning review defaults to the policy-compatible OpenRouter auto route", () => {
   assert.equal(defaultOpenRouterLearningReviewModel, "openrouter/auto");
+});
+
+test("learning review records the model selected by the auto route", async () => {
+  const result = await completeOpenRouterJson({
+    apiKey: "test-key",
+    errorLabel: "learning review",
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          choices: [{ message: { content: "{}" } }],
+          model: "provider/routed-model",
+          usage: { completion_tokens: 1, prompt_tokens: 1, total_tokens: 2, cost: 0.01 },
+        };
+      },
+      async text() {
+        return "";
+      },
+    }),
+    messages: [{ content: "test", role: "user" }],
+    model: "openrouter/auto",
+  });
+
+  assert.equal(result.usage.model, "provider/routed-model");
 });
 
 test("OpenRouter learning review sends strict JSON memory-lint request", async () => {

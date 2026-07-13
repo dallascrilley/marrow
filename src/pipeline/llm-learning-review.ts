@@ -676,11 +676,14 @@ export async function completeOpenRouterJson(input: {
 
   const payload = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
+    model?: unknown;
     usage?: OpenRouterUsage;
   };
+  const routedModel =
+    typeof payload.model === "string" && payload.model.length > 0 ? payload.model : input.model;
   return {
     content: extractMessageContent(payload, input.errorLabel),
-    usage: parseOpenRouterUsage(payload.usage, input.model, durationMs),
+    usage: parseOpenRouterUsage(payload.usage, routedModel, durationMs),
   };
 }
 
