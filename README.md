@@ -285,6 +285,19 @@ The default is a 30-day dry run. `--apply` deletes only
 downstream retention, writes a receipt under `deletes/receipts/`, and never removes
 `reduced-session.json`. Use `--older-than-days <n>` to tighten or loosen the age gate.
 
+Retain bounded generated archive and review reports without touching audit evidence:
+
+```bash
+node dist/cli.js storage retain-reports
+node dist/cli.js storage retain-reports --history 20 --older-than-days 60 --apply
+```
+
+The default is a 30-day dry run retaining 10 historical terminal reports. It only selects
+archive report pairs for terminal sessions and already-applied learning-review batches beyond
+that history. Active/incomplete sessions and batches, latest reports, failed review evidence,
+receipts, telemetry, ledgers, and pointers are never candidates. Dry-run and apply output show
+the report path, selection reason, and bytes; apply writes a receipt under `deletes/receipts/`.
+
 Read-only runtime lifecycle and storage inventory:
 
 ```bash
