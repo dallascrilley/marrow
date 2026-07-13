@@ -260,6 +260,19 @@ High-level runtime stats:
 node dist/cli.js stats
 ```
 
+Read-only runtime lifecycle and storage inventory:
+
+```bash
+node dist/cli.js storage inventory
+node dist/cli.js storage inventory --state deletion_candidate --older-than-days 30 --json
+```
+
+The inventory scans file metadata only, then groups artifacts by kind, ledger lifecycle
+state, retention dependency, count, bytes, and oldest/newest modification time. Parsed
+intermediates are only labeled `reclaimable` when a safe deletion candidate confirms
+durable downstream retention artifacts; all other recognized artifacts remain conservatively
+required. Unclassified paths are reported as `unknown` and are never cleanup-eligible.
+
 Static offline dashboard export:
 
 ```bash
