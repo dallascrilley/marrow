@@ -78,6 +78,15 @@ retention workflows.
 
 ## P1 - Launch-week polish
 
+- id: parsed-staging-retention
+  feature: Safe parsed intermediates are removed after durable archive promotion, and scheduled fallback retention enforces age and byte ceilings without depending on LLM review output.
+  test: Run `npm test` — `test/integration/ingest-lifecycle.test.mjs`, `test/parsed-cleanup.test.mjs`, and `test/scheduled-memory-pipeline.test.mjs` cover immediate deletion, unsafe retention, oldest-first byte pressure, and review-independent scheduling.
+  proof_required: Passing integration tests showing only exact `parsed-records.json` files with safe deletion candidates are removed while reduced sessions and durable outputs remain.
+  proof_level: B
+  status: validated
+  validated_on: 2026-07-13
+  proof: test/integration/ingest-lifecycle.test.mjs, test/parsed-cleanup.test.mjs, test/scheduled-memory-pipeline.test.mjs
+
 - id: first-run-proof-doc
   feature: The README links to or summarizes the latest first-run proof artifact.
   test: After P0 proof is captured, update README or docs with the proof path and rerun `npm test`.

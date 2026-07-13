@@ -1,5 +1,16 @@
 import assert from "node:assert/strict";
-import { access, mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  stat,
+  unlink,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -13,6 +24,7 @@ import {
   upsertSourceSession,
 } from "../dist/db/ledger.js";
 import { sourceSessionFixture } from "../dist/models/canonical.js";
+import { ParsedIntermediateCleanupError } from "../dist/pipeline/parsed-cleanup.js";
 import { listRuntimeLifecycleInventory } from "../dist/read/lifecycle-inventory.js";
 import { getProjectKnowledgeSessionPath } from "../dist/writers/knowledge-writer.js";
 import { getSessionManifestPathForRevision } from "../dist/writers/manifest-writer.js";
@@ -59,7 +71,50 @@ async function writeOldFile(path, contents) {
   await utimes(path, oldDate, oldDate);
 }
 
-async function runCleanup(database, args) {
+async function makeSafeCandidate(database, sessionId, parsedContents, modifiedAt) {
+  const source = upsertSourceSession(database, session(sessionId)).sourceSession;
+  upsertDeletionCandidate(database, {
+    candidateState: "ready",
+    currentLifecycleState: "archived",
+    projectKey: source.project_key,
+    reason: "Durable summary, manifest, and retention receipt are present.",
+    safeToDelete: true,
+    sessionId: source.session_id,
+    sourceHash: source.source_hash,
+    sourceSessionId: source.id,
+  });
+  const parsedPath = join(
+    process.env[runtimeRootOverrideEnvVar],
+    "staging",
+    source.session_id,
+    "parsed-records.json",
+  );
+  await Promise.all([
+    writeFileAt(parsedPath, parsedContents, modifiedAt),
+    writeFileAt(
+      getProjectKnowledgeSessionPath(source.project_key, source.session_id),
+      "{}\n",
+      modifiedAt,
+    ),
+    writeFileAt(
+      getSessionManifestPathForRevision(source.session_id, source.source_hash),
+      "{}\n",
+      modifiedAt,
+    ),
+    writeFileAt(getRetentionReceiptPath(source.session_id), "{}\n", modifiedAt),
+    writeFileAt(getSessionSummaryJsonPath(source.session_id), "{}\n", modifiedAt),
+    writeFileAt(getSessionSummaryMarkdownPath(source.session_id), "summary\n", modifiedAt),
+  ]);
+  return parsedPath;
+}
+
+async function writeFileAt(path, contents, modifiedAt) {
+  await mkdir(join(path, ".."), { recursive: true });
+  await writeFile(path, contents, "utf8");
+  await utimes(path, modifiedAt, modifiedAt);
+}
+
+async function runCleanup(database, args, dependencies = {}) {
   const output = [];
   const exitCode = await executeStorageParsedCleanup(
     {
@@ -68,7 +123,7 @@ async function runCleanup(database, args) {
       output: { error: (message) => output.push(message), info: (message) => output.push(message) },
     },
     database,
-    { now },
+    { now, ...dependencies },
   );
   return { exitCode, payload: JSON.parse(output.join("\n")) };
 }
@@ -196,6 +251,106 @@ test("parsed cleanup rejects a safe candidate after required retention artifacts
       const dryRun = await runCleanup(database, []);
       assert.deepEqual(dryRun.payload.candidates, []);
       await access(parsedPath);
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("parsed cleanup enforces a byte ceiling oldest-first even below the age threshold", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+    try {
+      const oldest = await makeSafeCandidate(
+        database,
+        "oldest",
+        "12345",
+        new Date("2026-07-10T12:00:00.000Z"),
+      );
+      const middle = await makeSafeCandidate(
+        database,
+        "middle",
+        "12345",
+        new Date("2026-07-11T12:00:00.000Z"),
+      );
+      const newest = await makeSafeCandidate(database, "newest", "12345", now);
+
+      const dryRun = await runCleanup(database, [
+        "--older-than-days",
+        "30",
+        "--max-total-bytes",
+        "8",
+      ]);
+      assert.equal(dryRun.payload.max_total_bytes, 8);
+      assert.deepEqual(
+        dryRun.payload.candidates.map((candidate) => candidate.path),
+        [oldest, middle],
+      );
+
+      const applied = await runCleanup(database, [
+        "--apply",
+        "--older-than-days",
+        "30",
+        "--max-total-bytes",
+        "8",
+      ]);
+      assert.deepEqual(
+        applied.payload.deleted.map((candidate) => candidate.path),
+        [oldest, middle],
+      );
+      await assert.rejects(access(oldest), { code: "ENOENT" });
+      await assert.rejects(access(middle), { code: "ENOENT" });
+      await access(newest);
+    } finally {
+      database.close();
+    }
+  });
+});
+
+test("parsed cleanup failure receipt records partial deletion and restores quarantine", async () => {
+  await withRuntimeRoot(async (runtimeRoot) => {
+    const database = await createLedger();
+    try {
+      const first = await makeSafeCandidate(database, "failure-first", "12345", oldDate);
+      const second = await makeSafeCandidate(
+        database,
+        "failure-second",
+        "12345",
+        new Date(oldDate.getTime() + 1000),
+      );
+      let unlinkCalls = 0;
+      const fileSystem = {
+        access,
+        rename,
+        stat,
+        unlink: async (path) => {
+          unlinkCalls += 1;
+          if (unlinkCalls === 2) {
+            throw new Error("injected unlink failure");
+          }
+          await unlink(path);
+        },
+      };
+
+      await assert.rejects(
+        runCleanup(database, ["--apply"], { fileSystem }),
+        (error) =>
+          error instanceof ParsedIntermediateCleanupError &&
+          error.message === "injected unlink failure",
+      );
+
+      await assert.rejects(access(first), { code: "ENOENT" });
+      await access(second);
+      const receiptPath = join(
+        runtimeRoot,
+        "deletes",
+        "receipts",
+        `parsed-cleanup-${now.toISOString().replaceAll(":", "-")}.json`,
+      );
+      const receipt = JSON.parse(await readFile(receiptPath, "utf8"));
+      assert.equal(receipt.status, "failed");
+      assert.deepEqual(receipt.deleted_paths, [first]);
+      assert.deepEqual(receipt.quarantined_paths, []);
     } finally {
       database.close();
     }

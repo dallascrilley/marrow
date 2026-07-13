@@ -211,7 +211,7 @@ const commandTree: Record<string, CommandDefinition> = {
       },
       "cleanup-parsed": {
         description:
-          "Dry-run or apply conservative cleanup of old parsed records with durable downstream retention.",
+          "Dry-run or apply conservative age/size cleanup of parsed records with durable downstream retention.",
         execute: async (context) => withLedger(context, executeStorageParsedCleanup),
       },
     },

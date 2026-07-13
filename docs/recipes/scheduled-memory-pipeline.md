@@ -147,6 +147,12 @@ never falls back to an older batch. Apply retries remain safe because completed
 batches are no-ops and incomplete batches converge through the append-only
 apply ledger.
 
+Parsed staging retention is independent of review generation and runs before audit/LLM steps.
+Every scheduled run applies the safe parsed cleanup with a 30-day age gate and a 1 GB byte
+ceiling by default. Override them with `ASD_PARSED_RETENTION_OLDER_THAN_DAYS` and
+`ASD_PARSED_MAX_TOTAL_BYTES`. Report compaction remains opt-in via
+`ASD_ENABLE_COMPACTION=1` and bound to a newly generated and applied review batch.
+
 
 ## Operator-local launcher (paid tier)
 
@@ -180,6 +186,7 @@ Consequences:
 - **Integrity check fails:** `check` exits non-zero on duplicate/orphan findings; the scheduled wrapper stops before audit/LLM steps. Inspect with `asd check` (human output) or `asd check --json`. `pipeline gate` also surfaces `session_integrity` and sets `recommendations.run_check` when violations exist.
 - **Ingest fails:** later steps still see stale data; check adapter paths and `ingest sync` logs.
 - **review-learnings skipped or budget-blocked:** no batch is generated, so the scheduled wrapper skips apply and continues with the existing reviewed-memory export.
+- **review batch absent:** report compaction is skipped, but safe parsed staging retention has already run.
 - **apply interrupted:** rerun the explicit `quality apply-learning-review --batch <batch-path>` command shown in the prior pipeline log; the apply ledger records `applying`/`failed`/`applied` transitions and the retry merges by learning id.
 - **credentials absent:** the wrapper skips both review and apply; it never applies a previous batch implicitly.
 - **Vault missing:** `memory push-wiki` exits 0 with a notice; export JSONL still updates under the runtime root.

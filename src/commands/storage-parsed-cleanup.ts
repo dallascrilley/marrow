@@ -1,10 +1,15 @@
-import { randomUUID } from "node:crypto";
-import { access, mkdir, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
 import { getRuntimePath } from "../config/paths.js";
+import {
+  applyParsedIntermediateCleanup,
+  ParsedIntermediateCleanupError,
+  type ParsedIntermediateCleanupFileSystem,
+  type ParsedIntermediateCleanupResult,
+} from "../pipeline/parsed-cleanup.js";
 import {
   listParsedIntermediateCleanupCandidates,
   type ParsedIntermediateCleanupCandidate,
@@ -14,17 +19,22 @@ const defaultOlderThanDays = 30;
 
 type StorageParsedCleanupOptions = {
   apply: boolean;
+  maxTotalBytes: number | undefined;
   olderThanDays: number;
 };
 
 export async function executeStorageParsedCleanup(
   context: CommandContext,
   database: DatabaseSync,
+  dependencies: { fileSystem?: ParsedIntermediateCleanupFileSystem; now?: Date } = {},
 ): Promise<number> {
   const options = parseStorageParsedCleanupOptions(context.args);
-  const candidates = await listParsedIntermediateCleanupCandidates(database, {
+  const cleanupOptions = {
     olderThanDays: options.olderThanDays,
-  });
+    ...(options.maxTotalBytes === undefined ? {} : { maxTotalBytes: options.maxTotalBytes }),
+    ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
+  };
+  const candidates = await listParsedIntermediateCleanupCandidates(database, cleanupOptions);
 
   if (!options.apply) {
     context.output.info(
@@ -32,6 +42,7 @@ export async function executeStorageParsedCleanup(
         {
           apply: false,
           candidates,
+          max_total_bytes: options.maxTotalBytes ?? null,
           older_than_days: options.olderThanDays,
           total_bytes: sumBytes(candidates),
         },
@@ -42,11 +53,12 @@ export async function executeStorageParsedCleanup(
     return 0;
   }
 
-  const receiptPath = getReceiptPath();
+  const receiptPath = getReceiptPath(dependencies.now);
   const applyingReceipt = {
     candidates,
-    created_at: new Date().toISOString(),
+    created_at: (dependencies.now ?? new Date()).toISOString(),
     deleted_paths: [],
+    max_total_bytes: options.maxTotalBytes ?? null,
     older_than_days: options.olderThanDays,
     skipped_paths: [],
     quarantined_paths: [],
@@ -55,71 +67,46 @@ export async function executeStorageParsedCleanup(
   await mkdir(dirname(receiptPath), { recursive: true });
   await writeReceipt(receiptPath, applyingReceipt);
 
-  const deleted: ParsedIntermediateCleanupCandidate[] = [];
-  const quarantined = new Set<string>();
-  const skipped: string[] = [];
+  let cleanup: ParsedIntermediateCleanupResult | undefined;
   try {
-    for (const candidate of candidates) {
-      const current = await findCurrentCandidate(database, candidate, options.olderThanDays);
-      if (current === undefined) {
-        skipped.push(candidate.path);
-        continue;
-      }
-
-      const quarantinePath = `${current.path}.asd-cleanup-${randomUUID()}.quarantine`;
-      try {
-        await rename(current.path, quarantinePath);
-      } catch (error) {
-        if (isMissingPathError(error)) {
-          skipped.push(candidate.path);
-          continue;
-        }
-        throw error;
-      }
-      quarantined.add(quarantinePath);
-
-      const metadata = await stat(quarantinePath);
-      if (!sameFileIdentity(current, metadata)) {
-        skipped.push(candidate.path);
-        if (await restoreQuarantinedFile(quarantinePath, current.path)) {
-          quarantined.delete(quarantinePath);
-          continue;
-        }
-        continue;
-      }
-
-      await unlink(quarantinePath);
-      quarantined.delete(quarantinePath);
-      deleted.push(current);
-    }
+    cleanup = await applyParsedIntermediateCleanup(
+      database,
+      cleanupOptions,
+      dependencies.fileSystem,
+    );
     await writeReceipt(receiptPath, {
       ...applyingReceipt,
-      deleted_paths: deleted.map((candidate) => candidate.path),
-      quarantined_paths: [...quarantined],
-      skipped_paths: skipped,
+      deleted_paths: cleanup.deleted.map((candidate) => candidate.path),
+      quarantined_paths: cleanup.quarantined,
+      skipped_paths: cleanup.skipped,
       status: "completed",
     });
   } catch (error) {
+    const partial = error instanceof ParsedIntermediateCleanupError ? error.result : cleanup;
     await writeReceipt(receiptPath, {
       ...applyingReceipt,
-      deleted_paths: deleted.map((candidate) => candidate.path),
-      quarantined_paths: [...quarantined],
-      skipped_paths: skipped,
+      deleted_paths: partial?.deleted.map((candidate) => candidate.path) ?? [],
+      quarantined_paths: partial?.quarantined ?? [],
+      skipped_paths: partial?.skipped ?? [],
       status: "failed",
     });
     throw error;
   }
 
+  if (cleanup === undefined) {
+    throw new Error("parsed cleanup completed without a result");
+  }
   context.output.info(
     JSON.stringify(
       {
         apply: true,
-        deleted,
+        deleted: cleanup.deleted,
+        max_total_bytes: options.maxTotalBytes ?? null,
         older_than_days: options.olderThanDays,
-        quarantined: [...quarantined],
+        quarantined: cleanup.quarantined,
         receipt_path: receiptPath,
-        skipped,
-        total_bytes: sumBytes(deleted),
+        skipped: cleanup.skipped,
+        total_bytes: sumBytes(cleanup.deleted),
       },
       null,
       2,
@@ -130,6 +117,7 @@ export async function executeStorageParsedCleanup(
 
 function parseStorageParsedCleanupOptions(args: readonly string[]): StorageParsedCleanupOptions {
   let apply = false;
+  let maxTotalBytes: number | undefined;
   let olderThanDays = defaultOlderThanDays;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -148,14 +136,24 @@ function parseStorageParsedCleanupOptions(args: readonly string[]): StorageParse
       index += 1;
       continue;
     }
+    if (argument === "--max-total-bytes") {
+      const value = args[index + 1];
+      const parsed = Number(value);
+      if (!Number.isSafeInteger(parsed) || parsed < 0) {
+        throw new Error("storage cleanup-parsed --max-total-bytes requires a non-negative integer");
+      }
+      maxTotalBytes = parsed;
+      index += 1;
+      continue;
+    }
     throw new Error(`Unknown storage cleanup-parsed option: ${argument ?? ""}`);
   }
 
-  return { apply, olderThanDays };
+  return { apply, maxTotalBytes, olderThanDays };
 }
 
-function getReceiptPath(): string {
-  const timestamp = new Date().toISOString().replaceAll(":", "-");
+function getReceiptPath(now: Date = new Date()): string {
+  const timestamp = now.toISOString().replaceAll(":", "-");
   return join(getRuntimePath("deletes"), "receipts", `parsed-cleanup-${timestamp}.json`);
 }
 
@@ -163,66 +161,6 @@ async function writeReceipt(path: string, value: Record<string, unknown>): Promi
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
-async function findCurrentCandidate(
-  database: DatabaseSync,
-  expected: ParsedIntermediateCleanupCandidate,
-  olderThanDays: number,
-): Promise<ParsedIntermediateCleanupCandidate | undefined> {
-  const candidates = await listParsedIntermediateCleanupCandidates(database, { olderThanDays });
-  return candidates.find((candidate) => sameCandidateIdentity(expected, candidate));
-}
-
-async function restoreQuarantinedFile(
-  quarantinePath: string,
-  originalPath: string,
-): Promise<boolean> {
-  try {
-    await access(originalPath);
-    return false;
-  } catch (error) {
-    if (!isMissingPathError(error)) {
-      throw error;
-    }
-  }
-  await rename(quarantinePath, originalPath);
-  return true;
-}
-
-function sameCandidateIdentity(
-  left: ParsedIntermediateCleanupCandidate,
-  right: ParsedIntermediateCleanupCandidate,
-): boolean {
-  return (
-    left.bytes === right.bytes &&
-    left.device === right.device &&
-    left.inode === right.inode &&
-    left.lifecycle_state === right.lifecycle_state &&
-    left.modified_at === right.modified_at &&
-    left.path === right.path &&
-    left.session_id === right.session_id
-  );
-}
-
-function sameFileIdentity(
-  candidate: ParsedIntermediateCleanupCandidate,
-  metadata: Awaited<ReturnType<typeof stat>>,
-): boolean {
-  return (
-    candidate.bytes === metadata.size &&
-    candidate.device === metadata.dev &&
-    candidate.inode === metadata.ino &&
-    candidate.modified_at === metadata.mtime.toISOString()
-  );
-}
 function sumBytes(candidates: readonly ParsedIntermediateCleanupCandidate[]): number {
   return candidates.reduce((total, candidate) => total + candidate.bytes, 0);
-}
-
-function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as NodeJS.ErrnoException).code === "ENOENT"
-  );
 }
