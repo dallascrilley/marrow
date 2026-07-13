@@ -21,6 +21,7 @@ export type RecallEventsSummary = {
   total_fires: number;
   fires_delivered: number;
   distinct_projects: number;
+  last_delivered_at: string | null;
   last_fire_at: string | null;
 };
 
@@ -46,12 +47,19 @@ export async function summarizeRecallEvents(): Promise<RecallEventsSummary> {
   try {
     contents = await readFile(getRecallEventsPath(), "utf8");
   } catch {
-    return { total_fires: 0, fires_delivered: 0, distinct_projects: 0, last_fire_at: null };
+    return {
+      total_fires: 0,
+      fires_delivered: 0,
+      distinct_projects: 0,
+      last_delivered_at: null,
+      last_fire_at: null,
+    };
   }
 
   const projects = new Set<string>();
   let total = 0;
   let delivered = 0;
+  let lastDeliveredAt: string | null = null;
   let lastFireAt: string | null = null;
 
   for (const line of contents.split("\n")) {
@@ -64,7 +72,15 @@ export async function summarizeRecallEvents(): Promise<RecallEventsSummary> {
       continue;
     }
     total += 1;
-    if (event.delivered === true) delivered += 1;
+    if (event.delivered === true) {
+      delivered += 1;
+      if (
+        typeof event.ts === "string" &&
+        (lastDeliveredAt === null || event.ts > lastDeliveredAt)
+      ) {
+        lastDeliveredAt = event.ts;
+      }
+    }
     if (typeof event.project_id === "string") projects.add(event.project_id);
     if (typeof event.ts === "string" && (lastFireAt === null || event.ts > lastFireAt)) {
       lastFireAt = event.ts;
@@ -75,6 +91,7 @@ export async function summarizeRecallEvents(): Promise<RecallEventsSummary> {
     total_fires: total,
     fires_delivered: delivered,
     distinct_projects: projects.size,
+    last_delivered_at: lastDeliveredAt,
     last_fire_at: lastFireAt,
   };
 }
