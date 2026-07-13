@@ -528,14 +528,18 @@ For the supported Claude Code project setup, inspect the SessionStart hook, the 
 ASD MCP registration, and vault reachability without modifying either configuration:
 
 ```bash
+# Read-only configuration and vault-state check.
 node dist/cli.js readback check
+
+# Explicitly run the bounded project-plus-global recall query after installation.
+node dist/cli.js readback check --verify
 ```
 
 Each surface is `installed`, `missing`, `drifted`, or `unverifiable`. Missing or drifted
 hook/MCP results include the explicit `asd hooks install --events start` or `asd mcp install`
-command; run it yourself, then rerun `readback check` and a bounded
-`asd recall --cwd <project>` query. A reachable vault with no project memory is reported as
-an actionable missing recall result rather than silently treating setup as healthy.
+command; run it yourself, then rerun `readback check --verify`. The explicit verification
+returns the bounded recall bytes and `delivered`/`missing` result. A reachable vault with no
+project/global memory is reported as actionable missing recall rather than silently healthy.
 
 ### SessionStart delivery
 

@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { CommandContext } from "../cli.js";
+import { executeRecall } from "./recall.js";
 
 export type ReadbackCheckStatus = "drifted" | "installed" | "missing" | "unverifiable";
 
@@ -16,6 +17,7 @@ export type ReadbackSetupReport = {
   hook: ReadbackCheckSurface;
   mcp: ReadbackCheckSurface;
   recall: ReadbackCheckSurface;
+  verification: { bytes: number; command: string; status: "delivered" | "missing" } | null;
 };
 
 type ReadbackCheckPaths = {
@@ -26,15 +28,18 @@ type ReadbackCheckPaths = {
 };
 
 export async function executeReadbackCheck(context: CommandContext): Promise<number> {
-  if (context.args.length > 0)
-    throw new Error(`Unknown readback check option: ${context.args[0] ?? ""}`);
+  const verify = parseReadbackCheckOptions(context.args);
   const projectRoot = process.cwd();
+  const vaultRoot = process.env.ASD_VAULT_ROOT?.trim() || join(homedir(), "vault");
   const report = await assessReadbackSetup({
     hookPath: join(projectRoot, ".claude", "hooks", "asd-session-start-recall.sh"),
     mcpConfigPath: join(homedir(), ".claude.json"),
     settingsPath: join(projectRoot, ".claude", "settings.json"),
-    vaultRoot: process.env.ASD_VAULT_ROOT?.trim() || join(homedir(), "vault"),
+    vaultRoot,
   });
+  if (verify && report.recall.status !== "unverifiable") {
+    report.verification = await verifyBoundedRecall(context, projectRoot, vaultRoot);
+  }
   context.output.info(JSON.stringify(report, null, 2));
   return report.hook.status === "unverifiable" || report.mcp.status === "unverifiable" ? 2 : 0;
 }
@@ -45,7 +50,33 @@ export async function assessReadbackSetup(paths: ReadbackCheckPaths): Promise<Re
     inspectMcp(paths.mcpConfigPath),
     inspectVault(paths.vaultRoot),
   ]);
-  return { hook, mcp, recall };
+  return { hook, mcp, recall, verification: null };
+}
+
+function parseReadbackCheckOptions(args: readonly string[]): boolean {
+  if (args.length === 0) return false;
+  if (args.length === 1 && args[0] === "--verify") return true;
+  throw new Error(`Unknown readback check option: ${args[0] ?? ""}`);
+}
+
+async function verifyBoundedRecall(
+  context: CommandContext,
+  cwd: string,
+  vaultRoot: string,
+): Promise<{ bytes: number; command: string; status: "delivered" | "missing" }> {
+  const output: string[] = [];
+  await executeRecall({
+    ...context,
+    args: ["--cwd", cwd, "--vault-root", vaultRoot],
+    commandPath: ["recall"],
+    output: { error: (message) => output.push(message), info: (message) => output.push(message) },
+  });
+  const payload = output.join("\n");
+  return {
+    bytes: Buffer.byteLength(payload, "utf8"),
+    command: `asd recall --cwd ${cwd} --vault-root ${vaultRoot}`,
+    status: payload.length > 0 ? "delivered" : "missing",
+  };
 }
 
 async function inspectHook(settingsPath: string, hookPath: string): Promise<ReadbackCheckSurface> {
