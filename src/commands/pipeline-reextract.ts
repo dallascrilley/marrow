@@ -31,6 +31,7 @@ export type ReextractOptions = {
 export async function executePipelineReextract(
   context: CommandContext,
   database: DatabaseSync,
+  dependencies: { runArchivePhase?: typeof runArchivePhase } = {},
 ): Promise<number> {
   const options = parseReextractOptions(context.args);
 
@@ -58,6 +59,7 @@ export async function executePipelineReextract(
   }
 
   const processed: Array<Record<string, unknown>> = [];
+  const cleanupFailures: Array<{ error: string; session_id: string }> = [];
 
   for (const session of sessions) {
     try {
@@ -82,7 +84,7 @@ export async function executePipelineReextract(
         reduced.events,
         false,
       );
-      await runArchivePhase({
+      const archived = await (dependencies.runArchivePhase ?? runArchivePhase)({
         database,
         events: reduced.events,
         knowledge,
@@ -93,10 +95,21 @@ export async function executePipelineReextract(
       });
 
       processed.push({
+        ...(archived.parsedIntermediateCleanupError === null
+          ? {}
+          : {
+              parsed_intermediate_cleanup_error: archived.parsedIntermediateCleanupError,
+            }),
         project_learning_count: knowledge.project.count,
         session_id: session.session_id,
         summary_path: summary.summaryPath,
       });
+      if (archived.parsedIntermediateCleanupError !== null) {
+        cleanupFailures.push({
+          error: archived.parsedIntermediateCleanupError,
+          session_id: session.session_id,
+        });
+      }
     } catch (error) {
       // A throw partway through the phases (e.g. summary written but extract
       // failed) leaves this session partially regenerated. The phases are
@@ -115,6 +128,8 @@ export async function executePipelineReextract(
   context.output.info(
     JSON.stringify(
       {
+        cleanup_failed_count: cleanupFailures.length,
+        cleanup_failures: cleanupFailures,
         matched_count: sessions.length,
         processed,
         reextracted_count: reextractedCount,
@@ -127,7 +142,7 @@ export async function executePipelineReextract(
       2,
     ),
   );
-  return reextractedCount === 0 && sessions.length > 0 ? 1 : 0;
+  return (reextractedCount === 0 && sessions.length > 0) || cleanupFailures.length > 0 ? 1 : 0;
 }
 
 async function selectReextractSessions(

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const pipelineScript = join(projectRoot, "scripts", "scheduled-memory-pipeline.sh");
+const pipelineRecipe = join(projectRoot, "docs", "recipes", "scheduled-memory-pipeline.md");
 
 async function runPipeline(reviewOutput, options = {}) {
   const sandbox = await mkdtemp(join(tmpdir(), "asd-scheduled-pipeline-"));
@@ -128,4 +129,23 @@ test("scheduled pipeline skips review but still retains parsed staging without c
   assert.doesNotMatch(commands, /quality review-learnings/);
   assert.doesNotMatch(commands, /quality apply-learning-review/);
   assert.match(commands, /storage cleanup-parsed --apply/);
+});
+
+test("scheduled cleanup runs before audit and docs describe receipt retries and environment", async () => {
+  const { commands, result } = await runPipeline({ generated_batch: false });
+  assert.equal(result.status, 0, result.stderr);
+  const lines = commands.trim().split("\n");
+  const cleanupIndex = lines.findIndex((line) => line.startsWith("storage cleanup-parsed --apply"));
+  const auditIndex = lines.findIndex((line) => line.startsWith("quality audit"));
+  const reviewIndex = lines.findIndex((line) => line.startsWith("quality review-learnings"));
+  assert.ok(cleanupIndex >= 0 && cleanupIndex < auditIndex && auditIndex < reviewIndex);
+
+  const recipe = await readFile(pipelineRecipe, "utf8");
+  assert.match(
+    recipe,
+    /pipeline gate --skip-ingest[\s\S]*storage cleanup-parsed --apply[\s\S]*quality audit/,
+  );
+  assert.match(recipe, /failed or interrupted applying receipts are retried immediately/i);
+  assert.match(recipe, /`ASD_PARSED_RETENTION_OLDER_THAN_DAYS`/);
+  assert.match(recipe, /`ASD_PARSED_MAX_TOTAL_BYTES`/);
 });
