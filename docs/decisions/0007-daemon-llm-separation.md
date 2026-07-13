@@ -51,10 +51,10 @@ Ship **Option B**:
 - `asd pipeline gate` reports pending ingest sessions (per adapter),
   unreviewed project learnings, and LLM budget headroom.
 - `quality review-learnings` accepts `--if-new` and `--max-per N/Tu`
-  (default from `ASD_LLM_MAX_PER`, fallback `5/24h`).
+  (default from `ASD_LLM_MAX_PER`, fallback `50/24h`; current as of 2026-07-13).
 - Budget uses persist file `reports/llm-budget.json` under the runtime root.
 - `scripts/scheduled-memory-pipeline.sh` calls gate before audit and passes
-  gate flags to review-learnings.
+  its explicit scheduled example cap (`5/24h`) to review-learnings.
 
 No new daemon process. Full daemon remains out of scope.
 
