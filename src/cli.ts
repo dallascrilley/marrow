@@ -33,6 +33,7 @@ import { executeSearch } from "./commands/search.js";
 import { executeSkillEvidence } from "./commands/skill-evidence.js";
 import { executeSkillReport } from "./commands/skill-report.js";
 import { executeStats } from "./commands/stats.js";
+import { executeStorageInventory } from "./commands/storage-inventory.js";
 import { executeWorkflowApply } from "./commands/workflow-apply.js";
 import { executeWorkflowJudge } from "./commands/workflow-judge.js";
 import { executeWorkflowMine } from "./commands/workflow-mine.js";
@@ -184,6 +185,16 @@ const commandTree: Record<string, CommandDefinition> = {
   stats: {
     description: "Report high-level distillery runtime statistics.",
     execute: async (context) => withLedger(context, executeStats),
+  },
+  storage: {
+    description: "Inspect bounded runtime lifecycle and storage inventory.",
+    subcommands: {
+      inventory: {
+        description:
+          "Classify runtime files by artifact kind, lifecycle state, age, and conservative retention dependency. Pass --json, --state, or --older-than-days.",
+        execute: async (context) => withLedger(context, executeStorageInventory),
+      },
+    },
   },
   explain: {
     description: "Explain how a stored result was derived.",
