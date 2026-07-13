@@ -47,6 +47,7 @@ import {
   executeWorkflowReview,
   executeWorkflowShow,
 } from "./commands/workflow-review.js";
+import { executeWorktreeCheck } from "./commands/worktree-check.js";
 import { getRuntimeRoot } from "./config/paths.js";
 import { createLedger } from "./db/ledger.js";
 
@@ -239,6 +240,16 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "Install Claude Code SessionEnd hook → asd ingest sync --source claude-code (project .claude/ by default; pass --global for ~/.claude/settings.json).",
         execute: async (context) => executeHooksInstall(context),
+      },
+    },
+  },
+  worktree: {
+    description: "Inspect registered Git worktrees without mutating them.",
+    subcommands: {
+      check: {
+        description:
+          "Classify registered worktrees as clean-current, dirty-active, dirty-stale, merged, or unknown. Flags: --json, --repo <path>.",
+        execute: async (context) => executeWorktreeCheck(context),
       },
     },
   },
