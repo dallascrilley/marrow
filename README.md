@@ -28,6 +28,7 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 | SessionEnd → ingest (Claude Code) | `asd hooks install` — [`docs/recipes/session-end-ingest-hook.md`](docs/recipes/session-end-ingest-hook.md) |
 | Scheduled ingest + wiki push | [`docs/recipes/scheduled-memory-pipeline.md`](docs/recipes/scheduled-memory-pipeline.md) |
 | Pipeline gate (skip LLM when idle) | `asd pipeline gate --max-per 5/24h --max-usd 1/24h` — ADR-0007 |
+| Operator health snapshot | `asd health` / `asd health --json` — [`docs/recipes/scheduled-memory-pipeline.md`](docs/recipes/scheduled-memory-pipeline.md) |
 | Re-extract stale artifacts (deterministic, no LLM) | `asd pipeline reextract --process-chatter-only --dry-run` then drop `--dry-run` to apply (or `--session-id <id>`) |
 | Skill usage evidence in corpus | `asd skill evidence <skill-id>` (after `export-index`) |
 | Skill adherence report | `asd skill report <skill-id>` — [`docs/recipes/skill-adherence-report.md`](docs/recipes/skill-adherence-report.md) |
@@ -253,6 +254,18 @@ node dist/cli.js doctor provider --json
 Without `OPENROUTER_API_KEY`, credential and remote route checks fail or skip, but
 local count/USD budget checks still report. Use this before LLM-gated commands
 such as `quality review-learnings`.
+
+Read the overall runtime health without running provider network checks:
+
+```bash
+node dist/cli.js health
+node dist/cli.js health --json
+```
+
+The default summary reports health, recall delivery, blockers, review freshness, count/USD
+budget headroom, storage pressure, and one next command. Provider status is explicitly
+`not checked` unless you run `doctor provider` separately. Exit codes are `0` for healthy,
+`1` for degraded, and `2` when the health model cannot be read.
 
 High-level runtime stats:
 
