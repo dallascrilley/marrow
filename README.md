@@ -366,7 +366,7 @@ Review deterministic project learnings with OpenRouter memory lint:
 # Source the key from 1Password: "OpenRouter API Credentials - agent-session-distillery"
 export OPENROUTER_API_KEY="$(op read 'op://Private/OpenRouter API Credentials - agent-session-distillery/credential')"
 
-node dist/cli.js quality review-learnings --model openai/gpt-5-nano
+node dist/cli.js quality review-learnings --model openrouter/auto
 node dist/cli.js quality review-learnings --limit 25 --max-total-learnings 100
 node dist/cli.js quality review-learnings --cache-dir /tmp/asd-review-cache
 node dist/cli.js quality review-learnings --refresh-llm
