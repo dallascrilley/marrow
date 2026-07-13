@@ -88,6 +88,7 @@ export async function processDiscoveredSessions(
   resume: boolean,
   llmTopic = false,
   onUsage?: LlmUsageSink,
+  dependencies: { runArchivePhase?: typeof runArchivePhase } = {},
 ): Promise<ProcessDiscoveredSessionsResult> {
   const sessions: Array<Record<string, unknown>> = [];
   const failures: ProcessDiscoveredSessionsResult["failures"] = [];
@@ -125,7 +126,7 @@ export async function processDiscoveredSessions(
         reduced.events,
         resume,
       );
-      const archived = await runArchivePhase({
+      const archived = await (dependencies.runArchivePhase ?? runArchivePhase)({
         database,
         events: reduced.events,
         knowledge: extracted,
@@ -144,6 +145,11 @@ export async function processDiscoveredSessions(
         summary_path: summary.summaryPath,
         turns: reduced.turns.length,
       });
+      if (archived.parsedIntermediateCleanupError !== null) {
+        const error = `parsed intermediate cleanup failed: ${archived.parsedIntermediateCleanupError}`;
+        failures.push({ error, session_id: sourceSession.session_id });
+        console.warn(`[asd] ingest cleanup pending ${sourceSession.session_id}: ${error}`);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       failures.push({

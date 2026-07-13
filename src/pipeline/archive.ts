@@ -8,6 +8,7 @@ import {
 } from "../db/ledger.js";
 import type { SourceSessionRow } from "../db/queries.js";
 import type { Event, Turn } from "../models/canonical.js";
+import { listParsedIntermediateCleanupCandidatesForSessions } from "../read/lifecycle-inventory.js";
 import type { KnowledgeWriteResult } from "../writers/knowledge-writer.js";
 import { writeSessionManifest } from "../writers/manifest-writer.js";
 import {
@@ -16,7 +17,8 @@ import {
   writeRetentionReceipt,
 } from "../writers/report-writer.js";
 import type { SummaryWriteResult } from "../writers/summary-writer.js";
-import { applyParsedIntermediateCleanup } from "./parsed-cleanup.js";
+import type { ParsedIntermediateCleanupFileSystem } from "./parsed-cleanup.js";
+import { applyParsedIntermediateCleanupWithReceipt } from "./parsed-cleanup-receipts.js";
 import { evaluateRetentionReadiness } from "./retention.js";
 
 export type ArchivePhaseResult = {
@@ -35,6 +37,8 @@ export async function runArchivePhase(input: {
   sourceSessionId: number;
   summary: SummaryWriteResult;
   turns: readonly Turn[];
+  now?: Date;
+  parsedCleanupFileSystem?: ParsedIntermediateCleanupFileSystem;
 }): Promise<ArchivePhaseResult> {
   try {
     const receiptPath = getReceiptPath(input.sourceSession.session_id);
@@ -131,10 +135,30 @@ export async function runArchivePhase(input: {
     let parsedIntermediateDeleted = false;
     let parsedIntermediateCleanupError: string | null = null;
     if (candidate.safe_to_delete === 1) {
+      const cleanupNow = input.now ?? new Date();
       try {
-        const cleanup = await applyParsedIntermediateCleanup(input.database, {
+        const cleanupOptions = { now: cleanupNow, olderThanDays: 0 };
+        const candidates =
+          input.parsedCleanupFileSystem === undefined
+            ? await listParsedIntermediateCleanupCandidatesForSessions(
+                input.database,
+                [input.sourceSession.session_id],
+                cleanupOptions,
+              )
+            : await listParsedIntermediateCleanupCandidatesForSessions(
+                input.database,
+                [input.sourceSession.session_id],
+                cleanupOptions,
+                input.parsedCleanupFileSystem,
+              );
+        const { cleanup } = await applyParsedIntermediateCleanupWithReceipt({
+          candidates,
+          createdAt: cleanupNow,
+          database: input.database,
           olderThanDays: 0,
-          sessionIds: [input.sourceSession.session_id],
+          ...(input.parsedCleanupFileSystem === undefined
+            ? {}
+            : { fileSystem: input.parsedCleanupFileSystem }),
         });
         parsedIntermediateDeleted = cleanup.deleted.length > 0;
       } catch (error) {

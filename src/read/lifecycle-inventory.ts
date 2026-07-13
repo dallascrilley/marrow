@@ -1,11 +1,16 @@
 import type { Dir } from "node:fs";
-import { access, opendir, stat } from "node:fs/promises";
-import { relative, sep } from "node:path";
+import { access, lstat, opendir, realpath, stat } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
 
 import type { DatabaseSync } from "node:sqlite";
 
-import { getRuntimeRoot } from "../config/paths.js";
-import { listDeletionCandidates, listSourceSessions } from "../db/ledger.js";
+import { getRuntimePath, getRuntimeRoot } from "../config/paths.js";
+import {
+  getDeletionCandidateBySessionId,
+  getSourceSessionBySessionId,
+  listDeletionCandidates,
+  listSourceSessions,
+} from "../db/ledger.js";
 import type { DeletionCandidateRow, SourceSessionRow } from "../db/queries.js";
 import { ingestStatuses } from "../models/canonical.js";
 import {
@@ -88,6 +93,7 @@ export interface ParsedIntermediateCleanupCandidate {
   inode: number;
   lifecycle_state: RuntimeInventoryLifecycleState;
   modified_at: string;
+  modified_at_nanoseconds?: string;
   path: string;
   reason: string;
   session_id: string;
@@ -98,6 +104,29 @@ export interface ParsedIntermediateCleanupOptions {
   now?: Date;
   olderThanDays: number;
 }
+
+export type ParsedIntermediateCandidateFileSystem = {
+  access: typeof access;
+  lstat?: typeof lstat;
+  realpath?: typeof realpath;
+  stat: typeof stat;
+};
+
+export type ParsedIntermediateCleanupSelectionObserver = {
+  onVisit?: (candidate: ParsedIntermediateCleanupCandidate) => void;
+};
+
+type ResolvedParsedIntermediateCandidateFileSystem = {
+  access: typeof access;
+  lstat: typeof lstat;
+  realpath: typeof realpath;
+  usesNativeLstat: boolean;
+};
+
+type SafeParsedIntermediateMetadata = {
+  metadata: Awaited<ReturnType<typeof lstat>>;
+  modifiedAtNanoseconds?: string;
+};
 
 type KnownArtifact = {
   kind: RuntimeInventoryArtifactKind;
@@ -211,8 +240,6 @@ export async function listParsedIntermediateCleanupCandidates(
   options: ParsedIntermediateCleanupOptions,
 ): Promise<ParsedIntermediateCleanupCandidate[]> {
   const runtimeRoot = getRuntimeRoot();
-  const now = options.now ?? new Date();
-  const cutoff = now.getTime() - options.olderThanDays * millisecondsPerDay;
   const context = buildInventoryContext(database);
   const eligible: ParsedIntermediateCleanupCandidate[] = [];
 
@@ -242,34 +269,343 @@ export async function listParsedIntermediateCleanupCandidates(
       inode: file.inode,
       lifecycle_state: classified.lifecycleState,
       modified_at: file.modifiedAt.toISOString(),
+      modified_at_nanoseconds: file.modifiedAtNanoseconds,
       path: file.path,
       reason: classified.reason,
       session_id: classified.sessionId,
     });
   }
 
-  eligible.sort(
-    (left, right) =>
-      left.modified_at.localeCompare(right.modified_at) || left.path.localeCompare(right.path),
-  );
-  const selected = new Set(
-    eligible
-      .filter((candidate) => Date.parse(candidate.modified_at) <= cutoff)
-      .map((candidate) => candidate.path),
-  );
+  return selectParsedIntermediateCleanupCandidateSnapshot(eligible, options);
+}
 
-  if (options.maxTotalBytes !== undefined) {
-    let remainingBytes = eligible.reduce((total, candidate) => total + candidate.bytes, 0);
-    for (const candidate of eligible) {
-      if (remainingBytes <= options.maxTotalBytes) {
-        break;
+/**
+ * Select cleanup candidates for exact sessions without traversing the runtime tree.
+ * Each session can contribute only staging/<session>/parsed-records.json.
+ */
+export async function listParsedIntermediateCleanupCandidatesForSessions(
+  database: DatabaseSync,
+  sessionIds: readonly string[],
+  options: ParsedIntermediateCleanupOptions,
+  fileSystem: ParsedIntermediateCandidateFileSystem = { access, stat },
+): Promise<ParsedIntermediateCleanupCandidate[]> {
+  const resolvedFileSystem = resolveCandidateFileSystem(fileSystem);
+  const eligible: ParsedIntermediateCleanupCandidate[] = [];
+  for (const sessionId of new Set(sessionIds)) {
+    const candidate = await inspectExactParsedIntermediateCandidate(
+      database,
+      sessionId,
+      resolvedFileSystem,
+    );
+    if (candidate !== undefined) {
+      eligible.push(candidate);
+    }
+  }
+  return selectParsedIntermediateCleanupCandidateSnapshot(eligible, options);
+}
+
+/** Revalidate one immutable snapshot entry by its exact path and current retention state. */
+export async function revalidateParsedIntermediateCleanupCandidate(
+  database: DatabaseSync,
+  expected: ParsedIntermediateCleanupCandidate,
+  fileSystem: ParsedIntermediateCandidateFileSystem = { access, stat },
+): Promise<ParsedIntermediateCleanupCandidate | undefined> {
+  const resolvedFileSystem = resolveCandidateFileSystem(fileSystem);
+  const current = await inspectExactParsedIntermediateCandidate(
+    database,
+    expected.session_id,
+    resolvedFileSystem,
+  );
+  return current !== undefined && sameParsedIntermediateCleanupCandidateIdentity(expected, current)
+    ? current
+    : undefined;
+}
+
+/** Revalidate lifecycle and durable-artifact eligibility without rediscovering a file path. */
+export async function revalidateParsedIntermediateCleanupCandidateRetention(
+  database: DatabaseSync,
+  expected: ParsedIntermediateCleanupCandidate,
+  fileSystem: ParsedIntermediateCandidateFileSystem = { access, stat },
+): Promise<boolean> {
+  const eligibility = await inspectExactParsedIntermediateEligibility(
+    database,
+    expected.session_id,
+    resolveCandidateFileSystem(fileSystem).access,
+  );
+  return (
+    eligibility !== undefined &&
+    eligibility.lifecycle_state === expected.lifecycle_state &&
+    eligibility.path === expected.path &&
+    eligibility.session_id === expected.session_id
+  );
+}
+
+export function sameParsedIntermediateCleanupCandidateIdentity(
+  left: ParsedIntermediateCleanupCandidate,
+  right: ParsedIntermediateCleanupCandidate,
+): boolean {
+  return (
+    left.bytes === right.bytes &&
+    left.device === right.device &&
+    left.inode === right.inode &&
+    left.lifecycle_state === right.lifecycle_state &&
+    left.modified_at === right.modified_at &&
+    (left.modified_at_nanoseconds === undefined ||
+      right.modified_at_nanoseconds === undefined ||
+      left.modified_at_nanoseconds === right.modified_at_nanoseconds) &&
+    left.path === right.path &&
+    left.session_id === right.session_id
+  );
+}
+
+async function inspectExactParsedIntermediateCandidate(
+  database: DatabaseSync,
+  sessionId: string,
+  fileSystem: ResolvedParsedIntermediateCandidateFileSystem,
+): Promise<ParsedIntermediateCleanupCandidate | undefined> {
+  const eligibility = await inspectExactParsedIntermediateEligibility(
+    database,
+    sessionId,
+    fileSystem.access,
+  );
+  if (eligibility === undefined) {
+    return undefined;
+  }
+
+  const inspected = await inspectSafeParsedIntermediatePath(
+    eligibility.path,
+    sessionId,
+    fileSystem,
+  );
+  if (inspected === undefined) {
+    return undefined;
+  }
+  const { metadata, modifiedAtNanoseconds } = inspected;
+
+  return {
+    bytes: Number(metadata.size),
+    device: Number(metadata.dev),
+    inode: Number(metadata.ino),
+    lifecycle_state: eligibility.lifecycle_state,
+    modified_at: metadata.mtime.toISOString(),
+    ...(modifiedAtNanoseconds === undefined
+      ? {}
+      : { modified_at_nanoseconds: modifiedAtNanoseconds }),
+    path: eligibility.path,
+    reason: eligibility.reason,
+    session_id: sessionId,
+  };
+}
+
+async function inspectExactParsedIntermediateEligibility(
+  database: DatabaseSync,
+  sessionId: string,
+  fileAccess: typeof access,
+): Promise<
+  | Pick<ParsedIntermediateCleanupCandidate, "lifecycle_state" | "path" | "reason" | "session_id">
+  | undefined
+> {
+  const session = getSourceSessionBySessionId(database, sessionId);
+  const deletionCandidate = getDeletionCandidateBySessionId(database, sessionId);
+  if (
+    session === null ||
+    deletionCandidate === null ||
+    deletionCandidate.source_session_id !== session.id
+  ) {
+    return undefined;
+  }
+
+  const classification = classifyRetention(
+    "staging_parsed",
+    session.current_lifecycle_state,
+    deletionCandidate,
+  );
+  if (
+    classification.retention !== "reclaimable" ||
+    !(await hasRequiredRetentionArtifacts(deletionCandidate, fileAccess))
+  ) {
+    return undefined;
+  }
+
+  const path = join(getRuntimePath("staging"), sessionId, "parsed-records.json");
+  if (!isExactParsedIntermediatePath(path, getRuntimeRoot())) {
+    return undefined;
+  }
+  return {
+    lifecycle_state: session.current_lifecycle_state,
+    path,
+    reason: classification.reason,
+    session_id: sessionId,
+  };
+}
+
+async function inspectSafeParsedIntermediatePath(
+  path: string,
+  sessionId: string,
+  fileSystem: ResolvedParsedIntermediateCandidateFileSystem,
+): Promise<SafeParsedIntermediateMetadata | undefined> {
+  const stagingRoot = getRuntimePath("staging");
+  const sessionDirectory = join(stagingRoot, sessionId);
+  try {
+    const [metadata, sessionMetadata, resolvedStagingRoot, resolvedSessionDirectory] =
+      await Promise.all([
+        fileSystem.lstat(path),
+        fileSystem.lstat(sessionDirectory),
+        fileSystem.realpath(stagingRoot),
+        fileSystem.realpath(sessionDirectory),
+      ]);
+    if (
+      metadata.isSymbolicLink() ||
+      !metadata.isFile() ||
+      sessionMetadata.isSymbolicLink() ||
+      !sessionMetadata.isDirectory() ||
+      relative(resolvedStagingRoot, resolvedSessionDirectory) !== sessionId
+    ) {
+      return undefined;
+    }
+    let modifiedAtNanoseconds: string | undefined;
+    if (fileSystem.usesNativeLstat) {
+      const exactMetadata = await lstat(path, { bigint: true });
+      if (
+        Number(exactMetadata.dev) !== Number(metadata.dev) ||
+        Number(exactMetadata.ino) !== Number(metadata.ino)
+      ) {
+        return undefined;
       }
+      modifiedAtNanoseconds = exactMetadata.mtimeNs.toString();
+    }
+    return {
+      metadata,
+      ...(modifiedAtNanoseconds === undefined ? {} : { modifiedAtNanoseconds }),
+    };
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+function resolveCandidateFileSystem(
+  fileSystem: ParsedIntermediateCandidateFileSystem,
+): ResolvedParsedIntermediateCandidateFileSystem {
+  return {
+    access: fileSystem.access,
+    lstat: fileSystem.lstat ?? lstat,
+    realpath: fileSystem.realpath ?? realpath,
+    usesNativeLstat: fileSystem.lstat === undefined || fileSystem.lstat === lstat,
+  };
+}
+
+export function selectParsedIntermediateCleanupCandidateSnapshot(
+  eligible: readonly ParsedIntermediateCleanupCandidate[],
+  options: ParsedIntermediateCleanupOptions,
+  observer: ParsedIntermediateCleanupSelectionObserver = {},
+): ParsedIntermediateCleanupCandidate[] {
+  const now = options.now ?? new Date();
+  const cutoff = now.getTime() - options.olderThanDays * millisecondsPerDay;
+  const selected = new Set<string>();
+  let totalBytes = 0;
+  for (const candidate of eligible) {
+    observer.onVisit?.(candidate);
+    totalBytes += candidate.bytes;
+    if (Date.parse(candidate.modified_at) <= cutoff) {
       selected.add(candidate.path);
-      remainingBytes -= candidate.bytes;
+    }
+  }
+
+  if (options.maxTotalBytes !== undefined && totalBytes > options.maxTotalBytes) {
+    const bytesToRemove = totalBytes - options.maxTotalBytes;
+    for (const candidate of selectOldestCandidatesByBytes(eligible, bytesToRemove, observer)) {
+      selected.add(candidate.path);
     }
   }
 
   return eligible.filter((candidate) => selected.has(candidate.path));
+}
+
+function selectOldestCandidatesByBytes(
+  eligible: readonly ParsedIntermediateCleanupCandidate[],
+  bytesToRemove: number,
+  observer: ParsedIntermediateCleanupSelectionObserver,
+): ParsedIntermediateCleanupCandidate[] {
+  const selected: ParsedIntermediateCleanupCandidate[] = [];
+  let remainingBytes = bytesToRemove;
+  let pool = [...eligible];
+
+  while (remainingBytes > 0 && pool.length > 0) {
+    const pivot = selectLinearPivot(pool, observer);
+    const older: ParsedIntermediateCleanupCandidate[] = [];
+    const equal: ParsedIntermediateCleanupCandidate[] = [];
+    const newer: ParsedIntermediateCleanupCandidate[] = [];
+    let olderBytes = 0;
+
+    for (const candidate of pool) {
+      observer.onVisit?.(candidate);
+      const comparison = compareParsedIntermediateCandidates(candidate, pivot);
+      if (comparison < 0) {
+        older.push(candidate);
+        olderBytes += candidate.bytes;
+      } else if (comparison > 0) {
+        newer.push(candidate);
+      } else {
+        equal.push(candidate);
+      }
+    }
+
+    if (remainingBytes <= olderBytes) {
+      pool = older;
+      continue;
+    }
+
+    selected.push(...older);
+    remainingBytes -= olderBytes;
+    for (const candidate of equal) {
+      selected.push(candidate);
+      remainingBytes -= candidate.bytes;
+      if (remainingBytes <= 0) {
+        return selected;
+      }
+    }
+    pool = newer;
+  }
+
+  return selected;
+}
+
+function selectLinearPivot(
+  candidates: readonly ParsedIntermediateCleanupCandidate[],
+  observer: ParsedIntermediateCleanupSelectionObserver,
+): ParsedIntermediateCleanupCandidate {
+  if (candidates.length <= 5) {
+    for (const candidate of candidates) {
+      observer.onVisit?.(candidate);
+    }
+    return [...candidates].sort(compareParsedIntermediateCandidates)[
+      Math.floor(candidates.length / 2)
+    ] as ParsedIntermediateCleanupCandidate;
+  }
+
+  const medians: ParsedIntermediateCleanupCandidate[] = [];
+  for (let index = 0; index < candidates.length; index += 5) {
+    const group = candidates.slice(index, index + 5);
+    for (const candidate of group) {
+      observer.onVisit?.(candidate);
+    }
+    group.sort(compareParsedIntermediateCandidates);
+    const median = group[Math.floor(group.length / 2)];
+    if (median !== undefined) {
+      medians.push(median);
+    }
+  }
+  return selectLinearPivot(medians, observer);
+}
+
+function compareParsedIntermediateCandidates(
+  left: ParsedIntermediateCleanupCandidate,
+  right: ParsedIntermediateCleanupCandidate,
+): number {
+  return left.modified_at.localeCompare(right.modified_at) || left.path.localeCompare(right.path);
 }
 
 export function isRuntimeInventoryLifecycleState(
@@ -424,11 +760,15 @@ function isExactParsedIntermediatePath(path: string, runtimeRoot: string): boole
   );
 }
 
-async function hasRequiredRetentionArtifacts(candidate: DeletionCandidateRow): Promise<boolean> {
+async function hasRequiredRetentionArtifacts(
+  candidate: DeletionCandidateRow,
+  fileAccess: typeof access = access,
+): Promise<boolean> {
   const manifestPresent =
     (await pathExists(
       getSessionManifestPathForRevision(candidate.session_id, candidate.source_hash),
-    )) || (await pathExists(getSessionManifestPath(candidate.session_id)));
+      fileAccess,
+    )) || (await pathExists(getSessionManifestPath(candidate.session_id), fileAccess));
   const [
     projectKnowledgePresent,
     receiptPresent,
@@ -436,11 +776,14 @@ async function hasRequiredRetentionArtifacts(candidate: DeletionCandidateRow): P
     summaryMarkdownPresent,
     userKnowledgePresent,
   ] = await Promise.all([
-    pathExists(getProjectKnowledgeSessionPath(candidate.project_key, candidate.session_id)),
-    pathExists(getRetentionReceiptPath(candidate.session_id)),
-    pathExists(getSessionSummaryJsonPath(candidate.session_id)),
-    pathExists(getSessionSummaryMarkdownPath(candidate.session_id)),
-    pathExists(getUserKnowledgeSessionPath("operator", candidate.session_id)),
+    pathExists(
+      getProjectKnowledgeSessionPath(candidate.project_key, candidate.session_id),
+      fileAccess,
+    ),
+    pathExists(getRetentionReceiptPath(candidate.session_id), fileAccess),
+    pathExists(getSessionSummaryJsonPath(candidate.session_id), fileAccess),
+    pathExists(getSessionSummaryMarkdownPath(candidate.session_id), fileAccess),
+    pathExists(getUserKnowledgeSessionPath("operator", candidate.session_id), fileAccess),
   ]);
 
   return (
@@ -454,9 +797,9 @@ async function hasRequiredRetentionArtifacts(candidate: DeletionCandidateRow): P
   );
 }
 
-async function pathExists(path: string): Promise<boolean> {
+async function pathExists(path: string, fileAccess: typeof access = access): Promise<boolean> {
   try {
-    await access(path);
+    await fileAccess(path);
     return true;
   } catch (error) {
     if (isMissingPathError(error)) {
@@ -535,6 +878,7 @@ async function* walkRuntimeFiles(root: string): AsyncGenerator<{
   device: number;
   inode: number;
   modifiedAt: Date;
+  modifiedAtNanoseconds: string;
   path: string;
 }> {
   const pendingDirectories = [root];
@@ -566,12 +910,13 @@ async function* walkRuntimeFiles(root: string): AsyncGenerator<{
       }
 
       try {
-        const metadata = await stat(entryPath);
+        const metadata = await stat(entryPath, { bigint: true });
         yield {
-          bytes: metadata.size,
-          device: metadata.dev,
-          inode: metadata.ino,
-          modifiedAt: metadata.mtime,
+          bytes: Number(metadata.size),
+          device: Number(metadata.dev),
+          inode: Number(metadata.ino),
+          modifiedAt: new Date(Number(metadata.mtimeNs) / 1_000_000),
+          modifiedAtNanoseconds: metadata.mtimeNs.toString(),
           path: entryPath,
         };
       } catch (error) {

@@ -1,15 +1,11 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
-import { getRuntimePath } from "../config/paths.js";
+import type { ParsedIntermediateCleanupFileSystem } from "../pipeline/parsed-cleanup.js";
 import {
-  applyParsedIntermediateCleanup,
-  ParsedIntermediateCleanupError,
-  type ParsedIntermediateCleanupFileSystem,
-  type ParsedIntermediateCleanupResult,
-} from "../pipeline/parsed-cleanup.js";
+  applyParsedIntermediateCleanupWithReceipt,
+  loadPendingParsedIntermediateCleanup,
+} from "../pipeline/parsed-cleanup-receipts.js";
 import {
   listParsedIntermediateCleanupCandidates,
   type ParsedIntermediateCleanupCandidate,
@@ -29,12 +25,17 @@ export async function executeStorageParsedCleanup(
   dependencies: { fileSystem?: ParsedIntermediateCleanupFileSystem; now?: Date } = {},
 ): Promise<number> {
   const options = parseStorageParsedCleanupOptions(context.args);
+  const now = dependencies.now ?? new Date();
   const cleanupOptions = {
     olderThanDays: options.olderThanDays,
     ...(options.maxTotalBytes === undefined ? {} : { maxTotalBytes: options.maxTotalBytes }),
-    ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
+    now,
   };
-  const candidates = await listParsedIntermediateCleanupCandidates(database, cleanupOptions);
+  const [ordinaryCandidates, pending] = await Promise.all([
+    listParsedIntermediateCleanupCandidates(database, cleanupOptions),
+    loadPendingParsedIntermediateCleanup(),
+  ]);
+  const candidates = mergeCandidateSnapshots(pending.candidates, ordinaryCandidates);
 
   if (!options.apply) {
     context.output.info(
@@ -44,6 +45,8 @@ export async function executeStorageParsedCleanup(
           candidates,
           max_total_bytes: options.maxTotalBytes ?? null,
           older_than_days: options.olderThanDays,
+          pending_retry_count: pending.pendingReceiptCount,
+          pending_conflicts: pending.conflicts,
           total_bytes: sumBytes(candidates),
         },
         null,
@@ -53,49 +56,23 @@ export async function executeStorageParsedCleanup(
     return 0;
   }
 
-  const receiptPath = getReceiptPath(dependencies.now);
-  const applyingReceipt = {
-    candidates,
-    created_at: (dependencies.now ?? new Date()).toISOString(),
-    deleted_paths: [],
-    max_total_bytes: options.maxTotalBytes ?? null,
-    older_than_days: options.olderThanDays,
-    skipped_paths: [],
-    quarantined_paths: [],
-    status: "applying",
-  };
-  await mkdir(dirname(receiptPath), { recursive: true });
-  await writeReceipt(receiptPath, applyingReceipt);
-
-  let cleanup: ParsedIntermediateCleanupResult | undefined;
-  try {
-    cleanup = await applyParsedIntermediateCleanup(
-      database,
-      cleanupOptions,
-      dependencies.fileSystem,
+  if (pending.conflicts.length > 0) {
+    throw new Error(
+      `parsed cleanup pending receipt conflict: ${JSON.stringify(pending.conflicts)}`,
     );
-    await writeReceipt(receiptPath, {
-      ...applyingReceipt,
-      deleted_paths: cleanup.deleted.map((candidate) => candidate.path),
-      quarantined_paths: cleanup.quarantined,
-      skipped_paths: cleanup.skipped,
-      status: "completed",
-    });
-  } catch (error) {
-    const partial = error instanceof ParsedIntermediateCleanupError ? error.result : cleanup;
-    await writeReceipt(receiptPath, {
-      ...applyingReceipt,
-      deleted_paths: partial?.deleted.map((candidate) => candidate.path) ?? [],
-      quarantined_paths: partial?.quarantined ?? [],
-      skipped_paths: partial?.skipped ?? [],
-      status: "failed",
-    });
-    throw error;
   }
 
-  if (cleanup === undefined) {
-    throw new Error("parsed cleanup completed without a result");
-  }
+  const { cleanup, receiptPath } = await applyParsedIntermediateCleanupWithReceipt({
+    candidates,
+    createdAt: now,
+    database,
+    ...(dependencies.fileSystem === undefined ? {} : { fileSystem: dependencies.fileSystem }),
+    ...(options.maxTotalBytes === undefined ? {} : { maxTotalBytes: options.maxTotalBytes }),
+    olderThanDays: options.olderThanDays,
+    pendingRetryCount: pending.pendingReceiptCount,
+    quarantines: pending.quarantines,
+    supersedesReceiptPaths: pending.receiptPaths,
+  });
   context.output.info(
     JSON.stringify(
       {
@@ -103,7 +80,8 @@ export async function executeStorageParsedCleanup(
         deleted: cleanup.deleted,
         max_total_bytes: options.maxTotalBytes ?? null,
         older_than_days: options.olderThanDays,
-        quarantined: cleanup.quarantined,
+        pending_retry_count: pending.pendingReceiptCount,
+        quarantines: cleanup.quarantines,
         receipt_path: receiptPath,
         skipped: cleanup.skipped,
         total_bytes: sumBytes(cleanup.deleted),
@@ -152,15 +130,24 @@ function parseStorageParsedCleanupOptions(args: readonly string[]): StorageParse
   return { apply, maxTotalBytes, olderThanDays };
 }
 
-function getReceiptPath(now: Date = new Date()): string {
-  const timestamp = now.toISOString().replaceAll(":", "-");
-  return join(getRuntimePath("deletes"), "receipts", `parsed-cleanup-${timestamp}.json`);
-}
-
-async function writeReceipt(path: string, value: Record<string, unknown>): Promise<void> {
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-}
-
 function sumBytes(candidates: readonly ParsedIntermediateCleanupCandidate[]): number {
   return candidates.reduce((total, candidate) => total + candidate.bytes, 0);
+}
+
+function mergeCandidateSnapshots(
+  pending: readonly ParsedIntermediateCleanupCandidate[],
+  ordinary: readonly ParsedIntermediateCleanupCandidate[],
+): ParsedIntermediateCleanupCandidate[] {
+  const merged = new Map<string, ParsedIntermediateCleanupCandidate>();
+  for (const candidate of pending) {
+    if (!merged.has(candidate.path)) {
+      merged.set(candidate.path, { ...candidate });
+    }
+  }
+  for (const candidate of ordinary) {
+    if (!merged.has(candidate.path)) {
+      merged.set(candidate.path, { ...candidate });
+    }
+  }
+  return [...merged.values()];
 }
