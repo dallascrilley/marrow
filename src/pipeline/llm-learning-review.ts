@@ -7,7 +7,7 @@ import type { Learning, SourceSession, Turn } from "../models/canonical.js";
 import { learningSchema } from "../models/canonical.js";
 import { extractSubstantivePrompt, sanitizeHarnessLeakText } from "./prompt-sanitize.js";
 
-export const defaultOpenRouterLearningReviewModel = "openai/gpt-5-nano";
+export const defaultOpenRouterLearningReviewModel = "openrouter/auto";
 export const defaultOpenRouterTopicModel = "openai/gpt-5.4-nano";
 export const openRouterApiKeyEnvVar = "OPENROUTER_API_KEY";
 export const openRouterModelEnvVar = "OPENROUTER_MODEL";
@@ -676,11 +676,14 @@ export async function completeOpenRouterJson(input: {
 
   const payload = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
+    model?: unknown;
     usage?: OpenRouterUsage;
   };
+  const routedModel =
+    typeof payload.model === "string" && payload.model.length > 0 ? payload.model : input.model;
   return {
     content: extractMessageContent(payload, input.errorLabel),
-    usage: parseOpenRouterUsage(payload.usage, input.model, durationMs),
+    usage: parseOpenRouterUsage(payload.usage, routedModel, durationMs),
   };
 }
 
