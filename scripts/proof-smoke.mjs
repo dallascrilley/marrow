@@ -28,6 +28,10 @@ const writeSummaryPath = parseOption("--write-summary");
 const keepSandbox = args.includes("--keep");
 
 const suites = suiteArg === "all" ? ["v1", "v2"] : [suiteArg];
+const supportedSuites = new Set(["v1", "v2", "first-time"]);
+if (suites.some((suite) => !supportedSuites.has(suite))) {
+  throw new Error(`Unknown suite "${suiteArg}". Use v1, v2, first-time, or all.`);
+}
 
 await assertBuiltCli();
 
@@ -41,6 +45,11 @@ const report = {
 if (suites.includes("v1")) {
   report.suites.v1 = await runV1Proofs();
   if (!report.suites.v1.success) report.success = false;
+}
+
+if (suites.includes("first-time")) {
+  report.suites.first_time = await runV1Proofs({ firstTime: true });
+  if (!report.suites.first_time.success) report.success = false;
 }
 
 if (suites.includes("v2")) {
@@ -57,30 +66,35 @@ if (writeSummaryPath) {
 
 process.exitCode = report.success ? 0 : 1;
 
-async function runV1Proofs() {
+async function runV1Proofs({ firstTime = false } = {}) {
   const sandbox = await mkdtemp(join(tmpdir(), "asd-proof-v1-"));
   const home = join(sandbox, "home");
   const runtimeRoot = join(sandbox, "runtime");
+  const sourcePath = join(
+    home,
+    ".cursor",
+    "projects",
+    "agent-session-distillery",
+    "agent-transcripts",
+    "session-e2e.jsonl",
+  );
   const steps = [];
+  const artifacts = {};
 
   try {
-    const cursorProject = join(home, ".cursor", "projects", "agent-session-distillery");
-    await mkdir(join(cursorProject, "agent-transcripts"), { recursive: true });
+    const cursorProject = dirname(dirname(sourcePath));
+    await mkdir(dirname(sourcePath), { recursive: true });
     await writeFile(join(cursorProject, "workspace-path.txt"), `${projectRoot}\n`, "utf8");
-    await cp(
-      join(projectRoot, "test/fixtures/cursor/transcripts/session-e2e.jsonl"),
-      join(cursorProject, "agent-transcripts/session-e2e.jsonl"),
-    );
+    await cp(join(projectRoot, "test/fixtures/cursor/transcripts/session-e2e.jsonl"), sourcePath);
 
     steps.push(
       runCliStep("install/build/help", ["--help"], { AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot }),
     );
-    steps.push(
-      runCliStep("ingest backfill", ["ingest", "backfill", "--source", "cursor"], {
-        HOME: home,
-        AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
-      }),
-    );
+    const ingestStep = runCliStep("ingest backfill", ["ingest", "backfill", "--source", "cursor"], {
+      HOME: home,
+      AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
+    });
+    steps.push(ingestStep);
     steps.push(
       runCliStep("review queue", ["review", "queue"], {
         AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
@@ -91,18 +105,93 @@ async function runV1Proofs() {
         AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
       }),
     );
-    steps.push(
-      runCliStep("explain", ["explain", "session-e2e"], {
+    const explainStep = runCliStep("explain", ["explain", "session-e2e"], {
+      AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
+    });
+    steps.push(explainStep);
+
+    if (firstTime) {
+      const ingestPayload = JSON.parse(ingestStep.stdout);
+      const projectKey = ingestPayload.sessions[0]?.project_key;
+      if (!projectKey) throw new Error("ingest backfill did not return project_key");
+
+      artifacts.summary_path = join(runtimeRoot, "summaries/by-session/session-e2e/summary.md");
+      artifacts.learning_path = join(
+        runtimeRoot,
+        "knowledge/projects",
+        projectKey,
+        "session-e2e.jsonl",
+      );
+      artifacts.deletion_candidate_path = join(runtimeRoot, "deletes/receipts/session-e2e.json");
+      artifacts.runtime_root = runtimeRoot;
+      artifacts.source_path = sourcePath;
+      artifacts.cleanup_command = `rm -rf ${sandbox}`;
+      const [summary, learningJsonl] = await Promise.all([
+        readFile(artifacts.summary_path, "utf8"),
+        readFile(artifacts.learning_path, "utf8"),
+        access(artifacts.deletion_candidate_path),
+        access(sourcePath),
+      ]);
+      const [learning] = learningJsonl
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+      const durableArtifactsPresent = summary.trim().length > 0 && Boolean(learning?.learning_id);
+      steps.push({
+        name: "durable summary and learning",
+        status: durableArtifactsPresent ? "passed" : "failed",
+        stderr: durableArtifactsPresent ? "" : "summary or durable learning is empty",
+        stdout: JSON.stringify({
+          learning_id: learning?.learning_id ?? null,
+          summary_bytes: Buffer.byteLength(summary, "utf8"),
+        }),
+      });
+
+      const explainPayload = JSON.parse(explainStep.stdout);
+      const candidateReady = explainPayload.deletion_candidate?.candidate_state === "ready";
+      steps.push({
+        name: "deletion readiness without source deletion",
+        status: candidateReady ? "passed" : "failed",
+        stderr: candidateReady ? "" : "fixture deletion candidate is not ready",
+        stdout: JSON.stringify(explainPayload.deletion_candidate ?? null),
+      });
+
+      steps.push(
+        runCliStep("export index", ["export-index"], {
+          AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
+        }),
+      );
+      const searchStep = runCliStep("bounded search", ["search", "session-e2e"], {
         AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
-      }),
-    );
+      });
+      searchStep.status =
+        searchStep.status === "passed" && /\b1 match\./.test(searchStep.stdout)
+          ? "passed"
+          : "failed";
+      if (searchStep.status === "failed" && !searchStep.stderr) {
+        searchStep.stderr = "search did not return the fixture session";
+      }
+      steps.push(searchStep);
+      artifacts.recall_path = join(runtimeRoot, "index/session-index.jsonl");
+      artifacts.next_live_command = "node dist/cli.js ingest sync --resume --source cursor";
+      artifacts.runtime_root_isolated = runtimeRoot.startsWith(sandbox);
+    }
 
     const failed = steps.filter((step) => step.status === "failed");
     const success = failed.length === 0;
     if (!keepSandbox && success) {
       await rm(sandbox, { recursive: true, force: true });
     }
-    return { home, runtimeRoot, sandbox, steps, success };
+    return {
+      home,
+      runtimeRoot,
+      sandbox,
+      steps,
+      artifacts,
+      runtime_root_isolated: runtimeRoot.startsWith(sandbox),
+      next_live_command: firstTime ? "node dist/cli.js ingest sync --resume --source cursor" : null,
+      success,
+    };
   } catch (error) {
     steps.push({
       name: "v1 setup",
@@ -113,7 +202,16 @@ async function runV1Proofs() {
     if (!keepSandbox) {
       await rm(sandbox, { recursive: true, force: true });
     }
-    return { home, runtimeRoot, sandbox, steps, success: false };
+    return {
+      home,
+      runtimeRoot,
+      sandbox,
+      steps,
+      artifacts,
+      runtime_root_isolated: runtimeRoot.startsWith(sandbox),
+      next_live_command: firstTime ? "node dist/cli.js ingest sync --resume --source cursor" : null,
+      success: false,
+    };
   }
 }
 
