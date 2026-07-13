@@ -94,6 +94,7 @@ export interface ParsedIntermediateCleanupCandidate {
 }
 
 export interface ParsedIntermediateCleanupOptions {
+  maxTotalBytes?: number;
   now?: Date;
   olderThanDays: number;
 }
@@ -213,13 +214,9 @@ export async function listParsedIntermediateCleanupCandidates(
   const now = options.now ?? new Date();
   const cutoff = now.getTime() - options.olderThanDays * millisecondsPerDay;
   const context = buildInventoryContext(database);
-  const candidates: ParsedIntermediateCleanupCandidate[] = [];
+  const eligible: ParsedIntermediateCleanupCandidate[] = [];
 
   for await (const file of walkRuntimeFiles(runtimeRoot)) {
-    if (file.modifiedAt.getTime() > cutoff) {
-      continue;
-    }
-
     const classified = classifyRuntimeArtifact(file.path, runtimeRoot, context);
     if (
       classified.kind !== "staging_parsed" ||
@@ -239,7 +236,7 @@ export async function listParsedIntermediateCleanupCandidates(
       continue;
     }
 
-    candidates.push({
+    eligible.push({
       bytes: file.bytes,
       device: file.device,
       inode: file.inode,
@@ -251,7 +248,28 @@ export async function listParsedIntermediateCleanupCandidates(
     });
   }
 
-  return candidates.sort((left, right) => left.path.localeCompare(right.path));
+  eligible.sort(
+    (left, right) =>
+      left.modified_at.localeCompare(right.modified_at) || left.path.localeCompare(right.path),
+  );
+  const selected = new Set(
+    eligible
+      .filter((candidate) => Date.parse(candidate.modified_at) <= cutoff)
+      .map((candidate) => candidate.path),
+  );
+
+  if (options.maxTotalBytes !== undefined) {
+    let remainingBytes = eligible.reduce((total, candidate) => total + candidate.bytes, 0);
+    for (const candidate of eligible) {
+      if (remainingBytes <= options.maxTotalBytes) {
+        break;
+      }
+      selected.add(candidate.path);
+      remainingBytes -= candidate.bytes;
+    }
+  }
+
+  return eligible.filter((candidate) => selected.has(candidate.path));
 }
 
 export function isRuntimeInventoryLifecycleState(

@@ -16,10 +16,13 @@ import {
   writeRetentionReceipt,
 } from "../writers/report-writer.js";
 import type { SummaryWriteResult } from "../writers/summary-writer.js";
+import { applyParsedIntermediateCleanup } from "./parsed-cleanup.js";
 import { evaluateRetentionReadiness } from "./retention.js";
 
 export type ArchivePhaseResult = {
   deletionCandidateState: string;
+  parsedIntermediateCleanupError: string | null;
+  parsedIntermediateDeleted: boolean;
   reportPath: string;
   safeToDelete: boolean;
 };
@@ -125,8 +128,24 @@ export async function runArchivePhase(input: {
       sourceSessionId: input.sourceSessionId,
     });
 
+    let parsedIntermediateDeleted = false;
+    let parsedIntermediateCleanupError: string | null = null;
+    if (candidate.safe_to_delete === 1) {
+      try {
+        const cleanup = await applyParsedIntermediateCleanup(input.database, {
+          olderThanDays: 0,
+          sessionIds: [input.sourceSession.session_id],
+        });
+        parsedIntermediateDeleted = cleanup.deleted.length > 0;
+      } catch (error) {
+        parsedIntermediateCleanupError = error instanceof Error ? error.message : String(error);
+      }
+    }
+
     return {
       deletionCandidateState: candidate.candidate_state,
+      parsedIntermediateCleanupError,
+      parsedIntermediateDeleted,
       reportPath: report.jsonPath,
       safeToDelete: candidate.safe_to_delete === 1,
     };

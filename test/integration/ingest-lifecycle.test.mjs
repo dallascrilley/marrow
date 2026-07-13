@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -113,6 +113,13 @@ test("ingest backfill advances a fixture transcript through deletion-candidate l
       const reviewEntry = getReviewQueueEntryBySessionId(database, "session-e2e");
       assert.ok(reviewEntry);
       assert.equal(reviewEntry.queue_state, "completed");
+
+      await assert.rejects(
+        access(join(runtimeRoot, "staging", "session-e2e", "parsed-records.json")),
+        { code: "ENOENT" },
+      );
+      await access(join(runtimeRoot, "staging", "session-e2e", "reduced-session.json"));
+      await access(join(runtimeRoot, "summaries", "by-session", "session-e2e", "summary.json"));
 
       const explainResult = runCli(["explain", "session-e2e"], {
         HOME: homeDir,

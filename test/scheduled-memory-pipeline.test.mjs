@@ -78,11 +78,14 @@ test("scheduled pipeline compacts only after a successful generated review batch
   );
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(commands, /storage cleanup-parsed --apply --older-than-days 30/);
+  assert.match(
+    commands,
+    /storage cleanup-parsed --apply --older-than-days 30 --max-total-bytes 1073741824/,
+  );
   assert.match(commands, /storage retain-reports --apply --older-than-days 30/);
 });
 
-test("scheduled pipeline does not apply when review generates no batch", async () => {
+test("scheduled pipeline cleans parsed storage when review generates no batch", async () => {
   const { commands, result } = await runPipeline({
     generated_batch: false,
     batch_id: null,
@@ -95,10 +98,14 @@ test("scheduled pipeline does not apply when review generates no batch", async (
   assert.match(commands, /quality review-learnings/);
   assert.doesNotMatch(commands, /quality apply-learning-review/);
   assert.match(result.stdout, /no batch generated; skipping apply-learning-review/);
-  assert.doesNotMatch(commands, /storage cleanup-parsed|storage retain-reports/);
+  assert.match(
+    commands,
+    /storage cleanup-parsed --apply --older-than-days 30 --max-total-bytes 1073741824/,
+  );
+  assert.doesNotMatch(commands, /storage retain-reports/);
 });
 
-test("scheduled pipeline stops on review failure without applying stale output", async () => {
+test("scheduled pipeline cleans parsed storage before stopping on review failure", async () => {
   const { commands, result } = await runPipeline(
     {
       generated_batch: true,
@@ -108,15 +115,17 @@ test("scheduled pipeline stops on review failure without applying stale output",
   );
 
   assert.equal(result.status, 17);
+  assert.match(commands, /storage cleanup-parsed --apply/);
   assert.match(commands, /quality review-learnings/);
   assert.doesNotMatch(commands, /quality apply-learning-review/);
-  assert.doesNotMatch(commands, /storage cleanup-parsed|storage retain-reports/);
+  assert.doesNotMatch(commands, /storage retain-reports/);
 });
 
-test("scheduled pipeline skips review and apply when provider credentials are absent", async () => {
+test("scheduled pipeline skips review but still retains parsed staging without credentials", async () => {
   const { commands, result } = await runPipeline({}, { apiKey: false });
 
   assert.equal(result.status, 0, result.stderr);
   assert.doesNotMatch(commands, /quality review-learnings/);
   assert.doesNotMatch(commands, /quality apply-learning-review/);
+  assert.match(commands, /storage cleanup-parsed --apply/);
 });
