@@ -55,6 +55,7 @@ test("asd --help lists every Task 1 command", () => {
     "stats",
     "explain",
     "workflow mine",
+    "worktree check",
   ];
 
   for (const command of expectedCommands) {

@@ -20,6 +20,7 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 | Run tests | `script/test` or `just test` |
 | CI parity | `script/cibuild` or `just cibuild` |
 | Lint / format | `npm run lint` / `npm run format` |
+| Inspect linked worktrees | `asd worktree check --json` — read-only classifications and safe next commands |
 | First-time offline proof | `script/proof-first-time` — ingests a fixture into a temporary runtime, verifies summary/learning/search/deletion readiness, then prints retained artifact paths, a cleanup command, and the next live command |
 
 ## Automation
