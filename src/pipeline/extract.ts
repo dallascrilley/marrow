@@ -1386,7 +1386,7 @@ const skillRefRules: Array<{ pattern: RegExp; skill: string }> = [
   { pattern: /^td\b/, skill: "td-task-management" },
   { pattern: /^gh\b[\s\S]*\bpr\b/, skill: "git" },
   { pattern: /^git\s+(?:commit|push|merge|rebase)\b/, skill: "git" },
-  { pattern: /\b(?:bun test|vitest|pytest|npm test|uv run pytest)\b/, skill: "tdd-guide" },
+  { pattern: /\b(?:bun test|vitest|pytest|npm test|uv run pytest)\b/, skill: "tdd" },
 ];
 
 function deriveSkillRefs(turns: readonly Turn[]): string[] {

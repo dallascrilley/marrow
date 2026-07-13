@@ -162,7 +162,7 @@ test("derives session technologies and skill_ref onto project learnings", () => 
   assert.ok(learnings.project.length > 0, "expected a project learning");
   for (const learning of learnings.project) {
     assert.deepEqual(learning.technologies, ["bun", "git", "npm", "python", "typescript"]);
-    assert.deepEqual(learning.skill_ref, ["git", "tdd-guide"]);
+    assert.deepEqual(learning.skill_ref, ["git", "tdd"]);
   }
 });
 
