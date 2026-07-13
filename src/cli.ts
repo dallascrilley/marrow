@@ -36,6 +36,7 @@ import { executeSkillReport } from "./commands/skill-report.js";
 import { executeStats } from "./commands/stats.js";
 import { executeStorageInventory } from "./commands/storage-inventory.js";
 import { executeStorageParsedCleanup } from "./commands/storage-parsed-cleanup.js";
+import { executeStorageReportRetention } from "./commands/storage-report-retention.js";
 import { executeWorkflowApply } from "./commands/workflow-apply.js";
 import { executeWorkflowJudge } from "./commands/workflow-judge.js";
 import { executeWorkflowMine } from "./commands/workflow-mine.js";
@@ -200,6 +201,11 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "Classify runtime files by artifact kind, lifecycle state, age, and conservative retention dependency. Pass --json, --state, or --older-than-days.",
         execute: async (context) => withLedger(context, executeStorageInventory),
+      },
+      "retain-reports": {
+        description:
+          "Dry-run conservative retention of terminal archive and applied review reports. Pass --history, --older-than-days, and --apply to prune.",
+        execute: async (context) => withLedger(context, executeStorageReportRetention),
       },
       "cleanup-parsed": {
         description:
