@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
+import { statSync } from "node:fs";
+import { join, resolve } from "node:path";
 
 import type { CommandContext } from "../cli.js";
 import {
@@ -27,17 +28,21 @@ type TrackerTaskRecord = {
   updated_at?: unknown;
 };
 
+type TrackerState = { available: boolean; tasks: Map<string, WorktreeTask> };
+
 export async function executeWorktreeCheck(context: CommandContext): Promise<number> {
   const options = parseWorktreeCheckOptions(context.args);
-  const worktrees = inspectWorktrees(options.repoPath);
+  const tracker = loadTrackerTasks(options.repoPath);
+  const worktrees = inspectWorktrees(options.repoPath, tracker.tasks);
   const report = {
     generated_at: new Date().toISOString(),
     repo_path: options.repoPath,
+    tracker_available: tracker.available,
     worktrees,
   };
 
   context.output.info(options.json ? JSON.stringify(report, null, 2) : formatWorktreeCheck(report));
-  return 0;
+  return tracker.available ? 0 : 2;
 }
 
 function parseWorktreeCheckOptions(args: readonly string[]): WorktreeCheckOptions {
@@ -63,25 +68,48 @@ function parseWorktreeCheckOptions(args: readonly string[]): WorktreeCheckOption
   return { json, repoPath };
 }
 
-function inspectWorktrees(repoPath: string): WorktreeClassificationResult[] {
-  const tracker = loadTrackerTasks(repoPath);
+function inspectWorktrees(
+  repoPath: string,
+  tracker: ReadonlyMap<string, WorktreeTask>,
+): WorktreeClassificationResult[] {
   return parseWorktreePorcelain(runGit(repoPath, ["worktree", "list", "--porcelain"])).map(
     (worktree) => {
       const taskId = worktree.branch?.match(/\btd-[a-z0-9]+\b/i)?.[0].toLowerCase() ?? null;
       const task = taskId ? (tracker.get(taskId) ?? null) : null;
+      const dirty = inspectDirtyState(worktree.path);
       const candidate: WorktreeCandidate = {
         path: worktree.path,
         branch: worktree.branch,
         head: worktree.head,
-        dirty: runGit(worktree.path, ["status", "--porcelain"]).trim().length > 0,
+        dirty: dirty.dirty,
+        dirtyModifiedAt: dirty.modifiedAt,
         detached: worktree.detached,
-        merged: worktree.branch ? isMerged(repoPath, worktree.branch) : false,
+        merged:
+          task?.status === "closed" ||
+          (worktree.branch ? isMerged(repoPath, worktree.branch) : false),
         lastCommitAt: gitTimestamp(worktree.path),
         task,
       };
       return classifyWorktree(candidate);
     },
   );
+}
+
+function inspectDirtyState(path: string): { dirty: boolean; modifiedAt: string | null } {
+  const records = runGit(path, ["status", "--porcelain", "-z"]).split("\0").filter(Boolean);
+  const modificationTimes = records.flatMap((record) => {
+    const relativePath = record.slice(3);
+    if (!relativePath) return [];
+    try {
+      return [statSync(join(path, relativePath)).mtime.toISOString()];
+    } catch {
+      return [];
+    }
+  });
+  return {
+    dirty: records.length > 0,
+    modifiedAt: modificationTimes.sort().at(-1) ?? null,
+  };
 }
 
 function parseWorktreePorcelain(output: string): PorcelainWorktree[] {
@@ -93,7 +121,9 @@ function parseWorktreePorcelain(output: string): PorcelainWorktree[] {
       const fields = new Map(
         block.split("\n").map((line) => {
           const separator = line.indexOf(" ");
-          return [line.slice(0, separator), line.slice(separator + 1)];
+          return separator === -1
+            ? [line, ""]
+            : [line.slice(0, separator), line.slice(separator + 1)];
         }),
       );
       const path = fields.get("worktree");
@@ -109,27 +139,35 @@ function parseWorktreePorcelain(output: string): PorcelainWorktree[] {
     });
 }
 
-function loadTrackerTasks(repoPath: string): Map<string, WorktreeTask> {
+function loadTrackerTasks(repoPath: string): TrackerState {
   try {
-    const records = JSON.parse(runCommand(repoPath, "td", ["list", "--format", "json"])) as unknown;
-    if (!Array.isArray(records)) return new Map();
-    return new Map(
-      records.flatMap((record) => {
-        const task = record as TrackerTaskRecord;
-        if (
-          typeof task.id !== "string" ||
-          typeof task.status !== "string" ||
-          typeof task.updated_at !== "string"
-        ) {
-          return [];
-        }
-        return [
-          [task.id.toLowerCase(), { id: task.id, status: task.status, updatedAt: task.updated_at }],
-        ];
-      }),
-    );
+    const records = JSON.parse(
+      runCommand(repoPath, "td", ["list", "--format", "json", "--limit", "10000"]),
+    ) as unknown;
+    if (!Array.isArray(records)) return { available: false, tasks: new Map() };
+    return {
+      available: true,
+      tasks: new Map(
+        records.flatMap((record) => {
+          const task = record as TrackerTaskRecord;
+          if (
+            typeof task.id !== "string" ||
+            typeof task.status !== "string" ||
+            typeof task.updated_at !== "string"
+          ) {
+            return [];
+          }
+          return [
+            [
+              task.id.toLowerCase(),
+              { id: task.id, status: task.status, updatedAt: task.updated_at },
+            ],
+          ];
+        }),
+      ),
+    };
   } catch {
-    return new Map();
+    return { available: false, tasks: new Map() };
   }
 }
 

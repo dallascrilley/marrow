@@ -13,6 +13,7 @@ function worktree(overrides = {}) {
     dirty: false,
     detached: false,
     merged: false,
+    dirtyModifiedAt: "2026-07-13T11:50:00.000Z",
     lastCommitAt: "2026-07-13T11:30:00.000Z",
     task: { id: "td-123abc", status: "in_progress", updatedAt: "2026-07-13T11:45:00.000Z" },
     ...overrides,
@@ -36,6 +37,7 @@ test("classifyWorktree flags old dirty work without calling it disposable", () =
   const result = classifyWorktree(
     worktree({
       dirty: true,
+      dirtyModifiedAt: "2026-07-10T11:50:00.000Z",
       lastCommitAt: "2026-07-10T11:30:00.000Z",
       task: { id: "td-123abc", status: "open", updatedAt: "2026-07-10T11:45:00.000Z" },
     }),
@@ -55,4 +57,11 @@ test("classifyWorktree identifies merged and clean current worktrees", () => {
 test("classifyWorktree leaves detached and untracked worktrees unknown", () => {
   assert.equal(classifyWorktree(worktree({ detached: true }), now).classification, "unknown");
   assert.equal(classifyWorktree(worktree({ task: null }), now).classification, "unknown");
+});
+
+test("classifyWorktree treats an uninspectable dirty path as unknown", () => {
+  assert.equal(
+    classifyWorktree(worktree({ dirty: true, dirtyModifiedAt: null }), now).classification,
+    "unknown",
+  );
 });

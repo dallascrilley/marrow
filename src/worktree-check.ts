@@ -18,6 +18,7 @@ export type WorktreeCandidate = {
   dirty: boolean;
   detached: boolean;
   merged: boolean;
+  dirtyModifiedAt: string | null;
   lastCommitAt: string | null;
   task: WorktreeTask | null;
 };
@@ -38,8 +39,14 @@ export function classifyWorktree(
   }
 
   if (candidate.dirty) {
-    const recent = isRecent(candidate.lastCommitAt, now) || isRecent(candidate.task.updatedAt, now);
-    if (recent && candidate.task.status === "in_progress") {
+    if (candidate.dirtyModifiedAt === null) {
+      return {
+        ...candidate,
+        classification: "unknown",
+        nextCommand: inspectCommand(candidate.path),
+      };
+    }
+    if (isRecent(candidate.dirtyModifiedAt, now)) {
       return {
         ...candidate,
         classification: "dirty-active",
