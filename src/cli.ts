@@ -26,6 +26,7 @@ import { executeQualityAudit } from "./commands/quality-audit.js";
 import { executeQualityCostReport } from "./commands/quality-cost-report.js";
 import { executeQualityResummarize } from "./commands/quality-resummarize.js";
 import { executeQualityReviewLearnings } from "./commands/quality-review-learnings.js";
+import { executeReadbackCheck } from "./commands/readback-check.js";
 import { executeRecall } from "./commands/recall.js";
 import { executeReport } from "./commands/report.js";
 import { executeReviewQueue } from "./commands/review-queue.js";
@@ -330,6 +331,17 @@ const commandTree: Record<string, CommandDefinition> = {
     description:
       "Query distilled instincts through the capped ADR-0005 MCP surface. Subcommands: search_instincts, instincts_for_file, recent_instincts, serve, install (register asd in ~/.claude.json; --dry-run to preview).",
     execute: async (context) => executeMcp(context),
+  },
+  readback: {
+    description:
+      "Inspect the read-only SessionStart recall hook, MCP registration, and vault reachability.",
+    subcommands: {
+      check: {
+        description:
+          "Report installed, missing, drifted, or unverifiable read-back setup without changing configuration.",
+        execute: async (context) => executeReadbackCheck(context),
+      },
+    },
   },
   recall: {
     description:
