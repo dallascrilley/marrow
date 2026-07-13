@@ -106,7 +106,7 @@ const commandTree: Record<string, CommandDefinition> = {
       },
       "review-learnings": {
         description:
-          "Review project learnings with OpenRouter LLM memory lint and write an immutable batch. Pass --if-new to skip when nothing is pending; --max-per 5/24h for sliding-window budget.",
+          "Review project learnings with OpenRouter LLM memory lint and write an immutable batch. Pass --if-new to skip when nothing is pending; default --max-per is 50/24h.",
         execute: async (context) => withLedger(context, executeQualityReviewLearnings),
       },
       "apply-learning-review": {
