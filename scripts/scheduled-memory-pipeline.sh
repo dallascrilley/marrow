@@ -49,6 +49,21 @@ echo "[asd] memory export-wiki"
 "${CLI[@]}" memory export-wiki
 
 echo "[asd] memory push-wiki"
+
 "${CLI[@]}" memory push-wiki
+
+if [[ "${ASD_ENABLE_COMPACTION:-0}" == "1" ]]; then
+  if [[ -z "${BATCH_PATH:-}" ]]; then
+    echo "[asd] skipping compaction (review did not generate and apply a new batch)"
+  else
+    COMPACTION_AGE_DAYS="${ASD_COMPACTION_OLDER_THAN_DAYS:-30}"
+    echo "[asd] storage cleanup-parsed --apply --older-than-days ${COMPACTION_AGE_DAYS}"
+    PARSED_COMPACTION="$("${CLI[@]}" storage cleanup-parsed --apply --older-than-days "$COMPACTION_AGE_DAYS")"
+    printf '%s\n' "$PARSED_COMPACTION"
+    echo "[asd] storage retain-reports --apply --older-than-days ${COMPACTION_AGE_DAYS}"
+    REPORT_COMPACTION="$("${CLI[@]}" storage retain-reports --apply --older-than-days "$COMPACTION_AGE_DAYS")"
+    printf '%s\n' "$REPORT_COMPACTION"
+  fi
+fi
 
 echo "[asd] pipeline complete"
