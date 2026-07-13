@@ -7,7 +7,7 @@ import type { Learning, SourceSession, Turn } from "../models/canonical.js";
 import { learningSchema } from "../models/canonical.js";
 import { extractSubstantivePrompt, sanitizeHarnessLeakText } from "./prompt-sanitize.js";
 
-export const defaultOpenRouterLearningReviewModel = "openai/gpt-5-nano";
+export const defaultOpenRouterLearningReviewModel = "openrouter/auto";
 export const defaultOpenRouterTopicModel = "openai/gpt-5.4-nano";
 export const openRouterApiKeyEnvVar = "OPENROUTER_API_KEY";
 export const openRouterModelEnvVar = "OPENROUTER_MODEL";
