@@ -280,12 +280,20 @@ Prune only old parsed intermediates that already have a safe deletion candidate:
 ```bash
 node dist/cli.js storage cleanup-parsed
 node dist/cli.js storage cleanup-parsed --apply
+node dist/cli.js storage cleanup-parsed --max-total-bytes 1073741824 --apply
 ```
 
-The default is a 30-day dry run. `--apply` deletes only
+Successful archive promotion now removes its exact parsed intermediate immediately after
+the safe deletion candidate and all required durable artifacts are recorded. Cleanup failure
+does not fail the archive, and every scheduled pipeline run retries the same conservative
+check before audit or LLM work.
+
+The manual command defaults to a 30-day dry run. `--apply` deletes only
 `staging/<session>/parsed-records.json` records whose safe candidate confirms durable
 downstream retention, writes a receipt under `deletes/receipts/`, and never removes
-`reduced-session.json`. Use `--older-than-days <n>` to tighten or loosen the age gate.
+`reduced-session.json`. Use `--older-than-days <n>` to tune the age gate and
+`--max-total-bytes <n>` to select the oldest safe records until safe parsed staging is under
+the byte ceiling. Unsafe, stale, incomplete, and unknown records remain untouched.
 
 Retain bounded generated archive and review reports without touching audit evidence:
 
