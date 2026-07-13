@@ -40,6 +40,7 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 
 - Node `22.x`
 - npm
+- Python `3.9+` for descriptor-relative parsed-intermediate cleanup
 - Local Cursor transcript files on disk
 - Optional: `OPENROUTER_API_KEY` for LLM-gated project-learning review commands.
   - Source the key from the 1Password item **OpenRouter API Credentials - agent-session-distillery** (`op read 'op://your-vault/OpenRouter API Credentials - agent-session-distillery/credential'`).
@@ -285,13 +286,21 @@ node dist/cli.js storage cleanup-parsed --max-total-bytes 1073741824 --apply
 
 Successful archive promotion now removes its exact parsed intermediate immediately after
 the safe deletion candidate and all required durable artifacts are recorded. Cleanup failure
-does not fail the archive, and every scheduled pipeline run retries the same conservative
-check before audit or LLM work.
+does not roll back the durable archive; ingest and reextract report it as a cleanup failure.
+Every scheduled pipeline run retries failed/interrupted receipt snapshots immediately before
+audit or LLM work, independent of the ordinary 30-day age gate.
 
 The manual command defaults to a 30-day dry run. `--apply` deletes only
 `staging/<session>/parsed-records.json` records whose safe candidate confirms durable
 downstream retention, writes a receipt under `deletes/receipts/`, and never removes
-`reduced-session.json`. Use `--older-than-days <n>` to tune the age gate and
+`reduced-session.json`, ledgers, normalized outputs, reports, or audit artifacts. Applying
+receipts freeze candidates before mutation and persist exact original/quarantine mappings for
+fail-closed restart recovery. Temporary files live only under the fixed
+`deletes/parsed-cleanup-quarantine/` boundary; path conflicts or redirected session directories
+retain that copy and fail without overwriting a replacement. Descriptor-relative quarantine
+operations use the bundled Python helper with `python3` (`ASD_PYTHON` or `PYTHON` overrides the
+executable); an unavailable helper fails before mutation. Use `--older-than-days <n>` to tune
+the ordinary age gate and
 `--max-total-bytes <n>` to select the oldest safe records until safe parsed staging is under
 the byte ceiling. Unsafe, stale, incomplete, and unknown records remain untouched.
 
