@@ -93,6 +93,7 @@ test("report retention dry-runs and prunes only terminal archive history", async
       const olderMarkdown = join(runtimeRoot, "reports", "archive-older.md");
       const newerJson = join(runtimeRoot, "reports", "archive-newer.json");
       const activeJson = join(runtimeRoot, "reports", "archive-active.json");
+      await mkdir(join(runtimeRoot, "reports"), { recursive: true });
       await Promise.all([
         writeOldReport(olderJson, "older json"),
         writeOldReport(olderMarkdown, "older markdown"),
