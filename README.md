@@ -21,6 +21,7 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 | CI parity | `script/cibuild` or `just cibuild` |
 | Lint / format | `npm run lint` / `npm run format` |
 | Inspect linked worktrees | `asd worktree check --json` — read-only classifications and safe next commands |
+| First-time offline proof | `script/proof-first-time` — ingests a fixture into a temporary runtime, verifies summary/learning/search/deletion readiness, then prints retained artifact paths, a cleanup command, and the next live command |
 
 ## Automation
 
@@ -28,7 +29,7 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 |------|----------------|
 | SessionEnd → ingest (Claude Code) | `asd hooks install` — [`docs/recipes/session-end-ingest-hook.md`](docs/recipes/session-end-ingest-hook.md) |
 | Scheduled ingest + wiki push | [`docs/recipes/scheduled-memory-pipeline.md`](docs/recipes/scheduled-memory-pipeline.md) |
-| Pipeline gate (skip LLM when idle) | `asd pipeline gate --max-per 5/24h --max-usd 1/24h` — ADR-0007 |
+| Pipeline gate (skip LLM when idle) | `asd pipeline gate --max-per 50/24h --max-usd 1/24h` — ADR-0007 |
 | Operator health snapshot | `asd health` / `asd health --json` — [`docs/recipes/scheduled-memory-pipeline.md`](docs/recipes/scheduled-memory-pipeline.md) |
 | Re-extract stale artifacts (deterministic, no LLM) | `asd pipeline reextract --process-chatter-only --dry-run` then drop `--dry-run` to apply (or `--session-id <id>`) |
 | Skill usage evidence in corpus | `asd skill evidence <skill-id>` (after `export-index`) |
@@ -386,7 +387,7 @@ not already in the ledger. LLM reviews are cached by exact
 learning/model/prompt/validator input under `cache/llm-learning-review/` by
 default. Provider or transport failures stay pending for retry.
 
-**Cost controls.** Reviews use a minimal OpenRouter reasoning effort (the memory-lint is a trivial classify task, so reasoning tokens are pure waste) and run only when **both** budgets allow: the call-count cap (`--max-per` / `ASD_LLM_MAX_PER`, default `5/24h`) and a hard USD ceiling (`--max-usd` / `ASD_LLM_MAX_USD`, default `1/24h`). The USD ceiling sums the **effective** (upstream-aware) cost of telemetry receipts in the trailing window, so it still fires for BYOK keys whose OpenRouter `usage.cost` is 0; over the cap the command skips with `skip_reason: "llm_usd_budget_exhausted"`. Before paying for any review the command drops deterministic junk and duplicate statements (reported as `skipped_pre_llm`), then reviews the remaining cache-miss learnings in batches of `--batch-size` (default 10, `1` disables batching) — one OpenRouter call per batch, demultiplexed by learning id, with cache hits served without a call.
+**Cost controls.** Reviews run only when both budgets allow: the count cap (`--max-per` / `ASD_LLM_MAX_PER`, default `50/24h`) and hard USD ceiling (`--max-usd` / `ASD_LLM_MAX_USD`, default `1/24h`). The USD ceiling uses effective upstream-aware telemetry cost, so BYOK usage is still gated. The examples above use explicit overrides; they do not change these defaults.
 
 Apply one immutable review batch into a separate reviewed namespace:
 
@@ -522,6 +523,25 @@ once to that reserved `_global` project rather than being duplicated into every
 per-project file, and `recall` prepends them so cross-cutting instincts reach
 every session. The global section is only injected when it holds at least one
 instinct; an empty rollup is dropped.
+
+### Setup check
+
+For the supported Claude Code project setup, inspect the SessionStart hook, the user-level
+ASD MCP registration, and vault reachability without modifying either configuration:
+
+```bash
+# Read-only configuration and vault-state check.
+node dist/cli.js readback check
+
+# Explicitly run the bounded project-plus-global recall query after installation.
+node dist/cli.js readback check --verify
+```
+
+Each surface is `installed`, `missing`, `drifted`, or `unverifiable`. Missing or drifted
+hook/MCP results include the explicit `asd hooks install --events start` or `asd mcp install`
+command; run it yourself, then rerun `readback check --verify`. The explicit verification
+returns the bounded recall bytes and `delivered`/`missing` result. A reachable vault with no
+project/global memory is reported as actionable missing recall rather than silently healthy.
 
 ### SessionStart delivery
 
