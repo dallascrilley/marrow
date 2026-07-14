@@ -480,6 +480,29 @@ function toProjectTurnCandidates(input: {
       });
     }
   }
+  if (fixEvents.length === 0 && verificationEvents.length > 0 && files.length > 0) {
+    const verification = verificationEvents.find((event) =>
+      /\b(?:the\s+)?fix\s+is\s+to\b/i.test(event.summary),
+    );
+    const file = files.at(0);
+    const statement =
+      verification && file ? verificationOnlyFixStatement(verification, file) : null;
+
+    if (verification && file && statement !== null) {
+      candidates.push({
+        confidence: "medium",
+        dedupeKey: `verification-only-fix:${statement.toLowerCase()}`,
+        evidence: [verification.summary, file],
+        kind: "workflow",
+        learningId: `${input.sourceSession.session_id}:project:verification-only-fix:${input.index}`,
+        promotionBasis:
+          "Derived from an explicit remediation in a verification event and a concrete file path.",
+        sourceRefs: sourceRefsForEvents(input.sourceSession, [verification]),
+        statement,
+        title: `Verified fix: ${truncateInline(statement, 60)}`,
+      });
+    }
+  }
 
   for (const failure of failureEvents) {
     const resolution = fixEvents[0] ?? verificationEvents[0];
@@ -768,6 +791,17 @@ function toVerifiedCompletionStatement(event: Event): string | null {
 
   return `${startsWithPastTenseVerb(doneText) ? "" : "Completed "}${lowercaseFirst(stripTrailingPunctuation(doneText))}; ${verifiedClause}.`;
 }
+function verificationOnlyFixStatement(event: Event, file: string): string | null {
+  const match = event.summary.match(/\b(?:the\s+)?fix\s+is\s+to\s+(.+?)(?::\s*-\s*|$)/i);
+  const action = match?.[1]?.trim().replace(/[.!?]+$/, "");
+
+  if (!action) {
+    return null;
+  }
+
+  return `In ${file}, ${lowercaseFirst(action)}; verified.`;
+}
+
 export function normalizeUserPreferenceStatement(value: string): string {
   const cleaned = sanitizeLearningStatement(value)
     .replace(/^\d+\s*[\].):-]\s*/, "")
@@ -900,7 +934,8 @@ function isUsefulVerificationText(value: string): boolean {
       value,
     ) ||
     /\btests?\s+pass(?:ed|es)?\b/i.test(value) ||
-    /`[^`]+`\s+passes\b/i.test(value)
+    /`[^`]+`\s+passes\b/i.test(value) ||
+    /\b(?:the\s+)?fix\s+is\s+to\b/i.test(value)
   );
 }
 
@@ -1310,6 +1345,7 @@ function sourceRefsForEvents(sourceSession: SourceSession, events: readonly Even
 // evidence rather than a heuristic inference (see ProjectLearningCandidate).
 const verifiedDedupePrefixes = [
   "verified-fix:",
+  "verification-only-fix:",
   "completion:",
   "verification:",
   "error-resolution:",
