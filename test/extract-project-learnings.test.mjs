@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { eventSchema, sourceSessionFixture, turnSchema } from "../dist/models/canonical.js";
 import { extractCommandFromText } from "../dist/pipeline/extract/command-helpers.js";
-import { extractLearnings } from "../dist/pipeline/extract.js";
+import { extractLearnings, normalizeUserPreferenceStatement } from "../dist/pipeline/extract.js";
 
 function sourceSession(overrides = {}) {
   return {
@@ -385,6 +385,41 @@ test("keeps explicit user preference lines that are not pasted document fragment
 
   assert.equal(learnings.user.length, 1);
   assert.equal(learnings.user[0].statement, "Always run the focused regression before finalizing.");
+});
+test("normalizes preference punctuation and whitespace for stable dedupe", () => {
+  const source = sourceSession();
+  const turns = [
+    turn({ index: 0, user_prompt: "Always run the focused regression before finalizing." }),
+    turn({ index: 1, user_prompt: "always   run the focused regression before finalizing" }),
+  ];
+
+  const learnings = extractLearnings({ events: [], sourceSession: source, turns });
+
+  assert.equal(learnings.user.length, 1);
+  assert.equal(
+    normalizeUserPreferenceStatement("  Always   run the focused regression before finalizing!! "),
+    "Always run the focused regression before finalizing.",
+  );
+});
+
+test("rejects one-off task instructions from user preference promotion", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    user_prompt: [
+      "Always update this task's checklist before finalizing.",
+      "Never edit unrelated files in this change.",
+      "Always update the test file before finalizing.",
+      "Implement the feature and always run the tests.",
+    ].join("\n"),
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(learnings.user, []);
 });
 test("promotes file-scoped implementation learning from concrete fix evidence", () => {
   const source = sourceSession();
