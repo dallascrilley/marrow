@@ -6,6 +6,7 @@ import { executeArchiveRun } from "./commands/archive-run.js";
 import { executeCheckSessions } from "./commands/check-sessions.js";
 import { executeDeleteApply } from "./commands/delete-apply.js";
 import { executeDeleteCandidates } from "./commands/delete-candidates.js";
+import { executeDeleteSources } from "./commands/delete-sources.js";
 import { executeDoctorProvider } from "./commands/doctor-provider.js";
 import { executeExplain } from "./commands/explain.js";
 import { executeExportIndex } from "./commands/export-index.js";
@@ -146,6 +147,11 @@ const commandTree: Record<string, CommandDefinition> = {
       apply: {
         description: "Dry-run deletion apply by default; pass --apply to mark candidates deleted.",
         execute: async (context) => withLedger(context, executeDeleteApply),
+      },
+      sources: {
+        description:
+          "Dry-run raw archive and deletion for one source adapter; pass --source codex-cli and --apply to archive, verify, unlink, and tombstone eligible Codex sources.",
+        execute: async (context) => withLedger(context, executeDeleteSources),
       },
     },
   },
