@@ -47,6 +47,7 @@ test("asd --help lists every Task 1 command", () => {
     "archive run",
     "delete candidates",
     "delete apply",
+    "delete sources",
     "search",
     "memory export-wiki",
     "export-index",

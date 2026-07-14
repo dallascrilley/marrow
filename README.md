@@ -151,7 +151,7 @@ Important directories:
 - `knowledge/user/operator/` — user learning JSONL
 - `sources/manifests/` — immutable provenance manifests
 - `reviews/` — review queue runtime path
-- `archives/` — archive runtime path
+- `archives/` — derived archives plus verified raw Codex transcript archives under `raw/codex-cli/YYYY/MM/DD/`
 - `deletes/receipts/` — per-session retention receipts
 - `deletes/tombstones/` — explicit deletion apply tombstones
 - `reports/` — retention, audit, LLM learning-review, and static dashboard HTML reports
@@ -214,6 +214,20 @@ Explicit deletion apply:
 ```bash
 node dist/cli.js delete apply --apply
 ```
+
+Archive and remove eligible Codex source transcripts (dry-run by default):
+
+```bash
+node dist/cli.js delete sources --source codex-cli
+node dist/cli.js delete sources --source codex-cli --apply
+```
+
+`delete sources --source codex-cli --apply` writes a gzip copy to
+`archives/raw/codex-cli/YYYY/MM/DD/`, verifies the decompressed bytes against
+the immutable manifest hash, and writes a neighboring receipt before unlinking
+the source. Archives are retained indefinitely. `delete apply` remains the
+compatible tombstone-only workflow; use `delete sources` when reclaiming the
+original Codex transcript bytes.
 
 Session integrity check (read-only):
 
@@ -706,7 +720,7 @@ A session is only marked safe to delete when all of the following exist:
 - the immutable provenance manifest
 - the retention receipt
 
-If any of those artifacts are missing, the session remains blocked with a concrete reason in the retention receipt and deletion-candidate record. `delete apply` is a dry run by default; only `delete apply --apply` records an applied deletion tombstone and advances the lifecycle to `deleted`.
+If any of those artifacts are missing, the session remains blocked with a concrete reason in the retention receipt and deletion-candidate record. `delete apply` is a dry run by default; only `delete apply --apply` records an applied deletion tombstone and advances the lifecycle to `deleted`. For Codex source cleanup, use `delete sources --source codex-cli --apply`, which archives and verifies the raw bytes before that transition.
 
 ## Troubleshooting
 

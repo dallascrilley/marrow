@@ -42,8 +42,8 @@ retention workflows.
 
 - id: deletion-readiness-safety
   feature: Deletion readiness is blocked unless summary, knowledge, manifest, and retention receipt artifacts exist.
-  test: Run `node dist/cli.js archive run`, `node dist/cli.js delete candidates`, and dry-run `node dist/cli.js delete apply` against a sandbox containing ready and blocked fixture sessions.
-  proof_required: Output showing ready and blocked deletion-candidate states, including blocked reasons and dry-run deletion behavior.
+  test: Run `node dist/cli.js archive run`, `node dist/cli.js delete candidates`, and dry-run `node dist/cli.js delete sources --source codex-cli` against a sandbox containing ready and blocked fixture sessions.
+  proof_required: Output showing ready and blocked deletion-candidate states, including blocked reasons and dry-run raw-archive deletion behavior.
   proof_level: B
   status: validated
   validated_on: 2026-05-18
