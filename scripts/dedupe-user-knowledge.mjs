@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -79,6 +79,7 @@ export async function runBackfill({ root, apply = false }) {
   const after = { records: 0 };
   let duplicates = 0;
   const seen = new Set();
+  const plans = [];
 
   for (const path of files) {
     const records = await readLearningFile(path);
@@ -86,13 +87,18 @@ export async function runBackfill({ root, apply = false }) {
     before.records += result.inputCount;
     after.records += result.outputCount;
     duplicates += result.duplicateCount;
+    plans.push({
+      contents: `${result.records.map((record) => JSON.stringify(record)).join("\n")}\n`,
+      path,
+      changed: result.duplicateCount > 0,
+    });
+  }
 
-    if (apply && result.duplicateCount > 0) {
-      await writeFile(
-        path,
-        `${result.records.map((record) => JSON.stringify(record)).join("\n")}\n`,
-        "utf8",
-      );
+  if (apply) {
+    for (const plan of plans.filter((entry) => entry.changed)) {
+      const temporaryPath = `${plan.path}.tmp-${process.pid}`;
+      await writeFile(temporaryPath, plan.contents, "utf8");
+      await rename(temporaryPath, plan.path);
     }
   }
 

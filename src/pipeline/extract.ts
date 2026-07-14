@@ -117,10 +117,7 @@ export function extractLearnings(input: ExtractLearningsInput): ExtractedLearnin
       // into this transcript source) contain prefer/always/never directives that
       // are NOT the operator's preferences. Skip them so they never become user
       // learnings.
-      if (
-        looksLikeEmbeddedAgentPrompt(turn.user_prompt) ||
-        looksLikePromptInstruction(substantivePrompt)
-      ) {
+      if (looksLikeEmbeddedAgentPrompt(turn.user_prompt)) {
         return [];
       }
 
@@ -784,7 +781,13 @@ export function normalizeUserPreferenceStatement(value: string): string {
 function looksLikePromptInstruction(prompt: string): boolean {
   return (
     /\b(?:re-read|review|update|edit|change)\b.*\bONLY\b/i.test(prompt) ||
-    /^\s*When working on\b/i.test(prompt) ||
+    /^\s*When working on\b/i.test(prompt)
+  );
+}
+
+function looksLikeUserPreferenceTaskInstruction(prompt: string): boolean {
+  return (
+    looksLikePromptInstruction(prompt) ||
     /\b(?:this task|this change|this session|this request)\b/i.test(prompt)
   );
 }
@@ -792,7 +795,7 @@ function looksLikePromptInstruction(prompt: string): boolean {
 function isPromotableUserPreferenceLine(line: string): boolean {
   if (
     line.length > 180 ||
-    looksLikePromptInstruction(line) ||
+    looksLikeUserPreferenceTaskInstruction(line) ||
     /\b(?:add|change|create|edit|fix|implement|inspect|review|update)\b.*\b(?:branch|change|command|file|feature|PR|task|test)\b/i.test(
       line,
     )

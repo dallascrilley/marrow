@@ -421,6 +421,46 @@ test("rejects one-off task instructions from user preference promotion", () => {
 
   assert.deepEqual(learnings.user, []);
 });
+
+test("filters task-specific lines without dropping durable preferences in the same prompt", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    user_prompt: [
+      "For this task, update src/pipeline/extract.ts.",
+      "Always use an isolated worktree for repository changes.",
+    ].join("\n"),
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.deepEqual(
+    learnings.user.map((learning) => learning.statement),
+    ["Always use an isolated worktree for repository changes."],
+  );
+});
+
+test("preserves project fallback extraction for task-context prompts", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    commands_seen: ["npm test"],
+    files_touched: ["src/pipeline/extract.ts"],
+    user_prompt: "For this task, fix src/pipeline/extract.ts and run npm test.",
+  });
+
+  const learnings = extractLearnings({
+    events: [],
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  assert.ok(
+    learnings.project.some((learning) => learning.statement.includes("src/pipeline/extract.ts")),
+  );
+});
 test("promotes file-scoped implementation learning from concrete fix evidence", () => {
   const source = sourceSession();
   const firstTurn = turn({
