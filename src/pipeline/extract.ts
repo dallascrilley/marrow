@@ -120,6 +120,7 @@ export function extractLearnings(input: ExtractLearningsInput): ExtractedLearnin
       if (looksLikeEmbeddedAgentPrompt(turn.user_prompt)) {
         return [];
       }
+
       return extractUserPreferenceCandidates(substantivePrompt).map((candidate, index) =>
         createLearning({
           confidence: candidate.confidence,
@@ -767,11 +768,42 @@ function toVerifiedCompletionStatement(event: Event): string | null {
 
   return `${startsWithPastTenseVerb(doneText) ? "" : "Completed "}${lowercaseFirst(stripTrailingPunctuation(doneText))}; ${verifiedClause}.`;
 }
+export function normalizeUserPreferenceStatement(value: string): string {
+  const cleaned = sanitizeLearningStatement(value)
+    .replace(/^\d+\s*[\].):-]\s*/, "")
+    .replace(/[.!?]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned.length === 0 ? "" : `${cleaned}.`;
+}
+
 function looksLikePromptInstruction(prompt: string): boolean {
   return (
     /\b(?:re-read|review|update|edit|change)\b.*\bONLY\b/i.test(prompt) ||
     /^\s*When working on\b/i.test(prompt)
   );
+}
+
+function looksLikeUserPreferenceTaskInstruction(prompt: string): boolean {
+  return (
+    looksLikePromptInstruction(prompt) ||
+    /\b(?:this task|this change|this session|this request)\b/i.test(prompt)
+  );
+}
+
+function isPromotableUserPreferenceLine(line: string): boolean {
+  if (
+    line.length > 180 ||
+    looksLikeUserPreferenceTaskInstruction(line) ||
+    /\b(?:add|change|create|edit|fix|implement|inspect|review|update)\b.*\b(?:branch|change|command|file|feature|PR|task|test)\b/i.test(
+      line,
+    )
+  ) {
+    return false;
+  }
+
+  return /^(?:please\s+)?(?:always|never|prefer(?:ably)?\b)/i.test(line);
 }
 
 function extractUserPreferenceCandidates(prompt: string): Array<{
@@ -817,13 +849,18 @@ function extractUserPreferenceCandidates(prompt: string): Array<{
       continue;
     }
 
-    if (/\bprefer\b/i.test(line) || /\balways\b/i.test(line) || /\bnever\b/i.test(line)) {
+    if (isPromotableUserPreferenceLine(line)) {
+      const statement = normalizeUserPreferenceStatement(line);
+      if (statement.length === 0) {
+        continue;
+      }
+
       candidates.push({
         confidence: "high",
         evidence: line,
         kind: "preference",
-        statement: line,
-        title: truncateInline(line, 72),
+        statement,
+        title: truncateInline(statement, 72),
       });
       continue;
     }
