@@ -89,6 +89,33 @@ test("promotes same-turn fix and verification into project learning", () => {
     ),
   );
 });
+test("promotes an explicit remediation embedded in a verification event", () => {
+  const source = sourceSession();
+  const firstTurn = turn({
+    files_touched: ["shared/repository_guests.py"],
+    verification_seen: true,
+  });
+  const events = [
+    event(
+      firstTurn.turn_id,
+      "verification",
+      "Verification noted: Pyright is complaining because execute expects a QueryNoTemplate. The fix is to use psycopg.sql to build the queries safely: - update_guest: sql.SQL.",
+    ),
+  ];
+
+  const learnings = extractLearnings({
+    events,
+    sourceSession: source,
+    turns: [firstTurn],
+  });
+
+  const verifiedFix = learnings.project.find((learning) =>
+    learning.statement.includes("shared/repository_guests.py"),
+  );
+  assert.ok(verifiedFix);
+  assert.match(verifiedFix.statement, /use psycopg\.sql to build the queries safely; verified\./);
+  assert.equal(verifiedFix.evidence_type, "verified");
+});
 
 test("extractCommandFromText keeps bare node verification commands", () => {
   assert.equal(extractCommandFromText("Verification noted: `node` passes."), "node");
