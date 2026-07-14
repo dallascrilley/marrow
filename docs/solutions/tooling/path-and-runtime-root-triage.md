@@ -47,7 +47,7 @@ asd review queue
 asd explain <session-id>
 ```
 
-If `search` says the session index is missing, that is literal: build it with `asd export-index` before debugging downstream search behavior.
+If `search` reports a missing session index, first confirm the displayed path exists and is readable. Rebuild it with `asd export-index` only when the file is genuinely absent; permission and other filesystem errors need their own fix.
 
 3. When a file should exist under the runtime, inspect the canonical directories, not ad hoc guesses:
 

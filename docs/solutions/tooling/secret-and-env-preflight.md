@@ -21,7 +21,7 @@ Recurring ASD failures come from missing or mismatched environment, not from the
 - the key exists, but the route/model policy is blocked and the symptom is misread as a missing credential
 - operators paste secrets into commands instead of resolving them from the documented source
 
-These failures usually surface in `quality review-learnings`, `quality apply-learning-review`, scheduled memory pipeline runs, or provider-health checks.
+These failures usually surface in `quality review-learnings`, scheduled memory pipeline runs, or provider-health checks. `quality apply-learning-review` is a local batch-application step; if it fails directly, inspect its batch and runtime state rather than provider credentials.
 
 ## What works
 
@@ -31,7 +31,7 @@ These failures usually surface in `quality review-learnings`, `quality apply-lea
 asd doctor provider
 ```
 
-This is the intended preflight command. It checks credential resolution, model catalog, route/data-policy availability, and budget headroom.
+This is the intended preflight command. It resolves credentials, checks the model catalog, and performs live route/data-policy probes, including a one-token completion request. It may incur a small provider charge; budget headroom is reported but does not prevent the route probe.
 
 2. Resolve the key from the documented source of truth instead of typing or copying it manually.
 
@@ -66,7 +66,7 @@ ASD already has one explicit diagnostic surface for provider readiness (`asd doc
 
 ## Prevention
 
-- Run `asd doctor provider` before debugging `quality review-learnings` failures by hand.
+- Run `asd doctor provider` before debugging `quality review-learnings` failures by hand; remember that the provider check itself performs live probes.
 - Load `OPENROUTER_API_KEY` from 1Password or the operator-local launcher, never from repo files.
 - For scheduled runs, document or inspect the launcher environment first; launchd and interactive shells are not equivalent.
 - Treat a missing key as an operator-env problem, and a 404/data-policy response as a provider-routing problem.
