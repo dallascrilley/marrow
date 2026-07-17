@@ -87,6 +87,15 @@ retention workflows.
   validated_on: 2026-07-13
   proof: test/integration/ingest-lifecycle.test.mjs, test/parsed-cleanup.test.mjs, test/scheduled-memory-pipeline.test.mjs
 
+- id: emulo-profile-evidence-bridge
+  feature: ASD publishes a private, versioned user-message corpus that the private Emulo mirror can validate without reparsing raw logs or starting model work.
+  test: Run `node dist/cli.js profile export-emulo` against an isolated reduced-session fixture, then run private Emulo `plugin preflight --source asd --preview` against the same runtime root.
+  proof_required: One accepted session, expected user-message count, no assistant prose in the generation, an Emulo approval hash, and no Emulo `runs/` directory.
+  proof_level: B
+  status: validated
+  validated_on: 2026-07-17
+  proof: docs/recipes/emulo-profile-bridge.md and /tmp/asd-emulo-bridge-proof.q8upxA/
+
 - id: first-run-proof-doc
   feature: The README links to or summarizes the latest first-run proof artifact.
   test: After P0 proof is captured, update README or docs with the proof path and rerun `npm test`.
