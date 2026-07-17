@@ -1,12 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-
+import { buildAssistantSummary, defaultAssistantSummaryBudget } from "../dist/pipeline/reduce.js";
 import { tagTurnEvents } from "../dist/reducers/event-tagging.js";
 import { groupRecordsIntoTurns } from "../dist/reducers/turn-grouping.js";
-import {
-  buildAssistantSummary,
-  defaultAssistantSummaryBudget,
-} from "../dist/pipeline/reduce.js";
 
 function makeRecord(overrides = {}) {
   const kind = overrides.kind ?? "event";
@@ -77,7 +73,12 @@ test("keeps failure-adjacent root-cause text for turns with a failed tool result
         kind: "tool_result_stub",
         lineNumber: 3,
         messageText: "npm test failed: 1 failing",
-        toolUse: { callId: "tool-1", inputText: null, name: "run_terminal_command", status: "error" },
+        toolUse: {
+          callId: "tool-1",
+          inputText: null,
+          name: "run_terminal_command",
+          status: "error",
+        },
       }),
       makeRecord({
         kind: "assistant_message",
@@ -123,7 +124,12 @@ test("does not duplicate the focus message in the head remainder", () => {
         kind: "tool_result_stub",
         lineNumber: 2,
         messageText: "asd ingest sync failed: checkpoint mismatch",
-        toolUse: { callId: "tool-9", inputText: null, name: "run_terminal_command", status: "failed" },
+        toolUse: {
+          callId: "tool-9",
+          inputText: null,
+          name: "run_terminal_command",
+          status: "failed",
+        },
       }),
       makeRecord({
         kind: "assistant_message",

@@ -88,7 +88,12 @@ function collectCommandCandidates(record: CursorTranscriptRecord): string[] {
 function normalizeCommand(value: string): string | null {
   // Multi-line tool inputs (heredocs, chained scripts) are represented by their
   // first line — the collapsed remainder is noise, not a command stub.
-  const firstLine = (value.trim().replace(/^`+|`+$/g, "").split("\n", 1)[0] ?? "").trim();
+  const firstLine = (
+    value
+      .trim()
+      .replace(/^`+|`+$/g, "")
+      .split("\n", 1)[0] ?? ""
+  ).trim();
   const trimmed = firstLine.replace(/\s+/g, " ").replace(trailingPunctuationPattern, "");
 
   if (trimmed.length === 0 || !commandStarterPattern.test(trimmed)) {

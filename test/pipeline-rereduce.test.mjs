@@ -85,7 +85,8 @@ const failureTurnRecords = [
   makeRecord({
     kind: "assistant_message",
     lineNumber: 3,
-    messageText: `${"Walking the ledger state. ".repeat(40)}The root cause was a stale checkpoint ` +
+    messageText:
+      `${"Walking the ledger state. ".repeat(40)}The root cause was a stale checkpoint ` +
       "left by the interrupted run; clearing it lets resume proceed.",
   }),
 ];

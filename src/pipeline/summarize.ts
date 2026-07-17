@@ -445,7 +445,12 @@ function deriveTopic(sourceSession: SourceSession, turns: readonly Turn[]): stri
       return assistantFallback;
     }
 
-    return topicLine;
+    if (!isHarnessTopicLine(topicLine)) {
+      return topicLine;
+    }
+    // Harness-noise lines (HTML comments, AGENTS.md headers, system reminders)
+    // are provably not session content — never surface one as the topic, even
+    // as a last resort. Fall through to the per-turn loop and defaults.
   }
 
   for (const turn of turns) {
@@ -464,7 +469,9 @@ function deriveTopic(sourceSession: SourceSession, turns: readonly Turn[]): stri
         return assistantFallback;
       }
 
-      return topicLine;
+      if (!isHarnessTopicLine(topicLine)) {
+        return topicLine;
+      }
     }
   }
 

@@ -5,7 +5,9 @@ export function stripEventPrefix(value: string): string {
 export function normalizeFixSummary(value: string): string {
   return stripLeadingElision(
     stripLeadingCompletionVerb(
-      stripTrailingPunctuation(stripWhatChangedClause(stripEventPrefix(stripCompletionBlock(value))))
+      stripTrailingPunctuation(
+        stripWhatChangedClause(stripEventPrefix(stripCompletionBlock(value))),
+      )
         .replace(
           /^(?:fixed|resolved|updated|changed|patched|corrected)\s+(?:fixed|resolved|updated|changed|patched|corrected)\b\s*/i,
           (match) => {

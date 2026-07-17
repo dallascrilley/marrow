@@ -232,9 +232,7 @@ function collectFocusMessages(turn: GroupedTurn, turnEvents: readonly Event[]): 
 
   const messagesByLine = new Map<number, string>();
   for (const line of signalLines) {
-    const anchorIndex = turn.records.findIndex(
-      (record) => record.provenance.lineNumber >= line,
-    );
+    const anchorIndex = turn.records.findIndex((record) => record.provenance.lineNumber >= line);
     if (anchorIndex === -1) {
       continue;
     }
@@ -243,9 +241,7 @@ function collectFocusMessages(turn: GroupedTurn, turnEvents: readonly Event[]): 
     const target =
       anchor?.kind === "assistant_message"
         ? anchor
-        : turn.records
-            .slice(anchorIndex)
-            .find((record) => record.kind === "assistant_message");
+        : turn.records.slice(anchorIndex).find((record) => record.kind === "assistant_message");
 
     if (
       target !== undefined &&
