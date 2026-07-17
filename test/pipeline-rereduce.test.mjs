@@ -261,6 +261,10 @@ test("pipeline rereduce is re-runnable: the second run supersedes the manifest",
     );
     assert.equal(first, 0, "first run must succeed");
 
+    // The archive phase retires parsed intermediates for ready sessions; the
+    // heal-by-rerun path restores them from a backup or a re-parse.
+    await writeFile(parsedPath, JSON.stringify(failureTurnRecords), "utf8");
+
     const secondOutput = makeOutput();
     const second = await executePipelineRereduce(
       { args, commandPath: [], output: secondOutput },
