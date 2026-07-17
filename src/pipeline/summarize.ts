@@ -1,5 +1,6 @@
 import type { Event, Learning, SourceSession, Summary, Turn } from "../models/canonical.js";
 import { summarySchema } from "../models/canonical.js";
+import { commandStarterPattern } from "../reducers/command-extraction.js";
 import { hasProcessChatter, hasWrapperTags } from "./artifact-heuristics.js";
 import { extractPathsFromText, normalizeFilePath } from "./file-paths.js";
 import {
@@ -906,10 +907,11 @@ function isUsefulCommand(command: string): boolean {
     return false;
   }
 
+  // Same starter gate the reducer applied when capturing commands_seen — a
+  // narrower list here silently drops operator CLIs (td, gh, hubctl, qa, …).
   return (
-    /^(?:\.\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b)/i.test(
-      command.trim(),
-    ) && !["node", "python", "python3"].includes(normalized)
+    commandStarterPattern.test(command.trim()) &&
+    !["node", "python", "python3"].includes(normalized)
   );
 }
 

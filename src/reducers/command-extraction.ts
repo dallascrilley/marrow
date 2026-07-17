@@ -1,7 +1,9 @@
 import type { CursorTranscriptRecord } from "../adapters/cursor/intermediate.js";
 import type { GroupedTurn } from "./turn-grouping.js";
 
-const commandStarterPattern =
+// Exported so downstream consumers (summary useful_commands) apply the same
+// starter gate as reduction instead of drifting onto a narrower list.
+export const commandStarterPattern =
   /^(?:\.\/[\w./-]+|script\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3|gh|jq|curl|wget|rg|grep|ls|cat|sed|awk|ssh|kubectl|brew|td|hubctl|qa|wt|op|gog|mise|tar)\b)/i;
 const inlineCodePattern = /`([^`\n]+)`/g;
 const trailingPunctuationPattern = /[.,;:!?]+$/;
