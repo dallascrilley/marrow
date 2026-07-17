@@ -467,3 +467,170 @@ test("does not promote embedded question-form wrapper markup into decisions", ()
 
   assert.deepEqual(taggedEvents, []);
 });
+
+test("extracts operator CLI commands beyond the original starter whitelist", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "Check the PR, the queue, and the search index.",
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 2,
+      commandStrings: [
+        "gh pr checks 42",
+        'td create "fix the thing" -p P2',
+        "hubctl dispatch run lint",
+        "qa --json",
+        "rg pattern src/",
+        "curl -s https://example.com",
+        "kubectl get pods",
+        "brew install jq",
+        "wt switch --create fix",
+        "op item get GitHub",
+        "gog gmail search newer_than:1d",
+        "jq . package.json",
+        "ls test/fixtures",
+        "cat README.md",
+        "ssh deploy@example.com",
+        "mise current node",
+        "tar -tzf dist.tgz",
+        "grep -r TODO src",
+        "wget https://example.com/archive.tgz",
+        "sed -n 1,5p README.md",
+        "awk '{print $1}' report.txt",
+      ],
+      toolUse: {
+        callId: "tool-cli",
+        inputText: null,
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-cli",
+  });
+  const commandResult = extractCommandsByTurn(turns);
+
+  assert.deepEqual(commandResult.allCommands, [
+    "gh pr checks 42",
+    'td create "fix the thing" -p P2',
+    "hubctl dispatch run lint",
+    "qa --json",
+    "rg pattern src/",
+    "curl -s https://example.com",
+    "kubectl get pods",
+    "brew install jq",
+    "wt switch --create fix",
+    "op item get GitHub",
+    "gog gmail search newer_than:1d",
+    "jq . package.json",
+    "ls test/fixtures",
+    "cat README.md",
+    "ssh deploy@example.com",
+    "mise current node",
+    "tar -tzf dist.tgz",
+    "grep -r TODO src",
+    "wget https://example.com/archive.tgz",
+    "sed -n 1,5p README.md",
+    "awk '{print $1}' report.txt",
+  ]);
+});
+
+test("keeps only the first line of multi-line command inputs", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "Run the checks.",
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 2,
+      commandStrings: ["git status\ngit diff --stat\n\nnpm test"],
+      toolUse: {
+        callId: "tool-multiline",
+        inputText: "npm test -- --filter=slow\nrm -rf /tmp/scratch",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-multiline",
+  });
+  const commandResult = extractCommandsByTurn(turns);
+
+  assert.deepEqual(commandResult.allCommands, ["git status", "npm test -- --filter=slow"]);
+});
+
+test("tags just/script/qa task-runner invocations as verification commands", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "Verify everything before merging.",
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 2,
+      commandStrings: ["just test"],
+      toolUse: {
+        callId: "tool-just-test",
+        inputText: "just test",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 3,
+      commandStrings: ["script/cibuild"],
+      toolUse: {
+        callId: "tool-cibuild",
+        inputText: "script/cibuild",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 4,
+      commandStrings: ["qa --json"],
+      toolUse: {
+        callId: "tool-qa",
+        inputText: "qa --json",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 5,
+      commandStrings: ["just install"],
+      toolUse: {
+        callId: "tool-just-install",
+        inputText: "just install",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-verify-runners",
+  });
+  const taggedEvents = tagTurnEvents(turns);
+  const verificationCommands = taggedEvents
+    .filter((event) => event.type === "verification")
+    .map((event) => event.payload_small.verification_command);
+
+  assert.deepEqual(verificationCommands, ["just test", "script/cibuild", "qa --json"]);
+});

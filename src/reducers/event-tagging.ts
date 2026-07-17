@@ -58,7 +58,7 @@ const nextStepPatterns = [
 ] as const;
 
 const verificationCommandPattern =
-  /^(?:\.\/[\w./-]+|npm(?: run)? build|npm test|pnpm(?: run)? build|pnpm test|yarn build|yarn test|bun test|cargo test|go test|python(?:3)? -m pytest|uv run pytest)\b/i;
+  /^(?:\.\/[\w./-]+|npm(?: run)? build|npm test|pnpm(?: run)? build|pnpm test|yarn build|yarn test|bun test|cargo test|go test|python(?:3)? -m pytest|uv run pytest|just \w*(?:test|check|build|lint|ci|qa|verify)\w*|script\/(?:test|cibuild)\b|qa)\b/i;
 const verificationTextPatterns = [
   /\bverified\b/i,
   /\bconfirmed\b/i,
