@@ -634,3 +634,101 @@ test("tags just/script/qa task-runner invocations as verification commands", () 
 
   assert.deepEqual(verificationCommands, ["just test", "script/cibuild", "qa --json"]);
 });
+
+test("centers failure excerpts on the matched marker in long records", () => {
+  const leadIn = "Checkpoint update: all migrations applied cleanly. ".repeat(10);
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "Continue the migration.",
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 2,
+      messageText: `${leadIn}Then the final backfill failed with a unique-constraint error on session_id.`,
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-long-failure",
+  });
+  const failures = tagTurnEvents(turns).filter((event) => event.type === "failure");
+
+  assert.equal(failures.length, 1);
+  assert.ok(failures[0].summary.includes("failed with a unique-constraint error"));
+  assert.ok(failures[0].summary.length <= 240);
+  assert.ok(
+    failures[0].summary.startsWith("..."),
+    "an excerpt cut away from the record head should signal elision",
+  );
+});
+
+test("keeps the head excerpt for fix events on markdown-heavy change summaries", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "Make the tests faster.",
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 2,
+      messageText: [
+        "Summary of changes:",
+        "",
+        "## Implemented",
+        "",
+        "**Vitest config** ([`desktop/vitest.config.ts`](desktop/vitest.config.ts))",
+        "- `pool: 'threads'` – use worker threads instead of forks",
+        "- `environment: 'happy-dom'` – lighter DOM env than jsdom",
+        "",
+        "**Fixes for test compatibility**",
+        "1. **PreProductionView.tsx** – corrected empty-state expectations.",
+        `2. **Other.test.tsx** – ${"padding ".repeat(60)}patched the snapshot.`,
+      ].join("\n"),
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-markdown-fix",
+  });
+  const fixes = tagTurnEvents(turns).filter((event) => event.type === "fix");
+
+  assert.equal(fixes.length, 1);
+  assert.ok(fixes[0].summary.startsWith("Summary of changes:"));
+  assert.ok(fixes[0].summary.includes("use worker threads instead of forks"));
+});
+
+test("excerpts the line containing the marker rather than the record head", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "status?",
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 2,
+      messageText: [
+        "Progress so far:",
+        "- parsed 120 sessions without issues",
+        "- archived 118",
+        "",
+        `Backfill failed on session 119: ${"x".repeat(300)}`,
+      ].join("\n"),
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-marker-line",
+  });
+  const failures = tagTurnEvents(turns).filter((event) => event.type === "failure");
+
+  assert.equal(failures.length, 1);
+  assert.ok(failures[0].summary.includes("Backfill failed on session 119"));
+  assert.ok(!failures[0].summary.startsWith("Progress so far:"));
+});

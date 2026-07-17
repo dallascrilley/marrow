@@ -38,6 +38,7 @@ import {
   normalizeWorkflowStatement,
   startsWithPastTenseVerb,
   stripEventPrefix,
+  stripLeadingElision,
   stripTrailingPunctuation,
 } from "./extract/text-normalizers.js";
 import { normalizeFilePath } from "./file-paths.js";
@@ -345,7 +346,7 @@ function toProjectEventCandidate(
 
   switch (event.type) {
     case "decision": {
-      const statement = sanitizeHarnessLeakText(event.summary);
+      const statement = stripLeadingElision(sanitizeHarnessLeakText(event.summary));
       if (statement.length === 0) {
         return null;
       }
@@ -384,8 +385,8 @@ function toProjectEventCandidate(
             turnId: event.turn_id,
           }),
         ],
-        statement: event.summary,
-        title: `Failure mode: ${truncateInline(event.summary, 68)}`,
+        statement: stripLeadingElision(event.summary),
+        title: `Failure mode: ${truncateInline(stripLeadingElision(event.summary), 68)}`,
         trigger: errorSignatureTrigger(event.summary, sourceSession.project_key),
       };
     case "verification": {

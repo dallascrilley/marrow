@@ -145,3 +145,57 @@ test("does not harvest embedded foreign-agent prompt directives as user learning
 
   assert.deepEqual(learnings.user, []);
 });
+
+test("learning statements never begin with an elision marker from a centered excerpt", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "extract-elision",
+  };
+  const turn = turnSchema.parse({
+    assistant_summary: "Investigated and fixed the constraint error.",
+    commands_seen: [],
+    ended_at: "2026-05-16T12:05:00Z",
+    files_touched: ["src/db/ledger.ts"],
+    index: 0,
+    session_id: sourceSession.session_id,
+    started_at: "2026-05-16T12:00:00Z",
+    tool_stub_count: 0,
+    turn_id: `${sourceSession.session_id}:turn-0000`,
+    user_prompt: "Fix the backfill constraint error.",
+    verification_seen: true,
+  });
+  const fixEvent = eventSchema.parse({
+    confidence: "high",
+    event_id: "extract-elision:fix:1",
+    payload_small: { matched_rule: "fixed" },
+    source_offsets: { end_line: 9, start_line: 9 },
+    summary:
+      "...then fixed the unique-constraint error by keying the upsert on session_id and source_hash.",
+    turn_id: turn.turn_id,
+    type: "fix",
+  });
+  const verificationEvent = eventSchema.parse({
+    confidence: "high",
+    event_id: "extract-elision:verification:1",
+    payload_small: { matched_rule: "verified", verification_command: "npm test" },
+    source_offsets: { end_line: 12, start_line: 12 },
+    summary: "Verification noted: tests pass after the upsert fix.",
+    turn_id: turn.turn_id,
+    type: "verification",
+  });
+
+  const learnings = extractLearnings({
+    events: [fixEvent, verificationEvent],
+    sourceSession,
+    turns: [turn],
+  });
+
+  assert.ok(learnings.project.length > 0);
+  for (const learning of learnings.project) {
+    assert.ok(
+      !learning.statement.startsWith("...") && !learning.title.startsWith("..."),
+      `statement must not begin with an elision marker: ${learning.statement}`,
+    );
+  }
+});

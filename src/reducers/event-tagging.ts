@@ -1,4 +1,5 @@
 import type { Event, EventType } from "../models/canonical.js";
+import { hasExcessiveMarkdownStructure } from "../pipeline/extract/raw-dump-predicates.js";
 import { pruneTranscriptPayload } from "./payload-pruning.js";
 import type { GroupedTurn } from "./turn-grouping.js";
 
@@ -188,10 +189,20 @@ function createPatternEvent(
     return null;
   }
 
+  // Fix events on markdown-heavy "Summary of changes" messages keep the head
+  // excerpt: the learning compressor (compressMarkdownHeavySummary) parses the
+  // top of the summary for file + action clauses, and centering on the marker
+  // starves it. Everything else centers on the matched marker so the excerpt
+  // always contains the signal it was tagged for.
+  const excerpt =
+    type === "fix" && hasExcessiveMarkdownStructure(text)
+      ? headExcerpt(text, 240)
+      : excerptAroundMatch(text, matchedPattern, 240);
+
   return createEvent({
     turn,
     record,
-    summary: `${options?.summaryPrefix ?? ""}${summarizeText(text)}`,
+    summary: `${options?.summaryPrefix ?? ""}${excerpt}`,
     type,
     ...(options?.confidence === undefined ? {} : { confidence: options.confidence }),
     payloadPatch: {
@@ -255,17 +266,57 @@ function extractVerificationCommand(record: GroupedTurn["records"][number]): str
   return normalized;
 }
 
-function summarizeText(text: string): string {
+/**
+ * Head truncation retained for markdown-heavy fix summaries: the value sits in
+ * the leading file + action clauses, not around the matched marker.
+ */
+function headExcerpt(text: string, maxLength: number): string {
   const normalized = text
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  if (normalized.length <= 240) {
+  if (normalized.length <= maxLength) {
     return normalized;
   }
 
-  return `${normalized.slice(0, 237)}...`;
+  return `${normalized.slice(0, maxLength - 3)}...`;
+}
+
+/**
+ * Builds an event excerpt centered on the matched marker instead of blindly
+ * head-truncating the record. The window starts at the line containing the
+ * marker (shifting right when the marker sits deep inside an overlong line) so
+ * the marker is always visible in the excerpt; elided edges get "...".
+ */
+function excerptAroundMatch(text: string, pattern: RegExp, maxLength: number): string {
+  const normalized = text
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  const matchIndex = pattern.exec(normalized)?.index ?? 0;
+  const lineStart = normalized.lastIndexOf("\n", matchIndex) + 1;
+
+  let start = lineStart;
+  if (matchIndex - lineStart >= maxLength - 6) {
+    start = matchIndex - Math.floor(maxLength / 3);
+  }
+
+  const needsPrefix = start > 0;
+  const budget = maxLength - (needsPrefix ? 3 : 0);
+  let end = Math.min(normalized.length, start + budget);
+  const needsSuffix = end < normalized.length;
+  if (needsSuffix) {
+    end = Math.max(start, end - 3);
+  }
+
+  const body = normalized.slice(start, end).trim();
+  return `${needsPrefix ? "..." : ""}${body}${needsSuffix ? "..." : ""}`;
 }
 
 function looksLikeCompletedOutcome(text: string): boolean {

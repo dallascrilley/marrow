@@ -107,17 +107,20 @@ function summarizeSessionWithTopic(
   input: SummarizeSessionInput,
   topicInput: { topic: string; topicSource: TopicSource },
 ): Summary {
-  const decisions = uniquePreservingOrder(
-    input.events
-      .filter((event) => event.type === "decision")
-      .map((event) => normalizeSummaryLine(event.summary))
-      .filter((line) => isOperatorReadySummaryLine(line)),
-  );
   const failures = uniquePreservingOrder(
     input.events
       .filter((event) => event.type === "failure")
       .map((event) => normalizeSummaryLine(event.summary))
       .filter((line) => isOperatorReadySummaryLine(line)),
+  ).slice(0, maxWhatFailedEntries);
+  const decisions = subtractDuplicateLines(
+    uniquePreservingOrder(
+      input.events
+        .filter((event) => event.type === "decision")
+        .map((event) => normalizeSummaryLine(event.summary))
+        .filter((line) => isOperatorReadySummaryLine(line)),
+    ),
+    [failures],
   );
   const fixes = summarizeWorkedOutcomes(input.events);
   const fallbackWorkflowOutcomes =
@@ -129,7 +132,10 @@ function summarizeSessionWithTopic(
             .filter((line) => isOperatorReadySummaryLine(line)),
         )
       : [];
-  const whatWorked = uniquePreservingOrder([...fixes, ...fallbackWorkflowOutcomes]);
+  const whatWorked = subtractDuplicateLines(
+    uniquePreservingOrder([...fixes, ...fallbackWorkflowOutcomes]),
+    [failures, decisions],
+  );
   const nextStep = selectNextStep(input.events);
   const usefulCommands = uniquePreservingOrder(
     [
@@ -678,6 +684,25 @@ function looksLikeCompletedOutcome(value: string): boolean {
     /\b(?:done|completed|implemented|fixed|resolved|merged|pushed)\b/i.test(value) &&
     /\b(?:verified|tests? pass(?:ed)?|all checks passed|0 failures)\b/i.test(value)
   );
+}
+
+const maxWhatFailedEntries = 10;
+
+function summaryLineKey(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/**
+ * A line may appear in exactly one summary field. The same 240-char event blob
+ * can match both failure and decision rules; the more specific field keeps it.
+ * Priority: what_failed > what_was_decided > what_worked.
+ */
+function subtractDuplicateLines(
+  lines: readonly string[],
+  higherPriorityFields: ReadonlyArray<readonly string[]>,
+): string[] {
+  const claimed = new Set(higherPriorityFields.flat().map((line) => summaryLineKey(line)));
+  return lines.filter((line) => !claimed.has(summaryLineKey(line)));
 }
 
 function truncateInline(value: string, maxLength: number): string {

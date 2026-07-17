@@ -1134,3 +1134,72 @@ test("deriveTopic skips corpus-validated structural wrapper headers", () => {
     assert.equal(summary.topic, body, `expected real task after ${header}`);
   }
 });
+
+function makeMinimalTurn(sessionId) {
+  return turnSchema.parse({
+    assistant_summary: "Did the work.",
+    commands_seen: [],
+    ended_at: "2026-05-03T23:10:01.000Z",
+    files_touched: [],
+    index: 0,
+    session_id: sessionId,
+    started_at: "2026-05-03T23:10:00.000Z",
+    tool_stub_count: 0,
+    turn_id: `${sessionId}:turn-0000`,
+    user_prompt: "Fix the pipeline.",
+    verification_seen: false,
+  });
+}
+
+function makeTypedEvent(sessionId, index, type, summary) {
+  return eventSchema.parse({
+    confidence: "high",
+    event_id: `${sessionId}:${type}:${index}`,
+    payload_small: {},
+    source_offsets: {
+      end_line: index + 1,
+      start_line: index + 1,
+    },
+    summary,
+    turn_id: `${sessionId}:turn-0000`,
+    type,
+  });
+}
+
+test("a line matching multiple fields appears in exactly one summary field", () => {
+  const sourceSession = { ...sourceSessionFixture, session_id: "dedupe-fields" };
+  const shared = "The backfill failed with a constraint error; decided to roll back and retry.";
+  const summary = summarizeSession({
+    events: [
+      makeTypedEvent(sourceSession.session_id, 0, "failure", shared),
+      makeTypedEvent(sourceSession.session_id, 1, "decision", shared),
+    ],
+    sourceSession,
+    turns: [makeMinimalTurn(sourceSession.session_id)],
+  });
+
+  assert.ok(summary.what_failed.includes(shared));
+  assert.ok(
+    !summary.what_was_decided.includes(shared),
+    "the same blob must not appear in both what_failed and what_was_decided",
+  );
+});
+
+test("caps what_failed at 10 entries", () => {
+  const sourceSession = { ...sourceSessionFixture, session_id: "cap-failures" };
+  const events = Array.from({ length: 12 }, (_, index) =>
+    makeTypedEvent(
+      sourceSession.session_id,
+      index,
+      "failure",
+      `Distinct failure number ${index}: the widget broke in a new way.`,
+    ),
+  );
+  const summary = summarizeSession({
+    events,
+    sourceSession,
+    turns: [makeMinimalTurn(sourceSession.session_id)],
+  });
+
+  assert.equal(summary.what_failed.length, 10);
+});
