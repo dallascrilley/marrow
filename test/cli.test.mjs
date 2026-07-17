@@ -406,6 +406,7 @@ test("workflow decisions exclude dismissed candidates unless included", async ()
         "workflow",
         "dismiss",
         candidateId,
+        "--days=30",
         "--note",
         "already covered at /Users/example/private/path with API_KEY=abc123",
       ],
