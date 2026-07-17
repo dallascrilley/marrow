@@ -521,7 +521,12 @@ export function selectParsedIntermediateCleanupCandidateSnapshot(
     }
   }
 
-  return eligible.filter((candidate) => selected.has(candidate.path));
+  // Deterministic oldest-first output: `eligible` follows walk/readdir order,
+  // which is arbitrary (and differs between APFS and ext4), so the selection
+  // filter alone made the returned order platform-dependent.
+  return eligible
+    .filter((candidate) => selected.has(candidate.path))
+    .sort(compareParsedIntermediateCandidates);
 }
 
 function selectOldestCandidatesByBytes(

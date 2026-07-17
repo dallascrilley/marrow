@@ -126,18 +126,23 @@ export function getReducedArtifactPath(sessionId: string): string {
   return join(getRuntimePath("staging"), sessionId, "reduced-session.json");
 }
 
+export const defaultAssistantSummaryBudget = 240;
+export const highSignalAssistantSummaryBudget = 1600;
+export const failureFocusExcerptBudget = 600;
+
+const maxFailureFocusExcerpts = 2;
+const minimumExcerptBudget = 20;
+
 function toCanonicalTurn(
   turn: GroupedTurn,
   sourceSession: SourceSessionRow,
   commandsSeen: readonly string[],
   events: readonly Event[],
 ): Turn {
-  const assistantSummary =
-    turn.assistantMessages.join(" ").trim() || "No assistant summary captured.";
   const turnEvents = events.filter((event) => event.turn_id === turn.turnId);
 
   return turnSchema.parse({
-    assistant_summary: truncateInline(assistantSummary, 240),
+    assistant_summary: buildAssistantSummary(turn, turnEvents),
     commands_seen: [...commandsSeen],
     ended_at: turn.endedAtHint ?? turn.startedAtHint ?? sourceSession.updated_at,
     files_touched: turn.filePaths,
@@ -153,11 +158,125 @@ function toCanonicalTurn(
   });
 }
 
+/**
+ * Composes the turn's assistant summary. Normal turns keep the historic 240-char
+ * head truncation. Turns with error/verification signal (failed tool result, or a
+ * failure/verification event) get a wider budget that leads with the assistant
+ * messages around the signal — that is where root-cause reasoning concentrates —
+ * followed by the remaining head context.
+ */
+export function buildAssistantSummary(turn: GroupedTurn, turnEvents: readonly Event[]): string {
+  const focusMessages = collectFocusMessages(turn, turnEvents);
+
+  if (focusMessages.length === 0) {
+    return (
+      truncateInline(turn.assistantMessages.join(" "), defaultAssistantSummaryBudget) ||
+      "No assistant summary captured."
+    );
+  }
+
+  const parts: string[] = [];
+  let remaining = highSignalAssistantSummaryBudget;
+
+  for (const message of focusMessages.slice(0, maxFailureFocusExcerpts)) {
+    const budget = Math.min(failureFocusExcerptBudget, remaining);
+    if (budget < minimumExcerptBudget) {
+      break;
+    }
+
+    const excerpt = truncateFocusMessage(message, budget);
+    if (excerpt.length === 0) {
+      continue;
+    }
+
+    parts.push(excerpt);
+    remaining -= excerpt.length + 1;
+  }
+
+  if (remaining >= minimumExcerptBudget) {
+    const focusSet = new Set(focusMessages);
+    const head = truncateInline(
+      turn.assistantMessages.filter((message) => !focusSet.has(message)).join(" "),
+      remaining,
+    );
+    if (head.length > 0) {
+      parts.push(head);
+    }
+  }
+
+  const summary = parts.join(" ").trim();
+  return summary.length > 0 ? summary : "No assistant summary captured.";
+}
+
+/**
+ * Returns the assistant messages anchoring the turn's error/verification signal:
+ * the message containing a failure/verification event, or the first assistant
+ * message after a failed tool result. Order follows record order.
+ */
+function collectFocusMessages(turn: GroupedTurn, turnEvents: readonly Event[]): string[] {
+  const signalLines: number[] = [];
+
+  for (const record of turn.records) {
+    if (record.kind === "tool_result_stub" && /fail|error/i.test(record.toolUse?.status ?? "")) {
+      signalLines.push(record.provenance.lineNumber);
+    }
+  }
+  for (const event of turnEvents) {
+    if (event.type === "failure" || event.type === "verification") {
+      const startLine = event.source_offsets.start_line;
+      if (startLine !== null) {
+        signalLines.push(startLine);
+      }
+    }
+  }
+
+  const messagesByLine = new Map<number, string>();
+  for (const line of signalLines) {
+    const anchorIndex = turn.records.findIndex((record) => record.provenance.lineNumber >= line);
+    if (anchorIndex === -1) {
+      continue;
+    }
+
+    const anchor = turn.records[anchorIndex];
+    const target =
+      anchor?.kind === "assistant_message"
+        ? anchor
+        : turn.records.slice(anchorIndex).find((record) => record.kind === "assistant_message");
+
+    if (
+      target !== undefined &&
+      target.messageText !== null &&
+      target.messageText.trim().length > 0
+    ) {
+      messagesByLine.set(target.provenance.lineNumber, target.messageText);
+    }
+  }
+
+  return [...messagesByLine.values()];
+}
+
 function truncateInline(value: string, maxLength: number): string {
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.length <= maxLength
     ? normalized
     : `${normalized.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
+/**
+ * Focus-message truncation keeps head AND tail: diagnosis messages build up to
+ * their conclusion, so the root cause ("the root cause was X", "fixed by Y")
+ * sits near the end. A pure head cut repeats the original 240-char loss at a
+ * larger budget.
+ */
+function truncateFocusMessage(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  const headLength = Math.floor((maxLength - 5) / 3);
+  const tailLength = maxLength - 5 - headLength;
+  return `${normalized.slice(0, headLength).trimEnd()} ... ${normalized.slice(-tailLength).trimStart()}`;
 }
 
 async function writeJsonArtifact(path: string, value: unknown): Promise<void> {

@@ -20,6 +20,7 @@ import { executeMemoryPushWiki } from "./commands/memory-push-wiki.js";
 import { executeMigrateProjectIds } from "./commands/migrate-project-ids.js";
 import { executePipelineGate } from "./commands/pipeline-gate.js";
 import { executePipelineReextract } from "./commands/pipeline-reextract.js";
+import { executePipelineRereduce } from "./commands/pipeline-rereduce.js";
 import { executePromoteJudge } from "./commands/promote-judge.js";
 import { executePromoteReview } from "./commands/promote-review.js";
 import { executeQualityApplyLearningReview } from "./commands/quality-apply-learning-review.js";
@@ -327,6 +328,11 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "Retroactively re-run summarize+extract+archive on already-ingested sessions with the current pipeline (deterministic, no LLM). Requires --process-chatter-only or --session-id <id>; pass --dry-run to preview matched sessions.",
         execute: async (context) => withLedger(context, executePipelineReextract),
+      },
+      rereduce: {
+        description:
+          "Re-run reduce (then summarize+extract+archive) from surviving parsed-records.json so reduce-layer improvements reach historical sessions (deterministic, no LLM). Requires --all-with-parsed or --session-id <id>; pass --dry-run to see which sessions can be re-reduced and which are locked.",
+        execute: async (context) => withLedger(context, executePipelineRereduce),
       },
     },
   },

@@ -19,6 +19,57 @@ export type ReextractOptions = {
   sessionIds: string[];
 };
 
+export type RegenerateFromReducedResult = {
+  archived: Awaited<ReturnType<typeof runArchivePhase>>;
+  knowledge: Awaited<ReturnType<typeof runExtractPhase>>;
+  summary: Awaited<ReturnType<typeof runSummarizePhase>>;
+};
+
+/**
+ * Re-run summarize (forced, deterministic, no LLM) + extract + archive from an
+ * already-reduced artifact. Shared by `pipeline reextract` (existing reduced
+ * artifact) and `pipeline rereduce` (freshly re-reduced artifact). The archive
+ * phase runs with manifest-overwrite enabled so repeat regeneration supersedes
+ * the provenance manifest instead of tripping its immutability guard.
+ */
+export async function regenerateFromReduced(input: {
+  database: DatabaseSync;
+  events: readonly Event[];
+  runArchivePhaseImpl?: typeof runArchivePhase;
+  sourceSession: SourceSessionRow;
+  turns: readonly Turn[];
+}): Promise<RegenerateFromReducedResult> {
+  // force=true, resume=false, llmTopic=false → deterministic regeneration.
+  const summary = await runSummarizePhase(
+    input.database,
+    input.sourceSession,
+    input.turns,
+    input.events,
+    false,
+    false,
+    true,
+  );
+  const knowledge = await runExtractPhase(
+    input.database,
+    input.sourceSession,
+    input.turns,
+    input.events,
+    false,
+  );
+  const archived = await (input.runArchivePhaseImpl ?? runArchivePhase)({
+    allowManifestOverwrite: true,
+    database: input.database,
+    events: input.events,
+    knowledge,
+    sourceSession: input.sourceSession,
+    sourceSessionId: input.sourceSession.id,
+    summary,
+    turns: input.turns,
+  });
+
+  return { archived, knowledge, summary };
+}
+
 /**
  * Retroactively re-run summarize + extract + archive on already-ingested
  * sessions, regenerating their artifacts with the current pipeline (current
@@ -67,31 +118,14 @@ export async function executePipelineReextract(
         await readFile(getReducedArtifactPath(session.session_id), "utf8"),
       ) as { events: Event[]; turns: Turn[] };
 
-      // force=true, resume=false, llmTopic=false → deterministic regeneration.
-      const summary = await runSummarizePhase(
-        database,
-        session,
-        reduced.turns,
-        reduced.events,
-        false,
-        false,
-        true,
-      );
-      const knowledge = await runExtractPhase(
-        database,
-        session,
-        reduced.turns,
-        reduced.events,
-        false,
-      );
-      const archived = await (dependencies.runArchivePhase ?? runArchivePhase)({
+      const { archived, knowledge, summary } = await regenerateFromReduced({
         database,
         events: reduced.events,
-        knowledge,
         sourceSession: session,
-        sourceSessionId: session.id,
-        summary,
         turns: reduced.turns,
+        ...(dependencies.runArchivePhase === undefined
+          ? {}
+          : { runArchivePhaseImpl: dependencies.runArchivePhase }),
       });
 
       processed.push({
