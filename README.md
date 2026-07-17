@@ -36,6 +36,7 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 | Skill usage evidence in corpus | `asd skill evidence <skill-id>` (after `export-index`) |
 | Skill adherence report | `asd skill report <skill-id>` — [`docs/recipes/skill-adherence-report.md`](docs/recipes/skill-adherence-report.md) |
 | Workflow guidance candidates | `asd workflow mine --days 7 --json` — [`docs/recipes/workflow-mining.md`](docs/recipes/workflow-mining.md) |
+| Emulo profile evidence export | `asd profile export-emulo` — writes a private, versioned user-message corpus without model calls |
 
 ## Requirements
 
@@ -229,6 +230,18 @@ the immutable manifest hash, and writes a neighboring receipt before unlinking
 the source. Archives are retained indefinitely. `delete apply` remains the
 compatible tombstone-only workflow; use `delete sources` when reclaiming the
 original Codex transcript bytes.
+
+Export canonical user-authored prompts for the private Emulo profile compiler:
+
+```bash
+node dist/cli.js profile export-emulo
+```
+
+The command reads durable reduced-session artifacts, strips harness and attached
+context, rejects ambiguous session identities, and writes immutable generations
+under `exports/emulo/generations/`. `exports/emulo/current.json` is the atomic
+pointer consumed by Emulo. This export is local and deterministic; it does not
+run Emulo workers, spend model budget, or activate a profile.
 
 Session integrity check (read-only):
 

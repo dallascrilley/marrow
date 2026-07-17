@@ -21,6 +21,7 @@ import { executeMigrateProjectIds } from "./commands/migrate-project-ids.js";
 import { executePipelineGate } from "./commands/pipeline-gate.js";
 import { executePipelineReextract } from "./commands/pipeline-reextract.js";
 import { executePipelineRereduce } from "./commands/pipeline-rereduce.js";
+import { executeProfileExportEmulo } from "./commands/profile-export-emulo.js";
 import { executePromoteJudge } from "./commands/promote-judge.js";
 import { executePromoteReview } from "./commands/promote-review.js";
 import { executeQualityApplyLearningReview } from "./commands/quality-apply-learning-review.js";
@@ -183,6 +184,16 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "Push reviewed-memory records into the personal vault as Obsidian-shaped pages.",
         execute: async (context) => withLedger(context, executeMemoryPushWiki),
+      },
+    },
+  },
+  profile: {
+    description: "Export evidence for personal-profile compilers.",
+    subcommands: {
+      "export-emulo": {
+        description:
+          "Export canonical user prompts and provenance for the private Emulo integration.",
+        execute: async (context) => withLedger(context, executeProfileExportEmulo),
       },
     },
   },
