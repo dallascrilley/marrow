@@ -29,6 +29,7 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 | Scheduled ingest + wiki push | [`docs/recipes/scheduled-memory-pipeline.md`](docs/recipes/scheduled-memory-pipeline.md) |
 | Pipeline gate (skip LLM when idle) | `asd pipeline gate --max-per 5/24h --max-usd 1/24h` — ADR-0007 |
 | Re-extract stale artifacts (deterministic, no LLM) | `asd pipeline reextract --process-chatter-only --dry-run` then drop `--dry-run` to apply (or `--session-id <id>`) |
+| Re-reduce after reduce-layer upgrades | `asd pipeline rereduce --all-with-parsed --dry-run` to see which sessions still have `parsed-records.json`, then drop `--dry-run` to apply (or `--session-id <id>`); sessions without parsed records are locked at their current reduced artifact |
 | Skill usage evidence in corpus | `asd skill evidence <skill-id>` (after `export-index`) |
 | Skill adherence report | `asd skill report <skill-id>` — [`docs/recipes/skill-adherence-report.md`](docs/recipes/skill-adherence-report.md) |
 | Workflow guidance candidates | `asd workflow mine --days 7 --json` — [`docs/recipes/workflow-mining.md`](docs/recipes/workflow-mining.md) |
