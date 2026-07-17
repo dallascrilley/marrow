@@ -8,6 +8,7 @@ const runtimePathSuffixes = {
   root: "",
   archives: "archives",
   deletes: "deletes",
+  emuloExports: "exports/emulo",
   index: "index",
   knowledgeProjects: "knowledge/projects",
   knowledgeUsers: "knowledge/user",
