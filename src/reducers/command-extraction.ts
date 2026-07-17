@@ -7,7 +7,46 @@ export const commandStarterPattern =
   /^(?:\.\/[\w./-]+|script\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3|gh|jq|curl|wget|rg|grep|ls|cat|sed|awk|ssh|kubectl|brew|td|hubctl|qa|wt|op|gog|mise|tar)\b)/i;
 const inlineCodePattern = /`([^`\n]+)`/g;
 const trailingPunctuationPattern = /[.,;:!?]+$/;
-const disallowedBareCommands = new Set(["node", "python", "python3"]);
+// td task ids (td-2a8b94, td-2a8b94-some-slug) match the `td` starter via the
+// word boundary before `-` but are identifiers, not invocations — real td
+// commands are `td <subcommand> …`.
+const tdTaskIdPattern = /^td-[0-9a-z]{4,}/i;
+// Bare invocations of these print usage/help or open a REPL — no signal.
+// (Bare `ls`/`just`/`make`/`qa` do real work and stay allowed.)
+const disallowedBareCommands = new Set([
+  "awk",
+  "brew",
+  "bun",
+  "cargo",
+  "cat",
+  "curl",
+  "docker",
+  "gh",
+  "git",
+  "go",
+  "gog",
+  "grep",
+  "hubctl",
+  "jq",
+  "kubectl",
+  "mise",
+  "node",
+  "npm",
+  "op",
+  "pnpm",
+  "python",
+  "python3",
+  "rg",
+  "sed",
+  "sqlite3",
+  "ssh",
+  "tar",
+  "td",
+  "uv",
+  "wget",
+  "wt",
+  "yarn",
+]);
 
 export type ExtractedCommand = {
   command: string;
@@ -99,6 +138,10 @@ function normalizeCommand(value: string): string | null {
   const trimmed = firstLine.replace(/\s+/g, " ").replace(trailingPunctuationPattern, "");
 
   if (trimmed.length === 0 || !commandStarterPattern.test(trimmed)) {
+    return null;
+  }
+
+  if (tdTaskIdPattern.test(trimmed)) {
     return null;
   }
 

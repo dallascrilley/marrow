@@ -570,6 +570,62 @@ test("keeps only the first line of multi-line command inputs", () => {
   assert.deepEqual(commandResult.allCommands, ["git status", "npm test -- --filter=slow"]);
 });
 
+test("drops td task ids and bare usage-only CLIs from extracted commands", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "Check the PR, then update the tracker.",
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 2,
+      commandStrings: ["td-2a8b94", "td-2a8b94-ros-command-apply", "gh", "git", "go"],
+      toolUse: {
+        callId: "tool-noise",
+        inputText: "td-2a8b94",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 3,
+      commandStrings: [
+        "gh pr checks 148",
+        "td create track-follow-up",
+        "td show td-2a8b94",
+        "qa",
+        "just",
+        "make",
+      ],
+      toolUse: {
+        callId: "tool-real",
+        inputText: "gh pr checks 148",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-command-noise",
+  });
+  const commandResult = extractCommandsByTurn(turns);
+
+  // Task ids and bare help/REPL invocations carry no command signal; bare
+  // `qa`/`just`/`make` do real work (gate run, recipe list, default target).
+  assert.deepEqual(commandResult.allCommands, [
+    "gh pr checks 148",
+    "td create track-follow-up",
+    "td show td-2a8b94",
+    "qa",
+    "just",
+    "make",
+  ]);
+});
+
 test("tags just/script/qa task-runner invocations as verification commands", () => {
   const records = [
     makeRecord({
