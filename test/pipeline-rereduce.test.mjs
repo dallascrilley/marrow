@@ -244,3 +244,33 @@ test("pipeline rereduce exits non-zero when every matched session is locked", as
     database.close();
   });
 });
+
+test("pipeline rereduce is re-runnable: the second run supersedes the manifest", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+    registerSession(database, "twice-sess");
+
+    const parsedPath = getParsedArtifactPath("twice-sess");
+    await mkdir(dirname(parsedPath), { recursive: true });
+    await writeFile(parsedPath, JSON.stringify(failureTurnRecords), "utf8");
+
+    const args = ["--session-id", "twice-sess"];
+    const first = await executePipelineRereduce(
+      { args, commandPath: [], output: makeOutput() },
+      database,
+    );
+    assert.equal(first, 0, "first run must succeed");
+
+    const secondOutput = makeOutput();
+    const second = await executePipelineRereduce(
+      { args, commandPath: [], output: secondOutput },
+      database,
+    );
+    assert.equal(second, 0, "second run must succeed, not trip the immutable-manifest guard");
+    const result = JSON.parse(secondOutput.lines.join("\n"));
+    assert.equal(result.rereduced_count, 1);
+    assert.equal(result.skipped_count, 0);
+
+    database.close();
+  });
+});

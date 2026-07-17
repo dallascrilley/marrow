@@ -53,6 +53,7 @@ export async function regenerateFromReduced(input: {
     false,
   );
   await runArchivePhase({
+    allowManifestOverwrite: true,
     database: input.database,
     events: input.events,
     knowledge,

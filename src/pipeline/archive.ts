@@ -25,6 +25,12 @@ export type ArchivePhaseResult = {
 };
 
 export async function runArchivePhase(input: {
+  /**
+   * Pass true only from deliberate regeneration flows (pipeline
+   * reextract/rereduce) so the provenance manifest can be superseded; normal
+   * ingest keeps the immutability guard.
+   */
+  allowManifestOverwrite?: boolean;
   database: DatabaseSync;
   events: readonly Event[];
   knowledge: KnowledgeWriteResult;
@@ -45,6 +51,7 @@ export async function runArchivePhase(input: {
         user_knowledge_jsonl_path: input.knowledge.user.path,
       },
       events: input.events,
+      ...(input.allowManifestOverwrite === true ? { overwriteIfDifferent: true } : {}),
       sourceSession: sourceSessionModel,
       turns: input.turns,
     });

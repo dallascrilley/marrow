@@ -48,6 +48,14 @@ export async function writeSessionManifest(input: {
   artifactPaths: SessionProvenanceManifest["artifact_paths"];
   events: readonly Event[];
   generatedAt?: string;
+  /**
+   * Opt-in for deliberate operator-initiated regeneration flows
+   * (pipeline reextract/rereduce). The manifest embeds session metadata that
+   * the flow itself advances (e.g. ingest_status), so a re-run legitimately
+   * produces different contents and must supersede; normal ingest leaves this
+   * off and keeps the immutability guard.
+   */
+  overwriteIfDifferent?: boolean;
   sourceSession: SourceSession;
   turns: readonly Turn[];
 }): Promise<ManifestWriteResult> {
@@ -62,8 +70,12 @@ export async function writeSessionManifest(input: {
   const existing = await readExistingFile(path);
 
   if (existing !== null) {
-    if (existing !== serialized) {
+    if (existing !== serialized && input.overwriteIfDifferent !== true) {
       throw new Error(`Immutable manifest already exists with different contents: ${path}`);
+    }
+
+    if (existing !== serialized) {
+      await writeFile(path, serialized, "utf8");
     }
 
     return {
