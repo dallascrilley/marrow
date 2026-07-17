@@ -1,5 +1,15 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -10,7 +20,9 @@ import {
 } from "../dist/commands/pipeline-reextract.js";
 import { createLedger, upsertSourceSession } from "../dist/db/ledger.js";
 import { eventFixture, sourceSessionFixture, turnFixture } from "../dist/models/canonical.js";
+import { runArchivePhase } from "../dist/pipeline/archive.js";
 import { hasProcessChatter } from "../dist/pipeline/artifact-heuristics.js";
+import { getParsedArtifactPath } from "../dist/pipeline/parse.js";
 import { getReducedArtifactPath } from "../dist/pipeline/reduce.js";
 import { getSessionSummaryJsonPath } from "../dist/writers/summary-writer.js";
 
@@ -213,5 +225,88 @@ test("pipeline reextract regenerates the summary and drops process_chatter", asy
     );
 
     database.close();
+  });
+});
+
+test("pipeline reextract returns nonzero and reports durable archive cleanup failure", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+    try {
+      const sessionId = "reextract-cleanup-failure";
+      upsertSourceSession(database, {
+        ...sourceSessionFixture,
+        conversation_id: "demo:reextract-cleanup-failure",
+        ingest_status: "extracted",
+        session_id: sessionId,
+        source_hash: "sha256:reextract-cleanup-failure",
+        source_path: "/nonexistent/reextract-cleanup-failure.jsonl",
+      });
+      const reducedPath = getReducedArtifactPath(sessionId);
+      await mkdir(dirname(reducedPath), { recursive: true });
+      await writeFile(
+        reducedPath,
+        JSON.stringify({
+          events: [
+            {
+              ...eventFixture,
+              event_id: "ev-cleanup-failure",
+              session_id: sessionId,
+              summary: "Preserve archive success while reporting cleanup failure.",
+            },
+          ],
+          turns: [{ ...turnFixture, session_id: sessionId }],
+        }),
+        "utf8",
+      );
+      const parsedPath = getParsedArtifactPath(sessionId);
+      await mkdir(dirname(parsedPath), { recursive: true });
+      await writeFile(parsedPath, "[]\n", "utf8");
+
+      const output = makeOutput();
+      const rc = await executePipelineReextract(
+        { args: ["--session-id", sessionId], commandPath: [], output },
+        database,
+        {
+          runArchivePhase: (input) =>
+            runArchivePhase({
+              ...input,
+              parsedCleanupFileSystem: {
+                access,
+                rename,
+                stat,
+                unlink: async () => {
+                  throw new Error("injected parsed cleanup failure");
+                },
+              },
+            }),
+        },
+      );
+
+      assert.equal(rc, 1);
+      const result = JSON.parse(output.lines.join("\n"));
+      assert.equal(result.reextracted_count, 1);
+      assert.equal(result.cleanup_failed_count, 1);
+      assert.deepEqual(result.cleanup_failures, [
+        {
+          error: "injected parsed cleanup failure",
+          session_id: sessionId,
+        },
+      ]);
+      assert.equal(
+        result.processed[0].parsed_intermediate_cleanup_error,
+        "injected parsed cleanup failure",
+      );
+      await assert.rejects(access(parsedPath), { code: "ENOENT" });
+      const quarantineDirectory = join(
+        process.env[runtimeOverrideEnvVar],
+        "deletes",
+        "parsed-cleanup-quarantine",
+      );
+      const quarantines = await readdir(quarantineDirectory);
+      assert.equal(quarantines.length, 1);
+      assert.equal(await readFile(join(quarantineDirectory, quarantines[0]), "utf8"), "[]\n");
+    } finally {
+      database.close();
+    }
   });
 });

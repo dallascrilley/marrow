@@ -21,6 +21,12 @@ echo "[asd] check (session integrity; fails fast before audit/LLM steps)"
 echo "[asd] pipeline gate (--skip-ingest; ingest already ran above)"
 "${CLI[@]}" pipeline gate --skip-ingest --max-per "${ASD_LLM_MAX_PER:-5/24h}"
 
+PARSED_RETENTION_AGE_DAYS="${ASD_PARSED_RETENTION_OLDER_THAN_DAYS:-30}"
+PARSED_MAX_TOTAL_BYTES="${ASD_PARSED_MAX_TOTAL_BYTES:-1073741824}"
+echo "[asd] storage cleanup-parsed --apply --older-than-days ${PARSED_RETENTION_AGE_DAYS} --max-total-bytes ${PARSED_MAX_TOTAL_BYTES}"
+PARSED_RETENTION="$("${CLI[@]}" storage cleanup-parsed --apply --older-than-days "$PARSED_RETENTION_AGE_DAYS" --max-total-bytes "$PARSED_MAX_TOTAL_BYTES")"
+printf '%s\n' "$PARSED_RETENTION"
+
 echo "[asd] quality audit"
 "${CLI[@]}" quality audit --limit 100
 
@@ -49,6 +55,18 @@ echo "[asd] memory export-wiki"
 "${CLI[@]}" memory export-wiki
 
 echo "[asd] memory push-wiki"
+
 "${CLI[@]}" memory push-wiki
+
+if [[ "${ASD_ENABLE_COMPACTION:-0}" == "1" ]]; then
+  COMPACTION_AGE_DAYS="${ASD_COMPACTION_OLDER_THAN_DAYS:-30}"
+  if [[ -z "${BATCH_PATH:-}" ]]; then
+    echo "[asd] skipping report compaction (review did not generate and apply a new batch)"
+  else
+    echo "[asd] storage retain-reports --apply --older-than-days ${COMPACTION_AGE_DAYS}"
+    REPORT_COMPACTION="$("${CLI[@]}" storage retain-reports --apply --older-than-days "$COMPACTION_AGE_DAYS")"
+    printf '%s\n' "$REPORT_COMPACTION"
+  fi
+fi
 
 echo "[asd] pipeline complete"

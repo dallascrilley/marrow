@@ -20,6 +20,7 @@ export type ReextractOptions = {
 };
 
 export type RegenerateFromReducedResult = {
+  archived: Awaited<ReturnType<typeof runArchivePhase>>;
   knowledge: Awaited<ReturnType<typeof runExtractPhase>>;
   summary: Awaited<ReturnType<typeof runSummarizePhase>>;
 };
@@ -27,11 +28,14 @@ export type RegenerateFromReducedResult = {
 /**
  * Re-run summarize (forced, deterministic, no LLM) + extract + archive from an
  * already-reduced artifact. Shared by `pipeline reextract` (existing reduced
- * artifact) and `pipeline rereduce` (freshly re-reduced artifact).
+ * artifact) and `pipeline rereduce` (freshly re-reduced artifact). The archive
+ * phase runs with manifest-overwrite enabled so repeat regeneration supersedes
+ * the provenance manifest instead of tripping its immutability guard.
  */
 export async function regenerateFromReduced(input: {
   database: DatabaseSync;
   events: readonly Event[];
+  runArchivePhaseImpl?: typeof runArchivePhase;
   sourceSession: SourceSessionRow;
   turns: readonly Turn[];
 }): Promise<RegenerateFromReducedResult> {
@@ -52,7 +56,7 @@ export async function regenerateFromReduced(input: {
     input.events,
     false,
   );
-  await runArchivePhase({
+  const archived = await (input.runArchivePhaseImpl ?? runArchivePhase)({
     allowManifestOverwrite: true,
     database: input.database,
     events: input.events,
@@ -63,7 +67,7 @@ export async function regenerateFromReduced(input: {
     turns: input.turns,
   });
 
-  return { knowledge, summary };
+  return { archived, knowledge, summary };
 }
 
 /**
@@ -78,6 +82,7 @@ export async function regenerateFromReduced(input: {
 export async function executePipelineReextract(
   context: CommandContext,
   database: DatabaseSync,
+  dependencies: { runArchivePhase?: typeof runArchivePhase } = {},
 ): Promise<number> {
   const options = parseReextractOptions(context.args);
 
@@ -105,6 +110,7 @@ export async function executePipelineReextract(
   }
 
   const processed: Array<Record<string, unknown>> = [];
+  const cleanupFailures: Array<{ error: string; session_id: string }> = [];
 
   for (const session of sessions) {
     try {
@@ -112,18 +118,32 @@ export async function executePipelineReextract(
         await readFile(getReducedArtifactPath(session.session_id), "utf8"),
       ) as { events: Event[]; turns: Turn[] };
 
-      const { knowledge, summary } = await regenerateFromReduced({
+      const { archived, knowledge, summary } = await regenerateFromReduced({
         database,
         events: reduced.events,
         sourceSession: session,
         turns: reduced.turns,
+        ...(dependencies.runArchivePhase === undefined
+          ? {}
+          : { runArchivePhaseImpl: dependencies.runArchivePhase }),
       });
 
       processed.push({
+        ...(archived.parsedIntermediateCleanupError === null
+          ? {}
+          : {
+              parsed_intermediate_cleanup_error: archived.parsedIntermediateCleanupError,
+            }),
         project_learning_count: knowledge.project.count,
         session_id: session.session_id,
         summary_path: summary.summaryPath,
       });
+      if (archived.parsedIntermediateCleanupError !== null) {
+        cleanupFailures.push({
+          error: archived.parsedIntermediateCleanupError,
+          session_id: session.session_id,
+        });
+      }
     } catch (error) {
       // A throw partway through the phases (e.g. summary written but extract
       // failed) leaves this session partially regenerated. The phases are
@@ -142,6 +162,8 @@ export async function executePipelineReextract(
   context.output.info(
     JSON.stringify(
       {
+        cleanup_failed_count: cleanupFailures.length,
+        cleanup_failures: cleanupFailures,
         matched_count: sessions.length,
         processed,
         reextracted_count: reextractedCount,
@@ -154,7 +176,7 @@ export async function executePipelineReextract(
       2,
     ),
   );
-  return reextractedCount === 0 && sessions.length > 0 ? 1 : 0;
+  return (reextractedCount === 0 && sessions.length > 0) || cleanupFailures.length > 0 ? 1 : 0;
 }
 
 async function selectReextractSessions(

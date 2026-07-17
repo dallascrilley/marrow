@@ -20,6 +20,8 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 | Run tests | `script/test` or `just test` |
 | CI parity | `script/cibuild` or `just cibuild` |
 | Lint / format | `npm run lint` / `npm run format` |
+| Inspect linked worktrees | `asd worktree check --json` — read-only classifications and safe next commands |
+| First-time offline proof | `script/proof-first-time` — ingests a fixture into a temporary runtime, verifies summary/learning/search/deletion readiness, then prints retained artifact paths, a cleanup command, and the next live command |
 
 ## Automation
 
@@ -27,7 +29,8 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 |------|----------------|
 | SessionEnd → ingest (Claude Code) | `asd hooks install` — [`docs/recipes/session-end-ingest-hook.md`](docs/recipes/session-end-ingest-hook.md) |
 | Scheduled ingest + wiki push | [`docs/recipes/scheduled-memory-pipeline.md`](docs/recipes/scheduled-memory-pipeline.md) |
-| Pipeline gate (skip LLM when idle) | `asd pipeline gate --max-per 5/24h --max-usd 1/24h` — ADR-0007 |
+| Pipeline gate (skip LLM when idle) | `asd pipeline gate --max-per 50/24h --max-usd 1/24h` — ADR-0007 |
+| Operator health snapshot | `asd health` / `asd health --json` — [`docs/recipes/scheduled-memory-pipeline.md`](docs/recipes/scheduled-memory-pipeline.md) |
 | Re-extract stale artifacts (deterministic, no LLM) | `asd pipeline reextract --process-chatter-only --dry-run` then drop `--dry-run` to apply (or `--session-id <id>`) |
 | Re-reduce after reduce-layer upgrades | `asd pipeline rereduce --all-with-parsed --dry-run` to see which sessions still have `parsed-records.json`, then drop `--dry-run` to apply (or `--session-id <id>`); sessions without parsed records are locked at their current reduced artifact |
 | Skill usage evidence in corpus | `asd skill evidence <skill-id>` (after `export-index`) |
@@ -38,6 +41,7 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 
 - Node `22.x`
 - npm
+- Python `3.9+` for descriptor-relative parsed-intermediate cleanup
 - Local Cursor transcript files on disk
 - Optional: `OPENROUTER_API_KEY` for LLM-gated project-learning review commands.
   - Source the key from the 1Password item **OpenRouter API Credentials - agent-session-distillery** (`op read 'op://Private/OpenRouter API Credentials - agent-session-distillery/credential'`).
@@ -148,7 +152,7 @@ Important directories:
 - `knowledge/user/operator/` — user learning JSONL
 - `sources/manifests/` — immutable provenance manifests
 - `reviews/` — review queue runtime path
-- `archives/` — archive runtime path
+- `archives/` — derived archives plus verified raw Codex transcript archives under `raw/codex-cli/YYYY/MM/DD/`
 - `deletes/receipts/` — per-session retention receipts
 - `deletes/tombstones/` — explicit deletion apply tombstones
 - `reports/` — retention, audit, LLM learning-review, and static dashboard HTML reports
@@ -212,6 +216,20 @@ Explicit deletion apply:
 node dist/cli.js delete apply --apply
 ```
 
+Archive and remove eligible Codex source transcripts (dry-run by default):
+
+```bash
+node dist/cli.js delete sources --source codex-cli
+node dist/cli.js delete sources --source codex-cli --apply
+```
+
+`delete sources --source codex-cli --apply` writes a gzip copy to
+`archives/raw/codex-cli/YYYY/MM/DD/`, verifies the decompressed bytes against
+the immutable manifest hash, and writes a neighboring receipt before unlinking
+the source. Archives are retained indefinitely. `delete apply` remains the
+compatible tombstone-only workflow; use `delete sources` when reclaiming the
+original Codex transcript bytes.
+
 Session integrity check (read-only):
 
 ```bash
@@ -255,11 +273,77 @@ Without `OPENROUTER_API_KEY`, credential and remote route checks fail or skip, b
 local count/USD budget checks still report. Use this before LLM-gated commands
 such as `quality review-learnings`.
 
+Read the overall runtime health without running provider network checks:
+
+```bash
+node dist/cli.js health
+node dist/cli.js health --json
+```
+
+The default summary reports health, recall delivery, blockers, review freshness, count/USD
+budget headroom, storage pressure, and one next command. Provider status is explicitly
+`not checked` unless you run `doctor provider` separately. Exit codes are `0` for healthy,
+`1` for degraded, and `2` when the health model cannot be read.
+
 High-level runtime stats:
 
 ```bash
 node dist/cli.js stats
 ```
+
+Prune only old parsed intermediates that already have a safe deletion candidate:
+
+```bash
+node dist/cli.js storage cleanup-parsed
+node dist/cli.js storage cleanup-parsed --apply
+node dist/cli.js storage cleanup-parsed --max-total-bytes 1073741824 --apply
+```
+
+Successful archive promotion now removes its exact parsed intermediate immediately after
+the safe deletion candidate and all required durable artifacts are recorded. Cleanup failure
+does not roll back the durable archive; ingest and reextract report it as a cleanup failure.
+Every scheduled pipeline run retries failed/interrupted receipt snapshots immediately before
+audit or LLM work, independent of the ordinary 30-day age gate.
+
+The manual command defaults to a 30-day dry run. `--apply` deletes only
+`staging/<session>/parsed-records.json` records whose safe candidate confirms durable
+downstream retention, writes a receipt under `deletes/receipts/`, and never removes
+`reduced-session.json`, ledgers, normalized outputs, reports, or audit artifacts. Applying
+receipts freeze candidates before mutation and persist exact original/quarantine mappings for
+fail-closed restart recovery. Temporary files live only under the fixed
+`deletes/parsed-cleanup-quarantine/` boundary; path conflicts or redirected session directories
+retain that copy and fail without overwriting a replacement. Descriptor-relative quarantine
+operations use the bundled Python helper with `python3` (`ASD_PYTHON` or `PYTHON` overrides the
+executable); an unavailable helper fails before mutation. Use `--older-than-days <n>` to tune
+the ordinary age gate and
+`--max-total-bytes <n>` to select the oldest safe records until safe parsed staging is under
+the byte ceiling. Unsafe, stale, incomplete, and unknown records remain untouched.
+
+Retain bounded generated archive and review reports without touching audit evidence:
+
+```bash
+node dist/cli.js storage retain-reports
+node dist/cli.js storage retain-reports --history 20 --older-than-days 60 --apply
+```
+
+The default is a 30-day dry run retaining 10 historical terminal reports. It only selects
+archive report pairs for terminal sessions and already-applied learning-review batches beyond
+that history. Active/incomplete sessions and batches, latest reports, failed review evidence,
+receipts, telemetry, ledgers, and pointers are never candidates. Dry-run and apply output show
+the report path, selection reason, and bytes; apply writes a receipt under `deletes/receipts/`.
+
+Read-only runtime lifecycle and storage inventory:
+
+```bash
+node dist/cli.js storage inventory
+node dist/cli.js storage inventory --state deletion_candidate --older-than-days 30 --json
+```
+
+The inventory scans file metadata only, then groups artifacts by kind, ledger lifecycle
+state, retention dependency, count, bytes, and oldest/newest modification time. Parsed
+intermediates are only labeled `reclaimable` when a safe deletion candidate confirms
+durable downstream retention artifacts; all other recognized artifacts remain conservatively
+required. Unclassified paths are reported as `unknown` and are never cleanup-eligible.
 
 Static offline dashboard export:
 
@@ -314,7 +398,7 @@ Review deterministic project learnings with OpenRouter memory lint:
 # Source the key from 1Password: "OpenRouter API Credentials - agent-session-distillery"
 export OPENROUTER_API_KEY="$(op read 'op://Private/OpenRouter API Credentials - agent-session-distillery/credential')"
 
-node dist/cli.js quality review-learnings --model openai/gpt-5-nano
+node dist/cli.js quality review-learnings --model openrouter/auto
 node dist/cli.js quality review-learnings --limit 25 --max-total-learnings 100
 node dist/cli.js quality review-learnings --cache-dir /tmp/asd-review-cache
 node dist/cli.js quality review-learnings --refresh-llm
@@ -335,7 +419,7 @@ not already in the ledger. LLM reviews are cached by exact
 learning/model/prompt/validator input under `cache/llm-learning-review/` by
 default. Provider or transport failures stay pending for retry.
 
-**Cost controls.** Reviews use a minimal OpenRouter reasoning effort (the memory-lint is a trivial classify task, so reasoning tokens are pure waste) and run only when **both** budgets allow: the call-count cap (`--max-per` / `ASD_LLM_MAX_PER`, default `5/24h`) and a hard USD ceiling (`--max-usd` / `ASD_LLM_MAX_USD`, default `1/24h`). The USD ceiling sums the **effective** (upstream-aware) cost of telemetry receipts in the trailing window, so it still fires for BYOK keys whose OpenRouter `usage.cost` is 0; over the cap the command skips with `skip_reason: "llm_usd_budget_exhausted"`. Before paying for any review the command drops deterministic junk and duplicate statements (reported as `skipped_pre_llm`), then reviews the remaining cache-miss learnings in batches of `--batch-size` (default 10, `1` disables batching) — one OpenRouter call per batch, demultiplexed by learning id, with cache hits served without a call.
+**Cost controls.** Reviews run only when both budgets allow: the count cap (`--max-per` / `ASD_LLM_MAX_PER`, default `50/24h`) and hard USD ceiling (`--max-usd` / `ASD_LLM_MAX_USD`, default `1/24h`). The USD ceiling uses effective upstream-aware telemetry cost, so BYOK usage is still gated. The examples above use explicit overrides; they do not change these defaults.
 
 Apply one immutable review batch into a separate reviewed namespace:
 
@@ -471,6 +555,25 @@ once to that reserved `_global` project rather than being duplicated into every
 per-project file, and `recall` prepends them so cross-cutting instincts reach
 every session. The global section is only injected when it holds at least one
 instinct; an empty rollup is dropped.
+
+### Setup check
+
+For the supported Claude Code project setup, inspect the SessionStart hook, the user-level
+ASD MCP registration, and vault reachability without modifying either configuration:
+
+```bash
+# Read-only configuration and vault-state check.
+node dist/cli.js readback check
+
+# Explicitly run the bounded project-plus-global recall query after installation.
+node dist/cli.js readback check --verify
+```
+
+Each surface is `installed`, `missing`, `drifted`, or `unverifiable`. Missing or drifted
+hook/MCP results include the explicit `asd hooks install --events start` or `asd mcp install`
+command; run it yourself, then rerun `readback check --verify`. The explicit verification
+returns the bounded recall bytes and `delivered`/`missing` result. A reachable vault with no
+project/global memory is reported as actionable missing recall rather than silently healthy.
 
 ### SessionStart delivery
 
@@ -618,7 +721,7 @@ A session is only marked safe to delete when all of the following exist:
 - the immutable provenance manifest
 - the retention receipt
 
-If any of those artifacts are missing, the session remains blocked with a concrete reason in the retention receipt and deletion-candidate record. `delete apply` is a dry run by default; only `delete apply --apply` records an applied deletion tombstone and advances the lifecycle to `deleted`.
+If any of those artifacts are missing, the session remains blocked with a concrete reason in the retention receipt and deletion-candidate record. `delete apply` is a dry run by default; only `delete apply --apply` records an applied deletion tombstone and advances the lifecycle to `deleted`. For Codex source cleanup, use `delete sources --source codex-cli --apply`, which archives and verifies the raw bytes before that transition.
 
 ## Troubleshooting
 

@@ -121,6 +121,7 @@ export function extractLearnings(input: ExtractLearningsInput): ExtractedLearnin
       if (looksLikeEmbeddedAgentPrompt(turn.user_prompt)) {
         return [];
       }
+
       return extractUserPreferenceCandidates(substantivePrompt).map((candidate, index) =>
         createLearning({
           confidence: candidate.confidence,
@@ -480,6 +481,29 @@ function toProjectTurnCandidates(input: {
       });
     }
   }
+  if (fixEvents.length === 0 && verificationEvents.length > 0 && files.length > 0) {
+    const verification = verificationEvents.find((event) =>
+      /\b(?:the\s+)?fix\s+is\s+to\b/i.test(event.summary),
+    );
+    const file = files.at(0);
+    const statement =
+      verification && file ? verificationOnlyFixStatement(verification, file) : null;
+
+    if (verification && file && statement !== null) {
+      candidates.push({
+        confidence: "medium",
+        dedupeKey: `verification-only-fix:${statement.toLowerCase()}`,
+        evidence: [verification.summary, file],
+        kind: "workflow",
+        learningId: `${input.sourceSession.session_id}:project:verification-only-fix:${input.index}`,
+        promotionBasis:
+          "Derived from an explicit remediation in a verification event and a concrete file path.",
+        sourceRefs: sourceRefsForEvents(input.sourceSession, [verification]),
+        statement,
+        title: `Verified fix: ${truncateInline(statement, 60)}`,
+      });
+    }
+  }
 
   for (const failure of failureEvents) {
     const resolution = fixEvents[0] ?? verificationEvents[0];
@@ -768,11 +792,53 @@ function toVerifiedCompletionStatement(event: Event): string | null {
 
   return `${startsWithPastTenseVerb(doneText) ? "" : "Completed "}${lowercaseFirst(stripTrailingPunctuation(doneText))}; ${verifiedClause}.`;
 }
+function verificationOnlyFixStatement(event: Event, file: string): string | null {
+  const match = event.summary.match(/\b(?:the\s+)?fix\s+is\s+to\s+(.+?)(?::\s*-\s*|$)/i);
+  const action = match?.[1]?.trim().replace(/[.!?]+$/, "");
+
+  if (!action) {
+    return null;
+  }
+
+  return `In ${file}, ${lowercaseFirst(action)}; verified.`;
+}
+
+export function normalizeUserPreferenceStatement(value: string): string {
+  const cleaned = sanitizeLearningStatement(value)
+    .replace(/^\d+\s*[\].):-]\s*/, "")
+    .replace(/[.!?]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned.length === 0 ? "" : `${cleaned}.`;
+}
+
 function looksLikePromptInstruction(prompt: string): boolean {
   return (
     /\b(?:re-read|review|update|edit|change)\b.*\bONLY\b/i.test(prompt) ||
     /^\s*When working on\b/i.test(prompt)
   );
+}
+
+function looksLikeUserPreferenceTaskInstruction(prompt: string): boolean {
+  return (
+    looksLikePromptInstruction(prompt) ||
+    /\b(?:this task|this change|this session|this request)\b/i.test(prompt)
+  );
+}
+
+function isPromotableUserPreferenceLine(line: string): boolean {
+  if (
+    line.length > 180 ||
+    looksLikeUserPreferenceTaskInstruction(line) ||
+    /\b(?:add|change|create|edit|fix|implement|inspect|review|update)\b.*\b(?:branch|change|command|file|feature|PR|task|test)\b/i.test(
+      line,
+    )
+  ) {
+    return false;
+  }
+
+  return /^(?:please\s+)?(?:always|never|prefer(?:ably)?\b)/i.test(line);
 }
 
 function extractUserPreferenceCandidates(prompt: string): Array<{
@@ -832,13 +898,18 @@ function extractUserPreferenceCandidates(prompt: string): Array<{
       continue;
     }
 
-    if (/\bprefer\b/i.test(line) || /\balways\b/i.test(line) || /\bnever\b/i.test(line)) {
+    if (isPromotableUserPreferenceLine(line)) {
+      const statement = normalizeUserPreferenceStatement(line);
+      if (statement.length === 0) {
+        continue;
+      }
+
       candidates.push({
         confidence: "high",
         evidence: line,
         kind: "preference",
-        statement: line,
-        title: truncateInline(line, 72),
+        statement,
+        title: truncateInline(statement, 72),
       });
       continue;
     }
@@ -907,7 +978,8 @@ function isUsefulVerificationText(value: string): boolean {
       value,
     ) ||
     /\btests?\s+pass(?:ed|es)?\b/i.test(value) ||
-    /`[^`]+`\s+passes\b/i.test(value)
+    /`[^`]+`\s+passes\b/i.test(value) ||
+    /\b(?:the\s+)?fix\s+is\s+to\b/i.test(value)
   );
 }
 
@@ -1317,6 +1389,7 @@ function sourceRefsForEvents(sourceSession: SourceSession, events: readonly Even
 // evidence rather than a heuristic inference (see ProjectLearningCandidate).
 const verifiedDedupePrefixes = [
   "verified-fix:",
+  "verification-only-fix:",
   "completion:",
   "verification:",
   "error-resolution:",

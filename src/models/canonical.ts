@@ -207,6 +207,19 @@ export const retentionReceiptSchema = z.object({
   reason_if_not: z.string(),
 });
 
+export const rawSourceArchiveReceiptSchema = z.object({
+  archive_path: nonEmptyStringSchema,
+  archive_sha256: nonEmptyStringSchema,
+  archived_at: isoTimestampSchema,
+  compressed_bytes: z.number().int().nonnegative(),
+  session_id: nonEmptyStringSchema,
+  source_bytes: z.number().int().nonnegative(),
+  source_hash: nonEmptyStringSchema,
+  source_path: nonEmptyStringSchema,
+  source_removed_at: isoTimestampSchema.nullable(),
+  source_tool: nonEmptyStringSchema,
+});
+
 export type SourceRef = z.infer<typeof sourceRefSchema>;
 export type SourceSession = z.infer<typeof sourceSessionSchema>;
 export type Turn = z.infer<typeof turnSchema>;
@@ -214,6 +227,7 @@ export type Event = z.infer<typeof eventSchema>;
 export type Learning = z.infer<typeof learningSchema>;
 export type Summary = z.infer<typeof summarySchema>;
 export type RetentionReceipt = z.infer<typeof retentionReceiptSchema>;
+export type RawSourceArchiveReceipt = z.infer<typeof rawSourceArchiveReceiptSchema>;
 
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {

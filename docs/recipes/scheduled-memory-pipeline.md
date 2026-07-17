@@ -10,6 +10,7 @@ Uses the v1 CLI surface today; v2 instinct sync happens inside
 ingest sync --resume --source <adapter>
   → check                                  # read-only integrity; exit non-zero on violations
   → pipeline gate --skip-ingest             # after ingest; LLM + budget + integrity rollup
+  → storage cleanup-parsed --apply          # retry pending receipts, then ordinary age/size candidates
   → quality audit --limit 100
   → [optional] quality review-learnings --if-new --max-total-learnings 100   # emits immutable batch_path
   → quality apply-learning-review --batch <that-batch-path>                 # only when this run generated one
@@ -19,6 +20,25 @@ ingest sync --resume --source <adapter>
 
 Repeat `ingest sync` per adapter you care about (`cursor`, `claude-code`,
 `codex-cli`, `pi`, `kimi`).
+
+## Operator health snapshot
+
+Use the read-only health summary before a manual run, after a failed scheduled run, or in
+a lightweight monitor:
+
+```bash
+node dist/cli.js health
+node dist/cli.js health --json
+```
+
+The human output includes system health, the last recall delivery, blockers, review
+freshness, count/USD budget headroom, storage pressure, and one copyable next command.
+It does not invoke the OpenRouter provider probe; `Provider: not checked` is intentional.
+Run `node dist/cli.js doctor provider` only when provider-specific diagnostics are needed.
+
+`health` exits `0` when healthy, `1` when degraded, and `2` when the model cannot be
+read. `--json` emits the typed health model on successful reads and an explicit
+`{ "status": "unverifiable", "error": "..." }` report when a reader fails.
 
 ## Optional corpus health (weekly or before full resummarize)
 
@@ -63,6 +83,9 @@ topic budget is exhausted.
 | `ASD_LLM_MAX_PER` | Sliding-window LLM count budget shared by review-learnings and corpus resummarize (default `50/24h`; use smaller `--max-per` values for deliberate trials) |
 | `ASD_LLM_MAX_USD` | USD ceiling for LLM review spend (default `1/24h`; the real financial guard) |
 | `OPENROUTER_MODEL` | Model for `quality review-learnings` (launcher default: `google/gemini-3-flash-preview`) |
+| `ASD_PARSED_RETENTION_OLDER_THAN_DAYS` | Ordinary parsed cleanup age gate (default `30` days); pending receipt retries ignore this gate |
+| `ASD_PARSED_MAX_TOTAL_BYTES` | Ordinary parsed staging byte ceiling (default `1073741824`, or 1 GB); pending receipt retries remain included |
+| `ASD_ENABLE_COMPACTION` | Set to `1` to retain bounded generated reports after a newly generated review batch is applied |
 
 Build the CLI once after checkout updates:
 
@@ -128,6 +151,16 @@ never falls back to an older batch. Apply retries remain safe because completed
 batches are no-ops and incomplete batches converge through the append-only
 apply ledger.
 
+Parsed staging retention is independent of review generation and runs before audit/LLM steps.
+Every scheduled run applies the safe parsed cleanup with a 30-day age gate and a 1 GB byte
+ceiling by default. Override them with `ASD_PARSED_RETENTION_OLDER_THAN_DAYS` and
+`ASD_PARSED_MAX_TOTAL_BYTES`. Report compaction remains opt-in via
+`ASD_ENABLE_COMPACTION=1` and bound to a newly generated and applied review batch.
+Failed or interrupted applying receipts are retried immediately before/alongside ordinary
+age/size-selected candidates. The retry uses the exact immutable candidate snapshot recorded
+before the prior mutation, so the 30-day gate cannot postpone recovery and the retry cannot
+discover a new deletion target.
+
 
 ## Operator-local launcher (paid tier)
 
@@ -161,6 +194,14 @@ Consequences:
 - **Integrity check fails:** `check` exits non-zero on duplicate/orphan findings; the scheduled wrapper stops before audit/LLM steps. Inspect with `asd check` (human output) or `asd check --json`. `pipeline gate` also surfaces `session_integrity` and sets `recommendations.run_check` when violations exist.
 - **Ingest fails:** later steps still see stale data; check adapter paths and `ingest sync` logs.
 - **review-learnings skipped or budget-blocked:** no batch is generated, so the scheduled wrapper skips apply and continues with the existing reviewed-memory export.
+- **review batch absent:** report compaction is skipped, but safe parsed staging retention has already run.
+- **parsed cleanup fails:** archive remains durable, while ingest/reextract report the cleanup failure. The next scheduled `storage cleanup-parsed --apply` includes failed or interrupted receipt candidates in its applying receipt before exact-path recovery/retry. A replacement at the original path is never overwritten; the cleanup-owned quarantine remains for operator inspection and the command exits non-zero.
+- Cleanup-owned temporary files are confined to `deletes/parsed-cleanup-quarantine/`. If the
+  original session directory is redirected or a replacement occupies the original path, retry
+  retains the trusted quarantine and exits non-zero rather than restoring through that path.
+- Parsed cleanup uses the bundled descriptor-relative Python helper (`python3`; override with
+  `ASD_PYTHON` or `PYTHON`; Python 3.9+ is required). If it is unavailable, cleanup fails before
+  moving or unlinking data.
 - **apply interrupted:** rerun the explicit `quality apply-learning-review --batch <batch-path>` command shown in the prior pipeline log; the apply ledger records `applying`/`failed`/`applied` transitions and the retry merges by learning id.
 - **credentials absent:** the wrapper skips both review and apply; it never applies a previous batch implicitly.
 - **Vault missing:** `memory push-wiki` exits 0 with a notice; export JSONL still updates under the runtime root.
@@ -179,3 +220,14 @@ Or v2-only:
 ```bash
 node scripts/proof-smoke.mjs --suite v2
 ```
+
+To revalidate the immutable-batch and transaction-ledger guarantees, run the
+bounded proof separately. It uses an isolated runtime; `--live` reviews at most
+one fixture learning with a `1/24h` count cap and `$0.05/24h` spend cap.
+
+```bash
+OPENROUTER_API_KEY=<secret> node scripts/proof-review-apply-exactly-once.mjs --live
+```
+
+The latest checked-in receipt is
+[`docs/ops/proofs/2026-07-09-review-apply-exactly-once.md`](../ops/proofs/2026-07-09-review-apply-exactly-once.md).

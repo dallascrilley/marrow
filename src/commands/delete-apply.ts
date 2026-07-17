@@ -9,6 +9,12 @@ import {
   markDeletionCandidateApplied,
   transitionPhase,
 } from "../db/ledger.js";
+import type { DeletionCandidateRow } from "../db/queries.js";
+
+export type AppliedDeletion = {
+  session_id: string;
+  tombstone_path: string;
+};
 
 export async function executeDeleteApply(
   context: CommandContext,
@@ -27,45 +33,52 @@ export async function executeDeleteApply(
     return 0;
   }
 
-  const applied: Array<Record<string, unknown>> = [];
+  const applied: AppliedDeletion[] = [];
 
   for (const candidate of ready) {
-    const tombstonePath = join(
-      getRuntimePath("deletes"),
-      "tombstones",
-      `${candidate.session_id}.json`,
-    );
-    await mkdir(dirname(tombstonePath), { recursive: true });
-    await writeFile(
-      tombstonePath,
-      `${JSON.stringify(
-        {
-          applied_at: new Date().toISOString(),
-          reason: candidate.reason,
-          session_id: candidate.session_id,
-          source_hash: candidate.source_hash,
-        },
-        null,
-        2,
-      )}\n`,
-      "utf8",
-    );
-    markDeletionCandidateApplied(database, candidate.source_session_id);
-    transitionPhase(database, {
-      detailsJson: JSON.stringify({
-        tombstone_path: tombstonePath,
-      }),
-      phaseName: "deleted",
-      phaseState: "completed",
-      sourceHash: candidate.source_hash,
-      sourceSessionId: candidate.source_session_id,
-    });
-    applied.push({
-      session_id: candidate.session_id,
-      tombstone_path: tombstonePath,
-    });
+    applied.push(await applyDeletionCandidate(database, candidate));
   }
 
   context.output.info(JSON.stringify({ apply: true, applied }, null, 2));
   return 0;
+}
+
+export async function applyDeletionCandidate(
+  database: DatabaseSync,
+  candidate: DeletionCandidateRow,
+): Promise<AppliedDeletion> {
+  const tombstonePath = join(
+    getRuntimePath("deletes"),
+    "tombstones",
+    `${candidate.session_id}.json`,
+  );
+  await mkdir(dirname(tombstonePath), { recursive: true });
+  await writeFile(
+    tombstonePath,
+    `${JSON.stringify(
+      {
+        applied_at: new Date().toISOString(),
+        reason: candidate.reason,
+        session_id: candidate.session_id,
+        source_hash: candidate.source_hash,
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  markDeletionCandidateApplied(database, candidate.source_session_id);
+  transitionPhase(database, {
+    detailsJson: JSON.stringify({
+      tombstone_path: tombstonePath,
+    }),
+    phaseName: "deleted",
+    phaseState: "completed",
+    sourceHash: candidate.source_hash,
+    sourceSessionId: candidate.source_session_id,
+  });
+  return {
+    session_id: candidate.session_id,
+    tombstone_path: tombstonePath,
+  };
 }

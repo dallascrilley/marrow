@@ -68,6 +68,7 @@ export async function executePipelineRereduce(
   }
 
   const processed: Array<Record<string, unknown>> = [];
+  const cleanupFailures: Array<{ error: string; session_id: string }> = [];
 
   for (const session of candidates) {
     try {
@@ -81,7 +82,7 @@ export async function executePipelineRereduce(
         resume: false,
         sourceSession: session,
       });
-      const { knowledge, summary } = await regenerateFromReduced({
+      const { archived, knowledge, summary } = await regenerateFromReduced({
         database,
         events: reduced.events,
         sourceSession: session,
@@ -89,11 +90,21 @@ export async function executePipelineRereduce(
       });
 
       processed.push({
+        parsed_intermediate_deleted: archived.parsedIntermediateDeleted,
+        ...(archived.parsedIntermediateCleanupError === null
+          ? {}
+          : { parsed_intermediate_cleanup_error: archived.parsedIntermediateCleanupError }),
         project_learning_count: knowledge.project.count,
         session_id: session.session_id,
         summary_path: summary.summaryPath,
         turn_count: reduced.turns.length,
       });
+      if (archived.parsedIntermediateCleanupError !== null) {
+        cleanupFailures.push({
+          error: archived.parsedIntermediateCleanupError,
+          session_id: session.session_id,
+        });
+      }
     } catch (error) {
       // A throw partway through the phases leaves this session partially
       // regenerated. The phases are overwrite-safe, so re-running
@@ -118,9 +129,19 @@ export async function executePipelineRereduce(
   if (skippedCount > 0) {
     notes.push("Re-run with --session-id <id> to heal partially-processed sessions.");
   }
+  const cleanedUpCount = processed.filter(
+    (entry) => entry.parsed_intermediate_deleted === true,
+  ).length;
+  if (cleanedUpCount > 0) {
+    notes.push(
+      `Archive-phase retention cleaned up parsed intermediates for ${cleanedUpCount} ready session(s); they are locked for future re-reduces.`,
+    );
+  }
   context.output.info(
     JSON.stringify(
       {
+        cleanup_failed_count: cleanupFailures.length,
+        cleanup_failures: cleanupFailures,
         locked_session_ids: lockedSessionIds,
         matched_count: sessions.length,
         processed,
@@ -132,7 +153,7 @@ export async function executePipelineRereduce(
       2,
     ),
   );
-  return rereducedCount === 0 && sessions.length > 0 ? 1 : 0;
+  return (rereducedCount === 0 && sessions.length > 0) || cleanupFailures.length > 0 ? 1 : 0;
 }
 
 function selectSessions(database: DatabaseSync, options: RereduceOptions): SourceSessionRow[] {

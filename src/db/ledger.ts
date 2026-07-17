@@ -145,7 +145,10 @@ function getSourceSessionByIdentity(
   return row ? mapSourceSessionRow(row) : null;
 }
 
-function getSourceSessionById(database: DatabaseSync, sourceSessionId: number): SourceSessionRow {
+export function getSourceSessionById(
+  database: DatabaseSync,
+  sourceSessionId: number,
+): SourceSessionRow {
   const row = database.prepare("SELECT * FROM source_sessions WHERE id = ?").get(sourceSessionId) as
     | Record<string, unknown>
     | undefined;

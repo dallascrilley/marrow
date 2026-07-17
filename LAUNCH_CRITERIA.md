@@ -1,8 +1,8 @@
 ---
 project: agent-session-distillery
 owner: dallascrilley
-last_reviewed: 2026-06-14
-version: 1.1.0
+last_reviewed: 2026-07-09
+version: 1.2.0
 ---
 
 # Launch Criteria
@@ -42,8 +42,8 @@ retention workflows.
 
 - id: deletion-readiness-safety
   feature: Deletion readiness is blocked unless summary, knowledge, manifest, and retention receipt artifacts exist.
-  test: Run `node dist/cli.js archive run`, `node dist/cli.js delete candidates`, and dry-run `node dist/cli.js delete apply` against a sandbox containing ready and blocked fixture sessions.
-  proof_required: Output showing ready and blocked deletion-candidate states, including blocked reasons and dry-run deletion behavior.
+  test: Run `node dist/cli.js archive run`, `node dist/cli.js delete candidates`, and dry-run `node dist/cli.js delete sources --source codex-cli` against a sandbox containing ready and blocked fixture sessions.
+  proof_required: Output showing ready and blocked deletion-candidate states, including blocked reasons and dry-run raw-archive deletion behavior.
   proof_level: B
   status: validated
   validated_on: 2026-05-18
@@ -60,14 +60,32 @@ retention workflows.
 
 - id: memory-export-reviewed
   feature: Reviewed memory records can be exported for downstream wiki ingestion without mutating deterministic project-learning originals.
-  test: Run `node dist/cli.js quality apply-learning-review`, then `node dist/cli.js memory export-wiki` against a sandbox with reviewed project learnings.
+  test: Run `node dist/cli.js quality apply-learning-review --batch <batch-path>`, then `node dist/cli.js memory export-wiki` against a sandbox with reviewed project learnings.
   proof_required: Command output plus generated `knowledge/projects-reviewed/` and wiki export JSONL artifact paths.
   proof_level: B
   status: validated
   validated_on: 2026-05-18
   proof: /tmp/agent-session-distillery/2026-05-18_reviewed-memory-export/SUMMARY.md
 
+- id: review-apply-exactly-once
+  feature: Reviewed-memory application is bound to an immutable batch, repeated application is a stable no-op, and interrupted application converges through an append-only ledger.
+  test: Run `node scripts/proof-review-apply-exactly-once.mjs --live` with the OpenRouter credential sourced from the operator secret store.
+  proof_required: Duplicate output hashes and timestamps, a skipped-generation no-change snapshot, failed/retry ledger transitions, and a one-learning live batch with count and spend caps.
+  proof_level: B
+  status: validated
+  validated_on: 2026-07-09
+  proof: docs/ops/proofs/2026-07-09-review-apply-exactly-once.md
+
 ## P1 - Launch-week polish
+
+- id: parsed-staging-retention
+  feature: Safe parsed intermediates are removed after durable archive promotion, and scheduled fallback retention enforces age and byte ceilings without depending on LLM review output.
+  test: Run `npm test` — `test/integration/ingest-lifecycle.test.mjs`, `test/parsed-cleanup.test.mjs`, and `test/scheduled-memory-pipeline.test.mjs` cover immediate deletion, unsafe retention, oldest-first byte pressure, and review-independent scheduling.
+  proof_required: Passing integration tests showing only exact `parsed-records.json` files with safe deletion candidates are removed while reduced sessions and durable outputs remain.
+  proof_level: B
+  status: validated
+  validated_on: 2026-07-13
+  proof: test/integration/ingest-lifecycle.test.mjs, test/parsed-cleanup.test.mjs, test/scheduled-memory-pipeline.test.mjs
 
 - id: first-run-proof-doc
   feature: The README links to or summarizes the latest first-run proof artifact.

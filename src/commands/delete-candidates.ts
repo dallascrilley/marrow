@@ -2,7 +2,7 @@ import { access } from "node:fs/promises";
 import type { DatabaseSync } from "node:sqlite";
 
 import type { CommandContext } from "../cli.js";
-import { listDeletionCandidates } from "../db/ledger.js";
+import { getSourceSessionById, listDeletionCandidates } from "../db/ledger.js";
 import type { DeletionCandidateRow } from "../db/queries.js";
 import {
   getProjectKnowledgeSessionPath,
@@ -58,13 +58,23 @@ export async function executeDeleteCandidates(
   database: DatabaseSync,
 ): Promise<number> {
   const candidates = listDeletionCandidates(database);
-  const decisions = await Promise.all(candidates.map(buildRetentionDecision));
+  const decisions = await Promise.all(
+    candidates.map((candidate) =>
+      buildRetentionDecision(
+        candidate,
+        getSourceSessionById(database, candidate.source_session_id).source_tool,
+      ),
+    ),
+  );
 
   context.output.info(JSON.stringify({ candidates, decisions }, null, 2));
   return 0;
 }
 
-async function buildRetentionDecision(candidate: DeletionCandidateRow): Promise<RetentionDecision> {
+async function buildRetentionDecision(
+  candidate: DeletionCandidateRow,
+  sourceTool: string,
+): Promise<RetentionDecision> {
   const manifestPath = getSessionManifestPathForRevision(
     candidate.session_id,
     candidate.source_hash,
@@ -104,7 +114,7 @@ async function buildRetentionDecision(candidate: DeletionCandidateRow): Promise<
     candidate_state: candidate.candidate_state,
     current_lifecycle_state: candidate.current_lifecycle_state,
     missing_required_artifacts: missingArtifacts,
-    next_action: nextAction(candidate, missingArtifacts),
+    next_action: nextAction(candidate, missingArtifacts, sourceTool),
     project_key: candidate.project_key,
     reason: candidate.reason,
     safe_to_delete: safeToDelete,
@@ -140,8 +150,15 @@ function missingRequiredArtifacts(
   return missing.sort();
 }
 
-function nextAction(candidate: DeletionCandidateRow, missingArtifacts: readonly string[]): string {
+function nextAction(
+  candidate: DeletionCandidateRow,
+  missingArtifacts: readonly string[],
+  sourceTool: string,
+): string {
   if (candidate.safe_to_delete === 1 && isDeletionReadyState(candidate.candidate_state)) {
+    if (sourceTool === "codex-cli") {
+      return "Review the manifest and retention receipt; run delete sources --source codex-cli --apply to archive, verify, and remove the raw source.";
+    }
     return "Review the manifest and retention receipt; run delete apply --apply only when deletion is intentionally approved.";
   }
 

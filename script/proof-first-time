@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#
+# script/proof-first-time — exercise ASD's offline core workflow in an isolated runtime.
+set -euo pipefail
+
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+cd "$ROOT"
+npm run build >&2
+exec node scripts/proof-smoke.mjs --suite first-time --keep "$@"

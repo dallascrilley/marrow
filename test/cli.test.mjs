@@ -47,13 +47,16 @@ test("asd --help lists every Task 1 command", () => {
     "archive run",
     "delete candidates",
     "delete apply",
+    "delete sources",
     "search",
     "memory export-wiki",
     "export-index",
     "report",
+    "health",
     "stats",
     "explain",
     "workflow mine",
+    "worktree check",
   ];
 
   for (const command of expectedCommands) {
@@ -1924,5 +1927,70 @@ test("doctor provider exits 1 when OPENROUTER_API_KEY is unset", () => {
     } else {
       process.env.OPENROUTER_API_KEY = previous;
     }
+  }
+});
+
+test("health prints typed JSON and fails open for the optional provider integration", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-health-"));
+  const runtimeRoot = join(sandbox, "runtime-root");
+
+  try {
+    const jsonResult = runCli(["health", "--json"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+    assert.equal(jsonResult.status, 1, jsonResult.stderr || jsonResult.stdout);
+    const payload = JSON.parse(jsonResult.stdout);
+    assert.equal(payload.provider, null);
+    assert.equal(payload.status, "degraded");
+    assert.equal(typeof payload.recommendation.command, "string");
+
+    const humanResult = runCli(["health"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+    assert.equal(humanResult.status, 1, humanResult.stderr || humanResult.stdout);
+    assert.match(
+      humanResult.stdout,
+      /Provider: not checked \(optional; run `asd doctor provider`\)/,
+    );
+    assert.match(humanResult.stdout, /Next: asd /);
+  } finally {
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("health exits 2 with an explicit unverifiable report when a reader fails", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-health-unverifiable-"));
+
+  try {
+    const result = runCli(["health", "--json"], {
+      ASD_LLM_MAX_PER: "invalid",
+      [runtimeOverrideEnvVar]: join(sandbox, "runtime-root"),
+    });
+    assert.equal(result.status, 2, result.stderr || result.stdout);
+    assert.deepEqual(JSON.parse(result.stdout), {
+      error:
+        'Invalid max-per window "invalid". Expected N/Tu where Tu is hours (h) or minutes (m), e.g. 5/24h',
+      status: "unverifiable",
+    });
+  } finally {
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("health exits 2 when opening the ledger is unverifiable", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "asd-health-ledger-"));
+  const runtimeRoot = join(sandbox, "not-a-directory");
+
+  try {
+    await writeFile(runtimeRoot, "block ledger root", "utf8");
+    const result = runCli(["health", "--json"], {
+      [runtimeOverrideEnvVar]: runtimeRoot,
+    });
+    assert.equal(result.status, 2, result.stderr || result.stdout);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.status, "unverifiable");
+    assert.match(payload.error, /EEXIST|not a directory/i);
+  } finally {
+    await rm(sandbox, { force: true, recursive: true });
   }
 });
