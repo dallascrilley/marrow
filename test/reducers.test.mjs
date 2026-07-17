@@ -635,6 +635,62 @@ test("tags just/script/qa task-runner invocations as verification commands", () 
   assert.deepEqual(verificationCommands, ["just test", "script/cibuild", "qa --json"]);
 });
 
+test("verification command matching requires a just recipe prefix, not mid-word letters", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "Decide on an approach, then run the gates.",
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 2,
+      commandStrings: ["just decide on an approach"],
+      toolUse: {
+        callId: "tool-just-decide",
+        inputText: "just decide on an approach",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 3,
+      commandStrings: ["just cibuild"],
+      toolUse: {
+        callId: "tool-just-cibuild",
+        inputText: "just cibuild",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 4,
+      commandStrings: ["just verify-fast"],
+      toolUse: {
+        callId: "tool-just-verify-fast",
+        inputText: "just verify-fast",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-just-prefix",
+  });
+  const taggedEvents = tagTurnEvents(turns);
+  const verificationCommands = taggedEvents
+    .filter((event) => event.type === "verification")
+    .map((event) => event.payload_small.verification_command);
+
+  // "just decide" only contains "ci" mid-word; verification events are reserved
+  // for recipes whose name starts with a verification word.
+  assert.deepEqual(verificationCommands, ["just cibuild", "just verify-fast"]);
+});
+
 test("centers failure excerpts on the matched marker in long records", () => {
   const leadIn = "Checkpoint update: all migrations applied cleanly. ".repeat(10);
   const records = [

@@ -1260,3 +1260,46 @@ test("deriveTopic never falls back to a harness-noise line as the topic", () => 
 
   assert.equal(summary.topic, "Patched the retention gate to require receipts before deletion.");
 });
+
+test("summary useful_commands keeps broadened starter commands captured during reduce", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "useful-broadened-starters",
+  };
+  const turns = [
+    turnSchema.parse({
+      assistant_summary: "Checked the tracker, CI, and remote host state.",
+      commands_seen: [
+        "td create track-follow-up",
+        "gh pr checks 148",
+        "hubctl dispatch run lint",
+        "qa --json",
+        "rg -n TODO src",
+        "ssh bux hostname",
+      ],
+      ended_at: "2026-07-17T12:05:00Z",
+      files_touched: [],
+      index: 0,
+      session_id: sourceSession.session_id,
+      started_at: "2026-07-17T12:00:00Z",
+      tool_stub_count: 0,
+      turn_id: `${sourceSession.session_id}:turn-0000`,
+      user_prompt: "check the tracker and CI before merging",
+      verification_seen: false,
+    }),
+  ];
+
+  const summary = summarizeSession({ events: [], sourceSession, turns });
+
+  // commands_seen already passed the reducer's starter gate; the summary must
+  // not re-filter them with a narrower starter list.
+  assert.deepEqual(summary.useful_commands, [
+    "td create track-follow-up",
+    "gh pr checks 148",
+    "hubctl dispatch run lint",
+    "qa --json",
+    "rg -n TODO src",
+    "ssh bux hostname",
+  ]);
+});

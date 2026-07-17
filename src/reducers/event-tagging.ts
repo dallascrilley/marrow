@@ -59,7 +59,10 @@ const nextStepPatterns = [
 ] as const;
 
 const verificationCommandPattern =
-  /^(?:\.\/[\w./-]+|npm(?: run)? build|npm test|pnpm(?: run)? build|pnpm test|yarn build|yarn test|bun test|cargo test|go test|python(?:3)? -m pytest|uv run pytest|just \w*(?:test|check|build|lint|ci|qa|verify)\w*|script\/(?:test|cibuild)\b|qa)\b/i;
+  // The `just` alternative requires a verification-word PREFIX so unrelated
+  // recipes containing the letters mid-word ("just decide", "just recipe") do
+  // not tag as verification and suppress failure learnings.
+  /^(?:\.\/[\w./-]+|npm(?: run)? build|npm test|pnpm(?: run)? build|pnpm test|yarn build|yarn test|bun test|cargo test|go test|python(?:3)? -m pytest|uv run pytest|just (?:test|check|build|lint|ci|qa|verify)[\w-]*|script\/(?:test|cibuild)\b|qa)\b/i;
 const verificationTextPatterns = [
   /\bverified\b/i,
   /\bconfirmed\b/i,
