@@ -2,7 +2,7 @@ import type { CursorTranscriptRecord } from "../adapters/cursor/intermediate.js"
 import type { GroupedTurn } from "./turn-grouping.js";
 
 const commandStarterPattern =
-  /^(?:\.\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3)\b)/i;
+  /^(?:\.\/[\w./-]+|script\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3|gh|jq|curl|wget|rg|grep|ls|cat|sed|awk|ssh|kubectl|brew|td|hubctl|qa|wt|op|gog|mise|tar)\b)/i;
 const inlineCodePattern = /`([^`\n]+)`/g;
 const trailingPunctuationPattern = /[.,;:!?]+$/;
 const disallowedBareCommands = new Set(["node", "python", "python3"]);
@@ -86,13 +86,17 @@ function collectCommandCandidates(record: CursorTranscriptRecord): string[] {
 }
 
 function normalizeCommand(value: string): string | null {
-  const trimmed = value
-    .trim()
-    .replace(/^`+|`+$/g, "")
-    .replace(/\s+/g, " ")
-    .replace(trailingPunctuationPattern, "");
+  // Multi-line tool inputs (heredocs, chained scripts) are represented by their
+  // first line — the collapsed remainder is noise, not a command stub.
+  const firstLine = (
+    value
+      .trim()
+      .replace(/^`+|`+$/g, "")
+      .split("\n", 1)[0] ?? ""
+  ).trim();
+  const trimmed = firstLine.replace(/\s+/g, " ").replace(trailingPunctuationPattern, "");
 
-  if (trimmed.length === 0 || !commandStarterPattern.test(trimmed) || trimmed.includes("\n")) {
+  if (trimmed.length === 0 || !commandStarterPattern.test(trimmed)) {
     return null;
   }
 

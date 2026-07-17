@@ -467,3 +467,268 @@ test("does not promote embedded question-form wrapper markup into decisions", ()
 
   assert.deepEqual(taggedEvents, []);
 });
+
+test("extracts operator CLI commands beyond the original starter whitelist", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "Check the PR, the queue, and the search index.",
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 2,
+      commandStrings: [
+        "gh pr checks 42",
+        'td create "fix the thing" -p P2',
+        "hubctl dispatch run lint",
+        "qa --json",
+        "rg pattern src/",
+        "curl -s https://example.com",
+        "kubectl get pods",
+        "brew install jq",
+        "wt switch --create fix",
+        "op item get GitHub",
+        "gog gmail search newer_than:1d",
+        "jq . package.json",
+        "ls test/fixtures",
+        "cat README.md",
+        "ssh deploy@example.com",
+        "mise current node",
+        "tar -tzf dist.tgz",
+        "grep -r TODO src",
+        "wget https://example.com/archive.tgz",
+        "sed -n 1,5p README.md",
+        "awk '{print $1}' report.txt",
+      ],
+      toolUse: {
+        callId: "tool-cli",
+        inputText: null,
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-cli",
+  });
+  const commandResult = extractCommandsByTurn(turns);
+
+  assert.deepEqual(commandResult.allCommands, [
+    "gh pr checks 42",
+    'td create "fix the thing" -p P2',
+    "hubctl dispatch run lint",
+    "qa --json",
+    "rg pattern src/",
+    "curl -s https://example.com",
+    "kubectl get pods",
+    "brew install jq",
+    "wt switch --create fix",
+    "op item get GitHub",
+    "gog gmail search newer_than:1d",
+    "jq . package.json",
+    "ls test/fixtures",
+    "cat README.md",
+    "ssh deploy@example.com",
+    "mise current node",
+    "tar -tzf dist.tgz",
+    "grep -r TODO src",
+    "wget https://example.com/archive.tgz",
+    "sed -n 1,5p README.md",
+    "awk '{print $1}' report.txt",
+  ]);
+});
+
+test("keeps only the first line of multi-line command inputs", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "Run the checks.",
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 2,
+      commandStrings: ["git status\ngit diff --stat\n\nnpm test"],
+      toolUse: {
+        callId: "tool-multiline",
+        inputText: "npm test -- --filter=slow\nrm -rf /tmp/scratch",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-multiline",
+  });
+  const commandResult = extractCommandsByTurn(turns);
+
+  assert.deepEqual(commandResult.allCommands, ["git status", "npm test -- --filter=slow"]);
+});
+
+test("tags just/script/qa task-runner invocations as verification commands", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "Verify everything before merging.",
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 2,
+      commandStrings: ["just test"],
+      toolUse: {
+        callId: "tool-just-test",
+        inputText: "just test",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 3,
+      commandStrings: ["script/cibuild"],
+      toolUse: {
+        callId: "tool-cibuild",
+        inputText: "script/cibuild",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 4,
+      commandStrings: ["qa --json"],
+      toolUse: {
+        callId: "tool-qa",
+        inputText: "qa --json",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+    makeRecord({
+      kind: "tool_use_stub",
+      lineNumber: 5,
+      commandStrings: ["just install"],
+      toolUse: {
+        callId: "tool-just-install",
+        inputText: "just install",
+        name: "run_terminal_command",
+        status: "started",
+      },
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-verify-runners",
+  });
+  const taggedEvents = tagTurnEvents(turns);
+  const verificationCommands = taggedEvents
+    .filter((event) => event.type === "verification")
+    .map((event) => event.payload_small.verification_command);
+
+  assert.deepEqual(verificationCommands, ["just test", "script/cibuild", "qa --json"]);
+});
+
+test("centers failure excerpts on the matched marker in long records", () => {
+  const leadIn = "Checkpoint update: all migrations applied cleanly. ".repeat(10);
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "Continue the migration.",
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 2,
+      messageText: `${leadIn}Then the final backfill failed with a unique-constraint error on session_id.`,
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-long-failure",
+  });
+  const failures = tagTurnEvents(turns).filter((event) => event.type === "failure");
+
+  assert.equal(failures.length, 1);
+  assert.ok(failures[0].summary.includes("failed with a unique-constraint error"));
+  assert.ok(failures[0].summary.length <= 240);
+  assert.ok(
+    failures[0].summary.startsWith("..."),
+    "an excerpt cut away from the record head should signal elision",
+  );
+});
+
+test("keeps the head excerpt for fix events on markdown-heavy change summaries", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "Make the tests faster.",
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 2,
+      messageText: [
+        "Summary of changes:",
+        "",
+        "## Implemented",
+        "",
+        "**Vitest config** ([`desktop/vitest.config.ts`](desktop/vitest.config.ts))",
+        "- `pool: 'threads'` – use worker threads instead of forks",
+        "- `environment: 'happy-dom'` – lighter DOM env than jsdom",
+        "",
+        "**Fixes for test compatibility**",
+        "1. **PreProductionView.tsx** – corrected empty-state expectations.",
+        `2. **Other.test.tsx** – ${"padding ".repeat(60)}patched the snapshot.`,
+      ].join("\n"),
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-markdown-fix",
+  });
+  const fixes = tagTurnEvents(turns).filter((event) => event.type === "fix");
+
+  assert.equal(fixes.length, 1);
+  assert.ok(fixes[0].summary.startsWith("Summary of changes:"));
+  assert.ok(fixes[0].summary.includes("use worker threads instead of forks"));
+});
+
+test("excerpts the line containing the marker rather than the record head", () => {
+  const records = [
+    makeRecord({
+      kind: "user_message",
+      lineNumber: 1,
+      messageText: "status?",
+    }),
+    makeRecord({
+      kind: "assistant_message",
+      lineNumber: 2,
+      messageText: [
+        "Progress so far:",
+        "- parsed 120 sessions without issues",
+        "- archived 118",
+        "",
+        `Backfill failed on session 119: ${"x".repeat(300)}`,
+      ].join("\n"),
+    }),
+  ];
+
+  const turns = groupRecordsIntoTurns({
+    records,
+    sessionId: "session-marker-line",
+  });
+  const failures = tagTurnEvents(turns).filter((event) => event.type === "failure");
+
+  assert.equal(failures.length, 1);
+  assert.ok(failures[0].summary.includes("Backfill failed on session 119"));
+  assert.ok(!failures[0].summary.startsWith("Progress so far:"));
+});

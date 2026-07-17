@@ -38,6 +38,7 @@ import {
   normalizeWorkflowStatement,
   startsWithPastTenseVerb,
   stripEventPrefix,
+  stripLeadingElision,
   stripTrailingPunctuation,
 } from "./extract/text-normalizers.js";
 import { normalizeFilePath } from "./file-paths.js";
@@ -346,7 +347,7 @@ function toProjectEventCandidate(
 
   switch (event.type) {
     case "decision": {
-      const statement = sanitizeHarnessLeakText(event.summary);
+      const statement = stripLeadingElision(sanitizeHarnessLeakText(event.summary));
       if (statement.length === 0) {
         return null;
       }
@@ -385,8 +386,8 @@ function toProjectEventCandidate(
             turnId: event.turn_id,
           }),
         ],
-        statement: event.summary,
-        title: `Failure mode: ${truncateInline(event.summary, 68)}`,
+        statement: stripLeadingElision(event.summary),
+        title: `Failure mode: ${truncateInline(stripLeadingElision(event.summary), 68)}`,
         trigger: errorSignatureTrigger(event.summary, sourceSession.project_key),
       };
     case "verification": {
@@ -855,8 +856,22 @@ function extractUserPreferenceCandidates(prompt: string): Array<{
     title: string;
   }> = [];
 
+  // A prompt that is predominantly markdown structure is a pasted doc, not
+  // operator speech: its prefer/always/never lines are doc content, and even
+  // the imperative special cases (e.g. AGENTS.md boilerplate) must not become
+  // user learnings.
+  if (isPredominantlyMarkdownDoc(prompt)) {
+    return candidates;
+  }
+
   for (const line of splitPromptLines(prompt)) {
     if (looksLikePastedDocumentLine(line)) {
+      continue;
+    }
+
+    // Markdown headings and heading fragments ("Red flags — never") are doc
+    // structure, not operator instructions.
+    if (/^#{1,6}\s/.test(line) || headingPreferenceFragmentPattern.test(line)) {
       continue;
     }
 
@@ -915,6 +930,35 @@ function extractUserPreferenceCandidates(prompt: string): Array<{
 
 function looksLikePastedDocumentLine(line: string): boolean {
   return /^\d+\t/.test(line) || /^\d+\s*\|/.test(line) || /^\d+\s*#/.test(line);
+}
+
+// Heading-fragment shape: a short noun phrase followed by a typographic dash
+// and a preference keyword ("Red flags — never", "requirements — never your
+// chat transcript."). Genuine instructions read as sentences, not doc titles.
+const headingPreferenceFragmentPattern = /^[\w][\w ]{0,40}\s+[—–]\s+(?:never|always|prefer)\b/i;
+
+function isPredominantlyMarkdownDoc(prompt: string): boolean {
+  const lines = prompt
+    .split(/\r?\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (lines.length < 3) {
+    return false;
+  }
+
+  const structural = lines.filter(isMarkdownStructureLine).length;
+  return structural / lines.length >= 0.6;
+}
+
+function isMarkdownStructureLine(line: string): boolean {
+  return (
+    /^#{1,6}\s/.test(line) ||
+    /^\|.+\|/.test(line) ||
+    /^\*\*[^*\n]+:\*\*/.test(line) ||
+    looksLikePastedDocumentLine(line) ||
+    headingPreferenceFragmentPattern.test(line.replace(/^[\s\-*]+/, "").trim())
+  );
 }
 
 function splitPromptLines(prompt: string): string[] {

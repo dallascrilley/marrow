@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { DatabaseSync } from "node:sqlite";
 
 import {
+  getDeletionCandidateBySessionId,
   getPhaseCheckpoint,
   insertRunHistory,
   transitionPhase,
@@ -57,8 +58,15 @@ export async function runSummarizePhase(
     sourceSession: toSourceSessionModel(sourceSession),
     turns,
   });
+  // Carry the ledger's latest retention verdict into the regenerated summary
+  // so re-summarizing never clobbers a real evaluation back to "not_ready".
+  const existingVerdict = getDeletionCandidateBySessionId(
+    database,
+    sourceSession.session_id,
+  )?.candidate_state;
   const summary = await summarizeSessionWithOptionalLlmTopic(
     {
+      ...(existingVerdict === undefined ? {} : { deletionReadiness: existingVerdict }),
       events,
       projectLearnings: reducedLearnings.project,
       sourceSession: toSourceSessionModel(sourceSession),

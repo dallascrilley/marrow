@@ -145,3 +145,122 @@ test("does not harvest embedded foreign-agent prompt directives as user learning
 
   assert.deepEqual(learnings.user, []);
 });
+
+test("learning statements never begin with an elision marker from a centered excerpt", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "extract-elision",
+  };
+  const turn = turnSchema.parse({
+    assistant_summary: "Investigated and fixed the constraint error.",
+    commands_seen: [],
+    ended_at: "2026-05-16T12:05:00Z",
+    files_touched: ["src/db/ledger.ts"],
+    index: 0,
+    session_id: sourceSession.session_id,
+    started_at: "2026-05-16T12:00:00Z",
+    tool_stub_count: 0,
+    turn_id: `${sourceSession.session_id}:turn-0000`,
+    user_prompt: "Fix the backfill constraint error.",
+    verification_seen: true,
+  });
+  const fixEvent = eventSchema.parse({
+    confidence: "high",
+    event_id: "extract-elision:fix:1",
+    payload_small: { matched_rule: "fixed" },
+    source_offsets: { end_line: 9, start_line: 9 },
+    summary:
+      "...then fixed the unique-constraint error by keying the upsert on session_id and source_hash.",
+    turn_id: turn.turn_id,
+    type: "fix",
+  });
+  const verificationEvent = eventSchema.parse({
+    confidence: "high",
+    event_id: "extract-elision:verification:1",
+    payload_small: { matched_rule: "verified", verification_command: "npm test" },
+    source_offsets: { end_line: 12, start_line: 12 },
+    summary: "Verification noted: tests pass after the upsert fix.",
+    turn_id: turn.turn_id,
+    type: "verification",
+  });
+
+  const learnings = extractLearnings({
+    events: [fixEvent, verificationEvent],
+    sourceSession,
+    turns: [turn],
+  });
+
+  assert.ok(learnings.project.length > 0);
+  for (const learning of learnings.project) {
+    assert.ok(
+      !learning.statement.startsWith("...") && !learning.title.startsWith("..."),
+      `statement must not begin with an elision marker: ${learning.statement}`,
+    );
+  }
+});
+
+test("user learnings keep genuine instructions but skip doc fragments in mixed prompts", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "extract-mixed-prompt",
+  };
+  const turn = turnSchema.parse({
+    assistant_summary: "Fixed the retention bug.",
+    commands_seen: [],
+    ended_at: "2026-05-16T12:05:00Z",
+    files_touched: [],
+    index: 0,
+    session_id: sourceSession.session_id,
+    started_at: "2026-05-16T12:00:00Z",
+    tool_stub_count: 0,
+    turn_id: `${sourceSession.session_id}:turn-0000`,
+    user_prompt: [
+      "Fix the retention bug.",
+      "Never bypass the lifecycle checks when you do.",
+      "## Red flags — never",
+      "requirements — never your chat transcript.",
+    ].join("\n"),
+    verification_seen: false,
+  });
+
+  const learnings = extractLearnings({ events: [], sourceSession, turns: [turn] });
+
+  assert.deepEqual(
+    learnings.user.map((learning) => learning.statement),
+    ["Never bypass the lifecycle checks when you do."],
+  );
+});
+
+test("user learnings ignore prompts that are predominantly pasted markdown docs", () => {
+  const sourceSession = {
+    ...sourceSessionFixture,
+    project_key: "demo",
+    session_id: "extract-doc-dump",
+  };
+  const turn = turnSchema.parse({
+    assistant_summary: "Reviewed the design doc.",
+    commands_seen: [],
+    ended_at: "2026-05-16T12:05:00Z",
+    files_touched: [],
+    index: 0,
+    session_id: sourceSession.session_id,
+    started_at: "2026-05-16T12:00:00Z",
+    tool_stub_count: 0,
+    turn_id: `${sourceSession.session_id}:turn-0000`,
+    user_prompt: [
+      "# Retention Design",
+      "",
+      "## Guarantees — always",
+      "The pipeline always retries failed sessions.",
+      "Operators should never see partial receipts.",
+      "- safe_to_delete — always",
+    ].join("\n"),
+    verification_seen: false,
+  });
+
+  const learnings = extractLearnings({ events: [], sourceSession, turns: [turn] });
+
+  assert.deepEqual(learnings.user, []);
+});

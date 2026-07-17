@@ -16,7 +16,7 @@ import {
   writeRetentionBatchReport,
   writeRetentionReceipt,
 } from "../writers/report-writer.js";
-import type { SummaryWriteResult } from "../writers/summary-writer.js";
+import { type SummaryWriteResult, writeSessionSummary } from "../writers/summary-writer.js";
 import type { ParsedIntermediateCleanupFileSystem } from "./parsed-cleanup.js";
 import { applyParsedIntermediateCleanupWithReceipt } from "./parsed-cleanup-receipts.js";
 import { evaluateRetentionReadiness } from "./retention.js";
@@ -30,6 +30,12 @@ export type ArchivePhaseResult = {
 };
 
 export async function runArchivePhase(input: {
+  /**
+   * Pass true only from deliberate regeneration flows (pipeline
+   * reextract/rereduce) so the provenance manifest can be superseded; normal
+   * ingest keeps the immutability guard.
+   */
+  allowManifestOverwrite?: boolean;
   database: DatabaseSync;
   events: readonly Event[];
   knowledge: KnowledgeWriteResult;
@@ -52,6 +58,7 @@ export async function runArchivePhase(input: {
         user_knowledge_jsonl_path: input.knowledge.user.path,
       },
       events: input.events,
+      ...(input.allowManifestOverwrite === true ? { overwriteIfDifferent: true } : {}),
       sourceSession: sourceSessionModel,
       turns: input.turns,
     });
@@ -94,6 +101,13 @@ export async function runArchivePhase(input: {
       turns: input.turns,
     });
     const candidate = upsertDeletionCandidate(input.database, postReceipt.candidate);
+    // Write the fresh retention verdict into the persisted summary so
+    // deletion_readiness reflects reality instead of the summarize-phase
+    // default ("not_ready" on 100% of the corpus historically).
+    await writeSessionSummary({
+      ...input.summary.summary,
+      deletion_readiness: candidate.candidate_state,
+    });
     const report = await writeRetentionBatchReport(
       [postReceipt],
       `archive-${input.sourceSession.session_id}`,

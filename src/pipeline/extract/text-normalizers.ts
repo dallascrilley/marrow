@@ -3,16 +3,20 @@ export function stripEventPrefix(value: string): string {
 }
 
 export function normalizeFixSummary(value: string): string {
-  return stripLeadingCompletionVerb(
-    stripTrailingPunctuation(stripWhatChangedClause(stripEventPrefix(stripCompletionBlock(value))))
-      .replace(
-        /^(?:fixed|resolved|updated|changed|patched|corrected)\s+(?:fixed|resolved|updated|changed|patched|corrected)\b\s*/i,
-        (match) => {
-          const firstWord = match.trim().split(/\s+/)[0] ?? "";
-          return firstWord.length > 0 ? `${firstWord} ` : "";
-        },
+  return stripLeadingElision(
+    stripLeadingCompletionVerb(
+      stripTrailingPunctuation(
+        stripWhatChangedClause(stripEventPrefix(stripCompletionBlock(value))),
       )
-      .trim(),
+        .replace(
+          /^(?:fixed|resolved|updated|changed|patched|corrected)\s+(?:fixed|resolved|updated|changed|patched|corrected)\b\s*/i,
+          (match) => {
+            const firstWord = match.trim().split(/\s+/)[0] ?? "";
+            return firstWord.length > 0 ? `${firstWord} ` : "";
+          },
+        )
+        .trim(),
+    ),
   );
 }
 
@@ -37,9 +41,19 @@ function stripWhatChangedClause(value: string): string {
 }
 
 export function normalizeResolutionSummary(value: string): string {
-  return stripTrailingPunctuation(
-    stripWhatChangedClause(stripEventPrefix(stripCompletionBlock(value))),
+  return stripLeadingElision(
+    stripTrailingPunctuation(stripWhatChangedClause(stripEventPrefix(stripCompletionBlock(value)))),
   );
+}
+
+/**
+ * Event excerpts cut away from the record head carry a leading "..." elision
+ * marker (see excerptAroundMatch in event-tagging). That marker is display
+ * context for humans reading the reduced artifact, not content — durable
+ * learning statements must not begin with it.
+ */
+export function stripLeadingElision(value: string): string {
+  return value.replace(/^(?:\.\.\.|…)\s*/, "").trim();
 }
 
 function stripLeadingCompletionVerb(value: string): string {
