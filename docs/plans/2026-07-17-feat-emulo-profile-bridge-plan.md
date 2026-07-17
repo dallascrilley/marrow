@@ -94,3 +94,10 @@ td_epic: td-cf32d7
 ## Open questions
 
 - None blocking. The default private repository name is `dallascrilley/emulo-private`; it can be renamed later without changing the bridge format.
+
+## Outcome
+
+- U1: Created the private `dallascrilley/emulo-private` mirror from the installed Emulo 0.5.0 source and retained public `ohad6k/emulo` as `upstream`.
+- U2: Added deterministic `asd profile export-emulo` generations with sanitized user-only records, provenance checks, explicit skips, and an atomic current pointer.
+- U3: Added private Emulo `--source asd` support with fail-closed pointer, manifest, path, hash, count, identity, and record validation. ASD remains excluded from auto-discovery.
+- U4: Proved the bridge with an isolated Node 22 runtime and read-only Emulo quick-preview preflight. No model work, run preparation, activation, or public-plugin replacement was performed.
