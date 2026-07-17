@@ -8,10 +8,11 @@ import {
   executePipelineRereduce,
   parseRereduceOptions,
 } from "../dist/commands/pipeline-rereduce.js";
-import { createLedger, upsertSourceSession } from "../dist/db/ledger.js";
+import { createLedger, getSourceSessionBySessionId, upsertSourceSession } from "../dist/db/ledger.js";
 import { sourceSessionFixture } from "../dist/models/canonical.js";
 import { getParsedArtifactPath } from "../dist/pipeline/parse.js";
 import { getReducedArtifactPath } from "../dist/pipeline/reduce.js";
+import { runSummarizePhase } from "../dist/pipeline/summarize-phase.js";
 import { getSessionSummaryJsonPath } from "../dist/writers/summary-writer.js";
 
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
@@ -176,6 +177,45 @@ test("pipeline rereduce re-reduces from parsed records with current fidelity", a
 
     const summary = JSON.parse(await readFile(getSessionSummaryJsonPath("rereduce-sess"), "utf8"));
     assert.equal(summary.session_id, "rereduce-sess");
+    assert.equal(
+      summary.deletion_readiness,
+      "ready",
+      "archive phase must write the retention verdict into the persisted summary",
+    );
+
+    database.close();
+  });
+});
+
+test("summarize phase preserves the ledger deletion verdict when regenerating", async () => {
+  await withRuntimeRoot(async () => {
+    const database = await createLedger();
+    registerSession(database, "verdict-sess");
+
+    const parsedPath = getParsedArtifactPath("verdict-sess");
+    await mkdir(dirname(parsedPath), { recursive: true });
+    await writeFile(parsedPath, JSON.stringify(failureTurnRecords), "utf8");
+
+    const rc = await executePipelineRereduce(
+      { args: ["--session-id", "verdict-sess"], commandPath: [], output: makeOutput() },
+      database,
+    );
+    assert.equal(rc, 0);
+    const afterArchive = JSON.parse(
+      await readFile(getSessionSummaryJsonPath("verdict-sess"), "utf8"),
+    );
+    assert.equal(afterArchive.deletion_readiness, "ready");
+
+    // Regenerating the summary (the resummarize path) must not clobber the
+    // verdict back to "not_ready" — it threads the ledger's latest state.
+    const session = getSourceSessionBySessionId(database, "verdict-sess");
+    const reduced = JSON.parse(await readFile(getReducedArtifactPath("verdict-sess"), "utf8"));
+    await runSummarizePhase(database, session, reduced.turns, reduced.events, false, false, true);
+
+    const regenerated = JSON.parse(
+      await readFile(getSessionSummaryJsonPath("verdict-sess"), "utf8"),
+    );
+    assert.equal(regenerated.deletion_readiness, "ready");
 
     database.close();
   });
