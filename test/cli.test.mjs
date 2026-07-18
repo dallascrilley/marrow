@@ -54,6 +54,7 @@ test("asd --help lists every Task 1 command", () => {
     "report",
     "health",
     "stats",
+    "storage migrate-staging",
     "explain",
     "workflow mine",
     "worktree check",
