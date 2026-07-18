@@ -9,7 +9,7 @@ import {
   getParsedStagingArtifactPath,
   getStagingRoot,
   inspectStagingRoot,
-  requireStagingRoot,
+  preflightStagingReadRoot,
 } from "../storage/staging.js";
 import {
   getDeletionCandidateBySessionId,
@@ -268,7 +268,7 @@ export async function listParsedIntermediateCleanupCandidates(
   database: DatabaseSync,
   options: ParsedIntermediateCleanupOptions,
 ): Promise<ParsedIntermediateCleanupCandidate[]> {
-  const stagingRoot = await requireStagingRoot("read");
+  const stagingRoot = await preflightStagingReadRoot();
   const context = buildInventoryContext(database);
   const eligible: ParsedIntermediateCleanupCandidate[] = [];
 

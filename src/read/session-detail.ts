@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import type { Summary, Turn } from "../models/canonical.js";
 import { summarySchema, turnSchema } from "../models/canonical.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
+import { preflightStagingReadRoot } from "../storage/staging.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
 import type { SessionIndexRecord } from "./session-index.js";
 import { buildSessionIndex, readSessionIndexFile } from "./session-index.js";
@@ -48,6 +49,7 @@ export async function readSessionSummary(sessionId: string): Promise<ArtifactRea
 }
 
 export async function readReducedTurns(sessionId: string): Promise<ArtifactReadResult<Turn[]>> {
+  await preflightStagingReadRoot();
   try {
     const parsed = JSON.parse(await readFile(getReducedArtifactPath(sessionId), "utf8")) as {
       turns?: unknown;

@@ -6,6 +6,7 @@ import type { CommandContext } from "../cli.js";
 import { summarySchema, turnSchema } from "../models/canonical.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
 import { loadSessionIndexRecords } from "../read/session-index.js";
+import { preflightStagingReadRoot } from "../storage/staging.js";
 import {
   buildSkillSuggestions,
   parseSkillChecklist,
@@ -35,6 +36,7 @@ export async function executeSkillReport(
   const skillContents = await readFile(skillPath, "utf8");
   const skill = await readSkillMetadata(skillPath);
   const checklist = parseSkillChecklist(skillContents);
+  await preflightStagingReadRoot();
   const records = await loadSessionIndexRecords({ database, fallbackToBuild: true });
   const sessions: SessionAdherenceScore[] = [];
 

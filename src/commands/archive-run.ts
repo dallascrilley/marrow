@@ -5,6 +5,7 @@ import type { CommandContext } from "../cli.js";
 import { listSourceSessionsByLifecycle } from "../db/ledger.js";
 import { runArchivePhase } from "../pipeline/archive.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
+import { preflightStagingReadRoot } from "../storage/staging.js";
 import {
   getProjectKnowledgeSessionPath,
   getUserKnowledgeSessionPath,
@@ -18,6 +19,7 @@ export async function executeArchiveRun(
   context: CommandContext,
   database: DatabaseSync,
 ): Promise<number> {
+  await preflightStagingReadRoot();
   const sessions = listSourceSessionsByLifecycle(database, ["extracted"]);
   const processed: Array<Record<string, unknown>> = [];
 

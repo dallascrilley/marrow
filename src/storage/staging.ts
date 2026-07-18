@@ -83,6 +83,17 @@ export async function requireStagingRoot(
   return inspection.root;
 }
 
+export async function preflightStagingReadRoot(): Promise<string> {
+  const inspection = await inspectStagingRoot("read");
+  if (inspection.available) {
+    return inspection.root;
+  }
+  if (inspection.configured || !inspection.error?.startsWith("staging root is unavailable:")) {
+    throw new Error(inspection.error ?? `staging root is unavailable: ${inspection.root}`);
+  }
+  return inspection.root;
+}
+
 export async function ensureStagingRoot(): Promise<string> {
   if (!isStagingRootConfigured()) {
     await mkdir(getStagingRoot(), { recursive: true });
