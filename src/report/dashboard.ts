@@ -3,6 +3,7 @@ import type { QualityAuditReport, QualityIssueCode } from "../pipeline/quality-a
 import type { HarnessBreakdownSnapshot } from "../read/harness-breakdown.js";
 import type { KnowledgeSnapshot } from "../read/knowledge.js";
 import type { PipelineStatus } from "../read/operations.js";
+import type { OperatorHealthModel } from "../read/operator-health.js";
 import type { SessionDetail } from "../read/session-detail.js";
 
 export type DashboardSession = {
@@ -77,6 +78,7 @@ export type DashboardData = {
   generated_at: string;
   harness_breakdown: HarnessBreakdownSnapshot;
   knowledge_snapshot: KnowledgeSnapshot;
+  operator_health: OperatorHealthModel;
   pipeline_status: PipelineStatus;
   quality_audit: DashboardQualityAudit;
   review_items: DashboardReviewItem[];
@@ -90,7 +92,7 @@ export type DashboardData = {
 
 export function buildDashboardData(
   sessions: readonly Omit<DashboardSession, "quality_audit">[],
-  pipelineStatus: PipelineStatus,
+  operatorHealth: OperatorHealthModel,
   knowledgeSnapshot: KnowledgeSnapshot,
   harnessBreakdown: HarnessBreakdownSnapshot,
   reviewItems: readonly DashboardReviewItem[],
@@ -121,7 +123,8 @@ export function buildDashboardData(
     generated_at: new Date().toISOString(),
     harness_breakdown: harnessBreakdown,
     knowledge_snapshot: knowledgeSnapshot,
-    pipeline_status: pipelineStatus,
+    operator_health: operatorHealth,
+    pipeline_status: operatorHealth.pipeline.status,
     quality_audit: quality_audit,
     review_items: [...reviewItems].sort((left, right) => {
       const byTime = right.updated_at.localeCompare(left.updated_at);
@@ -190,6 +193,21 @@ export function renderDashboardHtml(data: DashboardData): string {
       projects_count: knowledge.projects.length,
       projects: knowledge.projects.slice(0, KNOWLEDGE_PROJECTS_SHOWN),
       instincts: knowledge.instincts.slice(0, KNOWLEDGE_INSTINCTS_SHOWN),
+    },
+    // The shared model owns lifecycle inventory, but its artifact list can be
+    // large. Ship only the operator-facing storage rollup in the eager payload.
+    operator_health: {
+      reasons: data.operator_health.reasons,
+      recall: data.operator_health.recall,
+      recommendation: data.operator_health.recommendation,
+      review: data.operator_health.review,
+      status: data.operator_health.status,
+      storage: {
+        pressure: data.operator_health.storage.pressure,
+        pressure_threshold_bytes: data.operator_health.storage.pressure_threshold_bytes,
+        reclaimable_bytes: data.operator_health.storage.reclaimable_bytes,
+        total: data.operator_health.storage.inventory.total,
+      },
     },
     pipeline_status: data.pipeline_status,
     // Review queue can hold thousands of entries; ship only the displayed
@@ -312,9 +330,9 @@ export function renderDashboardHtml(data: DashboardData): string {
     "          </div>",
     "        </div>",
     '        <div class="panel">',
-    "          <h2>Pipeline health</h2>",
-    '          <p class="muted">Read-only operational snapshot from the current runtime ledger.</p>',
-    '          <div class="section-stack" id="pipeline-health"></div>',
+    "          <h2>Operator health</h2>",
+    '          <p class="muted">Shared read-only health, recall delivery, and pipeline snapshot from the current runtime.</p>',
+    '          <div class="section-stack" id="operator-health"></div>',
     "        </div>",
     '        <div class="panel">',
     "          <h2>Quality audit</h2>",
@@ -381,7 +399,7 @@ export function renderDashboardHtml(data: DashboardData): string {
     "      let reviewItemsExpanded = false;",
     "      const sessionList = document.getElementById('session-list');",
     "      const detail = document.getElementById('detail');",
-    "      const pipelineHealth = document.getElementById('pipeline-health');",
+    "      const operatorHealth = document.getElementById('operator-health');",
     "      const qualityAuditView = document.getElementById('quality-audit-view');",
     "      const knowledgeView = document.getElementById('knowledge-view');",
     "      const harnessView = document.getElementById('harness-view');",
@@ -395,7 +413,7 @@ export function renderDashboardHtml(data: DashboardData): string {
     "      document.getElementById('stat-generated').textContent = new Date(data.generated_at).toLocaleDateString();",
     "      hydrateSelect(sourceToolSelect, 'All source tools', uniqueValues(data.sessions.map((session) => session.index.source_tool)));",
     "      hydrateSelect(lifecycleStateSelect, 'All lifecycle states', uniqueValues(data.sessions.map((session) => session.lifecycle_state)));",
-    "      renderPipelineHealth();",
+    "      renderOperatorHealth();",
     "      renderQualityAuditView();",
     "      renderKnowledgeView();",
     "      renderHarnessView();",
@@ -423,9 +441,40 @@ export function renderDashboardHtml(data: DashboardData): string {
     "          return text.includes(needle);",
     "        });",
     "      }",
-    "      function renderPipelineHealth() {",
+    "      function renderOperatorHealth() {",
+    "        const health = data.operator_health;",
     "        const status = data.pipeline_status;",
-    "        pipelineHealth.innerHTML = '<div class=\"kpi-grid\">' +",
+    "        const events = health.recall.events;",
+    "        const reachability = health.recall.reachability;",
+    "        operatorHealth.innerHTML = '<div class=\"kpi-grid\">' +",
+    "          renderMetricCard('Current status', [",
+    "            { label: 'Status', value: health.status },",
+    "            { label: 'Degraded reasons', value: health.reasons.length === 0 ? 'none' : health.reasons.join(', ') },",
+    "            { label: 'Next action', value: health.recommendation.command },",
+    "          ]) +",
+    "          renderMetricCard('Recall delivery', [",
+    "            { label: 'Delivered fires', value: events.fires_delivered + '/' + events.total_fires },",
+    "            { label: 'Failed fires', value: health.recall.failed_fires },",
+    "            { label: 'Last successful delivery', value: events.last_delivered_at || 'none recorded' },",
+    "          ]) +",
+    "          renderMetricCard('Recall reachability', [",
+    "            { label: 'Project reachable', value: reachability.reachable + '/' + reachability.produced },",
+    "            { label: 'Global reachable', value: reachability.global_reachable + '/' + reachability.global_produced },",
+    "            { label: 'Project ratio', value: String(reachability.reachable_ratio) },",
+    "          ]) +",
+    "          renderMetricCard('Review state', [",
+    "            { label: 'Freshness', value: health.review.freshness },",
+    "            { label: 'Reviewed entries', value: health.review.reviewed.entry_count },",
+    "            { label: 'Latest apply', value: health.review.latest_apply ? health.review.latest_apply.status : 'none recorded' },",
+    "          ]) +",
+    "          renderMetricCard('Storage', [",
+    "            { label: 'Pressure', value: health.storage.pressure },",
+    "            { label: 'Total', value: formatBytes(health.storage.total.bytes) },",
+    "            { label: 'Reclaimable', value: formatBytes(health.storage.reclaimable_bytes) },",
+    "          ]) +",
+    "          '</div>' +",
+    "          '<h3>Pipeline detail</h3>' +",
+    "          '<div class=\"kpi-grid\">' +",
     "          renderMetricCard('Total sessions', [{ label: 'All sessions', value: status.totalSessions }]) +",
     "          renderMetricCard('Review queue', metricEntries(status.reviewQueue)) +",
     "          renderMetricCard('Deletion candidates', metricEntries(status.deletionCandidates)) +",
@@ -623,6 +672,12 @@ export function renderDashboardHtml(data: DashboardData): string {
     "        }",
     "      }",
     "      function formatUsd(value) { return '$' + Number(value ?? 0).toFixed(6); }",
+    "      function formatBytes(value) {",
+    "        if (value < 1024) return value + ' B';",
+    "        if (value < 1024 * 1024) return (value / 1024).toFixed(1) + ' KiB';",
+    "        if (value < 1024 * 1024 * 1024) return (value / (1024 * 1024)).toFixed(1) + ' MiB';",
+    "        return (value / (1024 * 1024 * 1024)).toFixed(1) + ' GiB';",
+    "      }",
     "      function hydrateSelect(select, label, values) {",
     "        select.innerHTML = '';",
     "        const empty = document.createElement('option');",

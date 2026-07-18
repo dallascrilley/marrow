@@ -117,3 +117,20 @@ test("listKnowledgeSnapshot returns merged project learnings and project instinc
     assert.equal(snapshot.instincts[0]?.source.source_refs[0]?.path, "src/read/knowledge.ts");
   });
 });
+
+test("listKnowledgeSnapshot ignores metadata files beside reviewed project directories", async () => {
+  await withRuntime(async (runtimeRoot) => {
+    const database = await createLedger();
+    const reviewedRoot = join(runtimeRoot, "knowledge", "projects-reviewed");
+    await mkdir(join(reviewedRoot, "demo"), { recursive: true });
+    await writeFile(join(reviewedRoot, ".DS_Store"), "metadata", "utf8");
+
+    try {
+      const snapshot = await listKnowledgeSnapshot(database);
+      assert.equal(snapshot.projects.length, 1);
+      assert.equal(snapshot.projects[0]?.source, "reviewed-export");
+    } finally {
+      database.close();
+    }
+  });
+});

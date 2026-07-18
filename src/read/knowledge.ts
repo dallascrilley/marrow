@@ -59,7 +59,9 @@ export async function listKnowledgeSnapshot(database: DatabaseSync): Promise<Kno
 
 async function readDirectoryNames(path: string): Promise<string[]> {
   try {
-    return await readdir(path);
+    return (await readdir(path, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") return [];
     throw error;
@@ -67,13 +69,7 @@ async function readDirectoryNames(path: string): Promise<string[]> {
 }
 
 async function directoryExists(path: string): Promise<boolean> {
-  try {
-    const entries = await readdir(path);
-    return entries.length > 0;
-  } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") return false;
-    throw error;
-  }
+  return (await readDirectoryNames(path)).length > 0;
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

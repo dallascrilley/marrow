@@ -56,6 +56,57 @@ const emptyPipeline = {
   sessionsByLifecycle: {},
   blockedReasons: {},
 };
+const emptyOperatorHealth = {
+  pipeline: {
+    gate: {
+      llm_budget: { allowed: true, remaining: 50 },
+      usd_budget: { allowed: true, remaining_usd: 1 },
+    },
+    pending_learnings: 0,
+    pending_sessions: 0,
+    status: emptyPipeline,
+  },
+  provider: null,
+  reasons: [],
+  recall: {
+    events: {
+      distinct_projects: 0,
+      fires_delivered: 0,
+      last_delivered_at: null,
+      last_fire_at: null,
+      total_fires: 0,
+    },
+    failed_fires: 0,
+    reachability: {
+      global_produced: 0,
+      global_reachable: 0,
+      produced: 0,
+      projects_total: 0,
+      projects_with_reachable: 0,
+      reachable: 0,
+      reachable_ratio: 0,
+      source: "bundle-replay",
+    },
+  },
+  recommendation: { command: "asd stats", reason: "healthy" },
+  review: {
+    freshness: "fresh",
+    latest_apply: null,
+    reviewed: { entry_count: 0, last_learning_id: null, last_reviewed_at: null },
+  },
+  status: "healthy",
+  storage: {
+    inventory: {
+      artifacts: [],
+      filters: { older_than_days: null, state: null },
+      runtime_root: "/tmp/asd",
+      total: { bytes: 0, count: 0 },
+    },
+    pressure: "normal",
+    pressure_threshold_bytes: 5 * 1024 * 1024 * 1024,
+    reclaimable_bytes: 0,
+  },
+};
 const emptyKnowledge = { projects: [], instincts: [], total_learnings: 0, total_instincts: 0 };
 const emptyHarness = {
   by_source_tool: [],
@@ -120,7 +171,12 @@ function makeQualityAuditReport(qualityAudit, sessionIds) {
 
 function render(
   sessions,
-  { knowledge = emptyKnowledge, reviewItems = [], qualityAudit = emptyQualityAudit } = {},
+  {
+    knowledge = emptyKnowledge,
+    operatorHealth = emptyOperatorHealth,
+    reviewItems = [],
+    qualityAudit = emptyQualityAudit,
+  } = {},
 ) {
   const sessionIds = sessions.map((session) => session.detail.index.asd_session_id);
   const qualityAuditBundle = buildDashboardQualityAudit(
@@ -131,7 +187,7 @@ function render(
   return renderDashboardHtml(
     buildDashboardData(
       sessions,
-      emptyPipeline,
+      operatorHealth,
       knowledge,
       emptyHarness,
       reviewItems,
@@ -139,6 +195,77 @@ function render(
     ),
   );
 }
+
+test("operator health static copy and eager payload match the shared bounded model", () => {
+  const artifactMarker = "LARGE_INVENTORY_ARTIFACT_MUST_STAY_OUT_OF_EAGER_PAYLOAD";
+  const operatorHealth = {
+    ...emptyOperatorHealth,
+    reasons: ["review_stale", "recall_failures", "storage_pressure"],
+    recall: {
+      events: {
+        distinct_projects: 2,
+        fires_delivered: 7,
+        last_delivered_at: "2026-07-18T08:30:00.000Z",
+        last_fire_at: "2026-07-18T08:45:00.000Z",
+        total_fires: 9,
+      },
+      failed_fires: 2,
+      reachability: {
+        global_produced: 3,
+        global_reachable: 2,
+        produced: 8,
+        projects_total: 4,
+        projects_with_reachable: 3,
+        reachable: 6,
+        reachable_ratio: 0.75,
+        source: "bundle-replay",
+      },
+    },
+    recommendation: { command: "asd quality review-learnings --if-new", reason: "review_stale" },
+    review: {
+      freshness: "stale",
+      latest_apply: {
+        batch_id: "sha256:batch",
+        recorded_at: "2026-07-17T09:00:00.000Z",
+        reviewed_at: "2026-07-17T08:00:00.000Z",
+        status: "applied",
+      },
+      reviewed: {
+        entry_count: 12,
+        last_learning_id: "learning-12",
+        last_reviewed_at: "2026-07-01T08:00:00.000Z",
+      },
+    },
+    status: "degraded",
+    storage: {
+      inventory: {
+        artifacts: [{ bytes: 6_000_000_000, reason: artifactMarker, retention: "reclaimable" }],
+        filters: { older_than_days: null, state: null },
+        runtime_root: "/tmp/asd",
+        total: { bytes: 6_000_000_000, count: 1 },
+      },
+      pressure: "elevated",
+      pressure_threshold_bytes: 5 * 1024 * 1024 * 1024,
+      reclaimable_bytes: 6_000_000_000,
+    },
+  };
+  const html = render([], { operatorHealth });
+  const data = parseEagerPayload(html);
+
+  assert.match(html, /Operator health/);
+  assert.equal(data.operator_health.status, operatorHealth.status);
+  assert.deepEqual(data.operator_health.reasons, operatorHealth.reasons);
+  assert.deepEqual(data.operator_health.recall, operatorHealth.recall);
+  assert.deepEqual(data.operator_health.review, operatorHealth.review);
+  assert.deepEqual(data.operator_health.recommendation, operatorHealth.recommendation);
+  assert.deepEqual(data.operator_health.storage, {
+    pressure: "elevated",
+    pressure_threshold_bytes: 5 * 1024 * 1024 * 1024,
+    reclaimable_bytes: 6_000_000_000,
+    total: { bytes: 6_000_000_000, count: 1 },
+  });
+  assert.ok(!eagerPayloadLine(html).includes(artifactMarker));
+});
 
 function parseEagerPayload(html) {
   const line = html.split("\n").find((l) => l.trimStart().startsWith("const data ="));
