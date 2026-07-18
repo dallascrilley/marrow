@@ -20,7 +20,9 @@ export type StagingRootInspection = {
 };
 
 export function getStagingRoot(): string {
-  const root = getRuntimePath("staging");
+  const configuredRoot = process.env[stagingRootOverrideEnvVar];
+  const root =
+    configuredRoot && configuredRoot.length > 0 ? configuredRoot : getRuntimePath("staging");
   if (isStagingRootConfigured() && !isAbsolute(root)) {
     throw new Error(`${stagingRootOverrideEnvVar} must be an absolute path`);
   }

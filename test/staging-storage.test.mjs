@@ -14,7 +14,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { runtimeRootOverrideEnvVar, stagingRootOverrideEnvVar } from "../dist/config/paths.js";
+import {
+  getRuntimePath,
+  runtimeRootOverrideEnvVar,
+  stagingRootOverrideEnvVar,
+} from "../dist/config/paths.js";
 import {
   ensureStagingRoot,
   getParsedStagingArtifactPath,
@@ -71,11 +75,12 @@ test("staging defaults beneath the runtime root and is created for writes", asyn
 });
 
 test("a pre-created absolute override owns parsed, reduced, and quarantine paths", async () => {
-  await withStagingEnvironment(async ({ sandboxBase }) => {
+  await withStagingEnvironment(async ({ runtimeRoot, sandboxBase }) => {
     const stagingRoot = join(sandboxBase, "external", "staging");
     await mkdir(stagingRoot, { recursive: true });
     process.env[stagingRootOverrideEnvVar] = stagingRoot;
 
+    assert.equal(getRuntimePath("staging"), join(runtimeRoot, "staging"));
     assert.equal(await ensureStagingRoot(), stagingRoot);
     const inspection = await inspectStagingRoot("write");
     assert.equal(inspection.available, true);
