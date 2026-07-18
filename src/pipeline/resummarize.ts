@@ -4,6 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { listSourceSessions } from "../db/ledger.js";
 import type { SourceSessionRow } from "../db/queries.js";
 import { summarySchema } from "../models/canonical.js";
+import { preflightStagingReadRoot } from "../storage/staging.js";
 import {
   getSessionManifestPath,
   getSessionManifestPathForRevision,
@@ -19,7 +20,6 @@ import {
 } from "./llm-budget.js";
 import { runParsePhase } from "./parse.js";
 import { getReducedArtifactPath, type ReducedArtifact, runReducePhase } from "./reduce.js";
-import { preflightStagingReadRoot } from "../storage/staging.js";
 import {
   isHarnessTopicLine,
   isLowSignalTopic,

@@ -7,7 +7,6 @@ import { z } from "zod";
 
 import type { CommandContext } from "../cli.js";
 import { getRuntimePath } from "../config/paths.js";
-import { preflightStagingReadRoot } from "../storage/staging.js";
 import { getPhaseCheckpoint, listSourceSessions } from "../db/ledger.js";
 import type { SourceSessionRow } from "../db/queries.js";
 import { turnSchema } from "../models/canonical.js";
@@ -16,6 +15,7 @@ import {
   looksLikeEmbeddedAgentPrompt,
 } from "../pipeline/prompt-sanitize.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
+import { preflightStagingReadRoot } from "../storage/staging.js";
 
 export const emuloMessageSchemaVersion = "asd.user_message.v1" as const;
 export const emuloCorpusSchemaVersion = "asd.emulo_corpus.v1" as const;

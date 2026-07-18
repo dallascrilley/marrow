@@ -39,7 +39,12 @@ semantics used by `src/pipeline/parsed-cleanup.ts`.
   mounting for the live pipeline.
 - [x] (2026-07-18 18:45Z) Imported the plan into td as epic `td-25b886` with stable U1-U5
   child issues and dependency order.
-- [ ] Implement U1-U4 and run the external-volume proof.
+- [x] (2026-07-18 19:44Z) Implemented and independently reviewed U1-U3: validated root API,
+  consumer cutover and cross-device cleanup, and receipt-backed migration.
+- [x] (2026-07-18 19:44Z) Ran the isolated SSK ingest/resume/migrate/inventory/cleanup/disconnect/
+  rollback proof; source and destination hashes matched and the proof target was moved to Trash.
+- [x] (2026-07-18 19:51Z) Completed CI-equivalent verification: Biome passed, all 696
+  tests passed, and the TypeScript build passed. Final review and shipping follow this commit.
 - [ ] Decide later whether the optional S3 cold-tier lane is worth its dependency, operational,
   and billable surface.
 
@@ -60,6 +65,13 @@ semantics used by `src/pipeline/parsed-cleanup.ts`.
 - Observation: `/Volumes/SSK` has about three times the current staging footprint free. That is
   enough for a verified migration after safe parsed cleanup, but not enough to treat the disk as
   an unbounded archive.
+- Observation: Completed cleanup receipts initially blocked cutover because they were fully parsed
+  against the new root before terminal-status filtering. The proof failed safely; status-first
+  filtering now ignores completed historical receipts while pending/failed receipts still bind
+  recovery to their recorded paths.
+- Observation: SSK free space fell from the planning snapshot to about 28 GB before proof. The
+  isolated proof remained small; a live 13 GB copy still fits today but should be preceded by a
+  fresh capacity check and is not part of this non-destructive implementation proof.
 
 ## Requirements
 
@@ -408,12 +420,16 @@ the existing 1 GB parsed-retention ceiling justifies implementing U5.
 
 ## Outcomes & Retrospective
 
-Planning outcome: recommended path selected and implementation decomposed. Implementation and
-live migration have not started. Update this section after each milestone with measured internal
-disk reclaimed, SSK growth, absent-volume behavior, and whether S3 remained deferred.
+U1-U4 implemented the SSK path without moving durable control-plane state. The real-volume proof
+showed different source/destination devices, matching SHA-256, fail-closed absence, successful
+rollback, idempotent rerun, and source retention. No live operator staging was deleted or cut over,
+so measured internal disk reclaimed remains 0 bytes. S3 remains deferred as the optional U5 lane.
 
 ## Revision History
 
 - 2026-07-18: Initial plan based on `origin/main` `c9eeb75`, live staging measurements, current
   parsed-cleanup safety behavior, and the mounted SSK capacity check.
 - 2026-07-18: Linked the plan to td epic `td-25b886`; U1 begins at `td-965810`.
+- 2026-07-18: Implemented U1-U4 after `de3a7fd`, corrected the completed-receipt cutover bug
+  discovered by the isolated SSK proof, captured proof evidence and operator documentation, and
+  passed the full 696-test CI-equivalent gate.
