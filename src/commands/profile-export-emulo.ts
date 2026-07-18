@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import type { CommandContext } from "../cli.js";
 import { getRuntimePath } from "../config/paths.js";
+import { preflightStagingReadRoot } from "../storage/staging.js";
 import { getPhaseCheckpoint, listSourceSessions } from "../db/ledger.js";
 import type { SourceSessionRow } from "../db/queries.js";
 import { turnSchema } from "../models/canonical.js";
@@ -102,6 +103,7 @@ export async function executeProfileExportEmulo(
 export async function buildEmuloCorpusExport(
   database: DatabaseSync,
 ): Promise<EmuloCorpusExportResult> {
+  await preflightStagingReadRoot();
   const exportRoot = getRuntimePath("emuloExports");
   const temporaryRoot = join(exportRoot, `.tmp-${randomUUID()}`);
   const sessions = listSourceSessions(database).sort(compareSourceSessions);

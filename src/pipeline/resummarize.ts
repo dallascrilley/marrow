@@ -19,6 +19,7 @@ import {
 } from "./llm-budget.js";
 import { runParsePhase } from "./parse.js";
 import { getReducedArtifactPath, type ReducedArtifact, runReducePhase } from "./reduce.js";
+import { preflightStagingReadRoot } from "../storage/staging.js";
 import {
   isHarnessTopicLine,
   isLowSignalTopic,
@@ -233,6 +234,7 @@ async function loadOrBuildReduced(
   database: DatabaseSync,
   sourceSession: SourceSessionRow,
 ): Promise<ReducedArtifact> {
+  await preflightStagingReadRoot();
   const artifactPath = getReducedArtifactPath(sourceSession.session_id);
   if (await fileExists(artifactPath)) {
     return JSON.parse(await readFile(artifactPath, "utf8")) as ReducedArtifact;

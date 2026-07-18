@@ -8,6 +8,7 @@ import { getSourceSessionBySessionId, listSourceSessions } from "../db/ledger.js
 import type { SourceSessionRow } from "../db/queries.js";
 import { getParsedArtifactPath } from "../pipeline/parse.js";
 import { runReducePhase } from "../pipeline/reduce.js";
+import { preflightStagingReadRoot } from "../storage/staging.js";
 import { regenerateFromReduced } from "./pipeline-reextract.js";
 
 export type RereduceOptions = {
@@ -38,6 +39,7 @@ export async function executePipelineRereduce(
       "Refusing to re-reduce all sessions without an explicit selector. Pass --all-with-parsed or --session-id <id>.",
     );
   }
+  await preflightStagingReadRoot();
 
   const sessions = selectSessions(database, options);
   const candidates: SourceSessionRow[] = [];
