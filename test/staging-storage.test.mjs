@@ -28,6 +28,7 @@ import {
   inspectStagingRoot,
   requireStagingRoot,
 } from "../dist/storage/staging.js";
+import { selectParsedCleanupQuarantineRoot } from "../dist/pipeline/parsed-cleanup.js";
 
 async function withStagingEnvironment(run) {
   const sandboxBase = await mkdtemp(join(await realpath(tmpdir()), "asd-staging-storage-"));
@@ -146,5 +147,26 @@ test("session artifact paths reject traversal and ambiguous directory names", as
       assert.throws(() => getParsedStagingArtifactPath(sessionId), /invalid staging session id/);
       assert.throws(() => getReducedStagingArtifactPath(sessionId), /invalid staging session id/);
     }
+  });
+});
+
+test("parsed cleanup chooses a same-device local quarantine and cross-device staging quarantine", async () => {
+  await withStagingEnvironment(async ({ runtimeRoot, sandboxBase }) => {
+    const stagingRoot = join(sandboxBase, "external-staging");
+    await mkdir(stagingRoot);
+    process.env[stagingRootOverrideEnvVar] = stagingRoot;
+
+    const fakeFileSystem = (stagingDevice, deletesDevice) => ({
+      stat: async (path) => ({ dev: path === stagingRoot ? stagingDevice : deletesDevice }),
+    });
+
+    assert.equal(
+      await selectParsedCleanupQuarantineRoot(fakeFileSystem(10, 10)),
+      join(runtimeRoot, "deletes", "parsed-cleanup-quarantine"),
+    );
+    assert.equal(
+      await selectParsedCleanupQuarantineRoot(fakeFileSystem(10, 20)),
+      join(stagingRoot, ".parsed-cleanup-quarantine"),
+    );
   });
 });

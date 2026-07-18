@@ -50,7 +50,7 @@ export async function inspectStagingRoot(
       throw new Error(`staging root must be a directory: ${root}`);
     }
     const canonicalRoot = await realpath(root);
-    if (canonicalRoot !== root) {
+    if (configured && canonicalRoot !== root) {
       throw new Error(`staging root must not traverse symbolic links: ${root}`);
     }
 
