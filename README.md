@@ -365,7 +365,12 @@ node dist/cli.js report --html
 node dist/cli.js report --html --out /tmp/asd-dashboard.html
 ```
 
-By default this writes `reports/dashboard.html` under the runtime root. The output is self-contained and works offline: session list, source/lifecycle filters, pipeline-health metrics, knowledge/instinct explorer cards with back-links, cross-harness comparison cards for volume/topic yield/LLM cost, a read-only review-queue snapshot with CLI follow-up hints, search, and per-session drill-down into summary and reduced timeline.
+By default this writes `reports/dashboard.html` under the runtime root. The output is
+self-contained and works offline: session list, source/lifecycle filters, shared operator
+health with recall delivery/reachability, review freshness, storage pressure, and one next
+action; knowledge/instinct explorer cards with back-links; cross-harness comparison cards for
+volume/topic yield/LLM cost; a read-only review-queue snapshot with CLI follow-up hints;
+search; and per-session drill-down into summary and reduced timeline.
 
 Mine reviewable workflow guidance candidates from recent distilled sessions:
 

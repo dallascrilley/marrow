@@ -9,7 +9,8 @@ import { listSourceSessions } from "../db/ledger.js";
 import type { ReviewQueueEntryRow } from "../db/queries.js";
 import { auditQuality } from "../pipeline/quality-audit.js";
 import { listKnowledgeSnapshot } from "../read/knowledge.js";
-import { listHarnessComparison, listPipelineStatus, listReviewItems } from "../read/operations.js";
+import { listHarnessComparison, listReviewItems } from "../read/operations.js";
+import { buildOperatorHealthModel } from "../read/operator-health.js";
 import { getSessionDetailForRecord } from "../read/session-detail.js";
 import { loadSessionIndexRecords } from "../read/session-index.js";
 import {
@@ -30,13 +31,14 @@ export async function executeReport(
     throw new Error("report currently requires --html");
   }
   const sessions = await loadDashboardSessions(database);
+  const operatorHealth = await buildOperatorHealthModel(database);
   const sessionIds = sessions.map((session) => session.detail.index.asd_session_id);
   const qualityAuditBundle = buildDashboardQualityAudit(await auditQuality(database), sessionIds);
   const outputPath = options.outPath ?? join(await ensureRuntimePath("reports"), "dashboard.html");
   const dashboard = renderDashboardHtml(
     buildDashboardData(
       sessions,
-      listPipelineStatus(database),
+      operatorHealth,
       await listKnowledgeSnapshot(database),
       await listHarnessComparison(database),
       listReviewItems(database).map(mapReviewItem),
