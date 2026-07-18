@@ -14,6 +14,12 @@ import {
 import type { DeletionCandidateRow, SourceSessionRow } from "../db/queries.js";
 import { ingestStatuses } from "../models/canonical.js";
 import {
+  getParsedStagingArtifactPath,
+  getStagingRoot,
+  inspectStagingRoot,
+  preflightStagingReadRoot,
+} from "../storage/staging.js";
+import {
   getProjectKnowledgeSessionPath,
   getUserKnowledgeSessionPath,
 } from "../writers/knowledge-writer.js";
@@ -78,6 +84,7 @@ export interface RuntimeLifecycleInventory {
   artifacts: RuntimeLifecycleInventoryArtifact[];
   filters: RuntimeLifecycleInventoryFilters;
   runtime_root: string;
+  staging: Awaited<ReturnType<typeof inspectStagingRoot>>;
   total: Pick<RuntimeLifecycleInventoryArtifact, "bytes" | "count">;
 }
 
@@ -171,8 +178,13 @@ export async function listRuntimeLifecycleInventory(
   };
   const context = buildInventoryContext(database);
   const aggregates = new Map<string, Aggregate>();
+  const staging = await inspectStagingRoot("read");
+  const externalStaging = staging.root !== getRuntimePath("staging");
 
   for await (const file of walkRuntimeFiles(runtimeRoot)) {
+    if (externalStaging && isPathWithin(file.path, getRuntimePath("staging"))) {
+      continue;
+    }
     if (options.olderThanDays !== undefined) {
       const cutoff = now.getTime() - options.olderThanDays * millisecondsPerDay;
       if (file.modifiedAt.getTime() > cutoff) {
@@ -209,6 +221,22 @@ export async function listRuntimeLifecycleInventory(
     aggregates.set(key, aggregate);
   }
 
+  if (staging.available && externalStaging) {
+    for await (const file of walkRuntimeFiles(staging.root)) {
+      if (options.olderThanDays !== undefined) {
+        const cutoff = now.getTime() - options.olderThanDays * millisecondsPerDay;
+        if (file.modifiedAt.getTime() > cutoff) {
+          continue;
+        }
+      }
+      const classified = classifyStagingArtifact(file.path, staging.root, context);
+      if (options.state !== undefined && classified.lifecycleState !== options.state) {
+        continue;
+      }
+      addAggregate(aggregates, classified, file);
+    }
+  }
+
   const artifacts = [...aggregates.values()].sort(compareAggregates).map((aggregate) => ({
     bytes: aggregate.bytes,
     count: aggregate.count,
@@ -224,6 +252,7 @@ export async function listRuntimeLifecycleInventory(
     artifacts,
     filters,
     runtime_root: runtimeRoot,
+    staging,
     total: {
       bytes: artifacts.reduce((sum, artifact) => sum + artifact.bytes, 0),
       count: artifacts.reduce((sum, artifact) => sum + artifact.count, 0),
@@ -239,17 +268,17 @@ export async function listParsedIntermediateCleanupCandidates(
   database: DatabaseSync,
   options: ParsedIntermediateCleanupOptions,
 ): Promise<ParsedIntermediateCleanupCandidate[]> {
-  const runtimeRoot = getRuntimeRoot();
+  const stagingRoot = await preflightStagingReadRoot();
   const context = buildInventoryContext(database);
   const eligible: ParsedIntermediateCleanupCandidate[] = [];
 
-  for await (const file of walkRuntimeFiles(runtimeRoot)) {
-    const classified = classifyRuntimeArtifact(file.path, runtimeRoot, context);
+  for await (const file of walkRuntimeFiles(stagingRoot)) {
+    const classified = classifyStagingArtifact(file.path, stagingRoot, context);
     if (
       classified.kind !== "staging_parsed" ||
       classified.retention !== "reclaimable" ||
       classified.sessionId === null ||
-      !isExactParsedIntermediatePath(file.path, runtimeRoot)
+      !isExactParsedIntermediatePath(file.path, stagingRoot)
     ) {
       continue;
     }
@@ -427,8 +456,8 @@ async function inspectExactParsedIntermediateEligibility(
     return undefined;
   }
 
-  const path = join(getRuntimePath("staging"), sessionId, "parsed-records.json");
-  if (!isExactParsedIntermediatePath(path, getRuntimeRoot())) {
+  const path = getParsedStagingArtifactPath(sessionId);
+  if (!isExactParsedIntermediatePath(path, getStagingRoot())) {
     return undefined;
   }
   return {
@@ -444,7 +473,7 @@ async function inspectSafeParsedIntermediatePath(
   sessionId: string,
   fileSystem: ResolvedParsedIntermediateCandidateFileSystem,
 ): Promise<SafeParsedIntermediateMetadata | undefined> {
-  const stagingRoot = getRuntimePath("staging");
+  const stagingRoot = getStagingRoot();
   const sessionDirectory = join(stagingRoot, sessionId);
   try {
     const [metadata, sessionMetadata, resolvedStagingRoot, resolvedSessionDirectory] =
@@ -622,6 +651,7 @@ export function isRuntimeInventoryLifecycleState(
 export function renderRuntimeLifecycleInventory(report: RuntimeLifecycleInventory): string {
   const filterLines = [
     `Runtime root: ${report.runtime_root}`,
+    `Staging root: ${report.staging.root} (${report.staging.available ? "available" : `unavailable: ${report.staging.error}`})`,
     `Filters: state=${report.filters.state ?? "all"}, older_than_days=${report.filters.older_than_days ?? "all"}`,
     `Total: ${report.total.count} files, ${formatBytes(report.total.bytes)}`,
     "",
@@ -680,6 +710,66 @@ function classifyRuntimeArtifact(
     reason: classification.reason,
     retention: classification.retention,
   };
+}
+
+function classifyStagingArtifact(
+  path: string,
+  stagingRoot: string,
+  context: InventoryContext,
+): ClassifiedArtifact {
+  const segments = relative(stagingRoot, path).split(sep);
+  const sessionId = segments.length === 2 ? (segments[0] ?? null) : null;
+  const kind: RuntimeInventoryArtifactKind =
+    segments[1] === "parsed-records.json"
+      ? "staging_parsed"
+      : segments[1] === "reduced-session.json"
+        ? "staging_reduced"
+        : "unknown";
+  const session = sessionId === null ? null : (context.sessionsById.get(sessionId) ?? null);
+  const lifecycleState = session?.current_lifecycle_state ?? unknownLifecycleState;
+  const candidate =
+    session === null ? null : (context.deletionCandidatesBySourceSessionId.get(session.id) ?? null);
+  const classification = classifyRetention(kind, lifecycleState, candidate);
+  return {
+    kind,
+    lifecycleState,
+    reason: classification.reason,
+    retention: classification.retention,
+    sessionId,
+  };
+}
+
+function addAggregate(
+  aggregates: Map<string, Aggregate>,
+  classified: ClassifiedArtifact,
+  file: { bytes: number; modifiedAt: Date },
+): void {
+  const key = [
+    classified.kind,
+    classified.lifecycleState,
+    classified.retention,
+    classified.reason,
+  ].join("\u0000");
+  const aggregate = aggregates.get(key) ?? {
+    bytes: 0,
+    count: 0,
+    kind: classified.kind,
+    lifecycleState: classified.lifecycleState,
+    newestAt: null,
+    oldestAt: null,
+    reason: classified.reason,
+    retention: classified.retention,
+  };
+  aggregate.bytes += file.bytes;
+  aggregate.count += 1;
+  aggregate.oldestAt = earliest(aggregate.oldestAt, file.modifiedAt);
+  aggregate.newestAt = latest(aggregate.newestAt, file.modifiedAt);
+  aggregates.set(key, aggregate);
+}
+
+function isPathWithin(path: string, root: string): boolean {
+  const child = relative(root, path);
+  return child.length > 0 && child !== ".." && !child.startsWith(`..${sep}`);
 }
 
 function classifyByDirectory(relativePath: string, context: InventoryContext): KnownArtifact {
@@ -755,13 +845,10 @@ function sessionIdFromKnownFilename(
   return sessionsById.has(candidate) ? candidate : null;
 }
 
-function isExactParsedIntermediatePath(path: string, runtimeRoot: string): boolean {
-  const segments = relative(runtimeRoot, path).split(sep);
+function isExactParsedIntermediatePath(path: string, stagingRoot: string): boolean {
+  const segments = relative(stagingRoot, path).split(sep);
   return (
-    segments.length === 3 &&
-    segments[0] === "staging" &&
-    segments[1] !== undefined &&
-    segments[2] === "parsed-records.json"
+    segments.length === 2 && segments[0] !== undefined && segments[1] === "parsed-records.json"
   );
 }
 

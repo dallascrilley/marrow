@@ -13,6 +13,12 @@ import {
   revalidateParsedIntermediateCleanupCandidate,
   revalidateParsedIntermediateCleanupCandidateRetention,
 } from "../read/lifecycle-inventory.js";
+import {
+  getParsedStagingArtifactPath,
+  getStagingQuarantineRoot,
+  getStagingRoot,
+  requireStagingRoot,
+} from "../storage/staging.js";
 
 const parsedCleanupQuarantineDirectoryName = "parsed-cleanup-quarantine";
 
@@ -130,7 +136,11 @@ export async function applyParsedIntermediateCleanup(
   try {
     quarantines = indexQuarantines(plannedQuarantines);
     if (quarantines.size > 0) {
-      trustedDirectory = await openTrustedQuarantineDirectory(resolvedFileSystem);
+      trustedDirectory = await openTrustedQuarantineDirectory(
+        resolvedFileSystem,
+        true,
+        requireSingleQuarantineRoot([...quarantines.values()]),
+      );
       for (const mapping of quarantines.values()) {
         assertMappingQuarantineDirectoryIdentity(mapping, trustedDirectory);
         mapping.quarantine_directory_device = trustedDirectory.device;
@@ -384,6 +394,7 @@ async function migrateLegacyQuarantineIfNeeded(
 export function planParsedIntermediateCleanupQuarantines(
   candidates: readonly ParsedIntermediateCleanupCandidate[],
   pendingQuarantines: readonly ParsedIntermediateCleanupQuarantine[] = [],
+  quarantineRoot = getParsedCleanupQuarantineRoot(),
 ): ParsedIntermediateCleanupQuarantine[] {
   const planned = pendingQuarantines.map((mapping) => ({ ...mapping }));
   const mappedOriginals = new Set(planned.map((mapping) => mapping.original_path));
@@ -393,7 +404,7 @@ export function planParsedIntermediateCleanupQuarantines(
     }
     planned.push({
       original_path: candidate.path,
-      quarantine_path: join(getParsedCleanupQuarantineRoot(), `${randomUUID()}.quarantine`),
+      quarantine_path: join(quarantineRoot, `${randomUUID()}.quarantine`),
     });
     mappedOriginals.add(candidate.path);
   }
@@ -417,7 +428,11 @@ export async function prepareParsedIntermediateCleanupQuarantines(
     return [];
   }
   const resolvedFileSystem = resolveCleanupFileSystem(fileSystem);
-  const trustedDirectory = await openTrustedQuarantineDirectory(resolvedFileSystem, false);
+  const trustedDirectory = await openTrustedQuarantineDirectory(
+    resolvedFileSystem,
+    false,
+    requireSingleQuarantineRoot(mappings),
+  );
   try {
     return mappings.map((mapping) => {
       if (!isCleanupOwnedQuarantine(mapping.quarantine_path)) {
@@ -464,9 +479,9 @@ async function assertSafeSessionDirectory(
   sessionId: string,
   fileSystem: ResolvedParsedIntermediateCleanupFileSystem,
 ): Promise<Awaited<ReturnType<typeof lstat>>> {
-  const stagingRoot = getRuntimePath("staging");
+  const stagingRoot = getStagingRoot();
   const sessionDirectory = join(stagingRoot, sessionId);
-  if (originalPath !== join(sessionDirectory, "parsed-records.json")) {
+  if (originalPath !== getParsedStagingArtifactPath(sessionId)) {
     throw new Error(`unsafe parsed cleanup path: ${originalPath}`);
   }
   const [sessionMetadata, resolvedStagingRoot, resolvedSessionDirectory] = await Promise.all([
@@ -499,23 +514,26 @@ async function assertTrustedQuarantinePath(
 async function openTrustedQuarantineDirectory(
   fileSystem: ResolvedParsedIntermediateCleanupFileSystem,
   startHelper = true,
+  quarantineRoot = getParsedCleanupQuarantineRoot(),
 ): Promise<TrustedQuarantineDirectory> {
-  const deletesRoot = getRuntimePath("deletes");
-  const quarantineRoot = getParsedCleanupQuarantineRoot();
+  const quarantineParent = getAllowedQuarantineParent(quarantineRoot);
+  if (quarantineParent === undefined) {
+    throw new Error(`unsafe parsed cleanup quarantine directory: ${quarantineRoot}`);
+  }
   await mkdir(quarantineRoot, { recursive: true });
-  const [deletesMetadata, quarantineMetadata, resolvedDeletesRoot, resolvedQuarantineRoot] =
+  const [parentMetadata, quarantineMetadata, resolvedParent, resolvedQuarantineRoot] =
     await Promise.all([
-      fileSystem.lstat(deletesRoot),
+      fileSystem.lstat(quarantineParent),
       fileSystem.lstat(quarantineRoot),
-      fileSystem.realpath(deletesRoot),
+      fileSystem.realpath(quarantineParent),
       fileSystem.realpath(quarantineRoot),
     ]);
   if (
-    deletesMetadata.isSymbolicLink() ||
-    !deletesMetadata.isDirectory() ||
+    parentMetadata.isSymbolicLink() ||
+    !parentMetadata.isDirectory() ||
     quarantineMetadata.isSymbolicLink() ||
     !quarantineMetadata.isDirectory() ||
-    relative(resolvedDeletesRoot, resolvedQuarantineRoot) !== parsedCleanupQuarantineDirectoryName
+    relative(resolvedParent, resolvedQuarantineRoot) !== basename(quarantineRoot)
   ) {
     throw new Error(`unsafe parsed cleanup quarantine directory: ${quarantineRoot}`);
   }
@@ -552,12 +570,15 @@ async function verifyTrustedQuarantineDirectory(
   fileSystem: ResolvedParsedIntermediateCleanupFileSystem,
   trustedDirectory: TrustedQuarantineDirectory,
 ): Promise<void> {
-  const deletesRoot = getRuntimePath("deletes");
-  const [handleMetadata, quarantineMetadata, resolvedDeletesRoot, resolvedQuarantineRoot] =
+  const quarantineParent = getAllowedQuarantineParent(trustedDirectory.path);
+  if (quarantineParent === undefined) {
+    throw new Error(`unsafe parsed cleanup quarantine directory: ${trustedDirectory.path}`);
+  }
+  const [handleMetadata, quarantineMetadata, resolvedParent, resolvedQuarantineRoot] =
     await Promise.all([
       trustedDirectory.handle.stat(),
       fileSystem.lstat(trustedDirectory.path),
-      fileSystem.realpath(deletesRoot),
+      fileSystem.realpath(quarantineParent),
       fileSystem.realpath(trustedDirectory.path),
     ]);
   if (
@@ -567,7 +588,7 @@ async function verifyTrustedQuarantineDirectory(
     !quarantineMetadata.isDirectory() ||
     Number(quarantineMetadata.dev) !== trustedDirectory.device ||
     Number(quarantineMetadata.ino) !== trustedDirectory.inode ||
-    relative(resolvedDeletesRoot, resolvedQuarantineRoot) !== parsedCleanupQuarantineDirectoryName
+    relative(resolvedParent, resolvedQuarantineRoot) !== basename(trustedDirectory.path)
   ) {
     throw new Error(`unsafe parsed cleanup quarantine directory: ${trustedDirectory.path}`);
   }
@@ -819,13 +840,70 @@ function getParsedCleanupQuarantineRoot(): string {
 }
 
 function isCleanupOwnedQuarantine(quarantinePath: string): boolean {
-  const segments = relative(getParsedCleanupQuarantineRoot(), quarantinePath).split(sep);
+  const quarantineRoot = getQuarantineRootForPath(quarantinePath);
+  if (quarantineRoot === undefined) {
+    return false;
+  }
+  const segments = relative(quarantineRoot, quarantinePath).split(sep);
   if (segments.length !== 1) {
     return false;
   }
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.quarantine$/i.test(
     segments[0] ?? "",
   );
+}
+
+export async function selectParsedCleanupQuarantineRoot(
+  fileSystem: ParsedIntermediateCleanupFileSystem = {
+    access,
+    link,
+    lstat,
+    open,
+    realpath,
+    rename,
+    stat,
+    unlink,
+  },
+): Promise<string> {
+  const stagingRoot = await requireStagingRoot("write");
+  const deletesRoot = getRuntimePath("deletes");
+  await mkdir(deletesRoot, { recursive: true });
+  const [stagingMetadata, deletesMetadata] = await Promise.all([
+    fileSystem.stat(stagingRoot),
+    fileSystem.stat(deletesRoot),
+  ]);
+  return Number(stagingMetadata.dev) === Number(deletesMetadata.dev)
+    ? getParsedCleanupQuarantineRoot()
+    : getStagingQuarantineRoot();
+}
+
+function requireSingleQuarantineRoot(
+  mappings: readonly ParsedIntermediateCleanupQuarantine[],
+): string {
+  const roots = new Set(mappings.map((mapping) => dirname(mapping.quarantine_path)));
+  if (roots.size !== 1) {
+    throw new Error("parsed cleanup mappings must use one quarantine root");
+  }
+  const root = [...roots][0];
+  if (root === undefined || getAllowedQuarantineParent(root) === undefined) {
+    throw new Error(`unrecognized parsed cleanup quarantine mapping: ${root ?? ""}`);
+  }
+  return root;
+}
+
+function getAllowedQuarantineParent(quarantineRoot: string): string | undefined {
+  if (quarantineRoot === getParsedCleanupQuarantineRoot()) {
+    return getRuntimePath("deletes");
+  }
+  if (quarantineRoot === getStagingQuarantineRoot()) {
+    return getStagingRoot();
+  }
+  return undefined;
+}
+
+function getQuarantineRootForPath(quarantinePath: string): string | undefined {
+  const root = dirname(quarantinePath);
+  return getAllowedQuarantineParent(root) === undefined ? undefined : root;
 }
 
 function isLegacyCleanupOwnedQuarantine(originalPath: string, quarantinePath: string): boolean {

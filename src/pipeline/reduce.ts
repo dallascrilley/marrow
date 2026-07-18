@@ -1,9 +1,8 @@
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 
 import type { CursorTranscriptRecord } from "../adapters/cursor/intermediate.js";
-import { getRuntimePath } from "../config/paths.js";
 import { getPhaseCheckpoint, insertRunHistory, transitionPhase } from "../db/ledger.js";
 import type { SourceSessionRow } from "../db/queries.js";
 import type { Event, Turn } from "../models/canonical.js";
@@ -11,6 +10,7 @@ import { turnSchema } from "../models/canonical.js";
 import { extractCommandsByTurn } from "../reducers/command-extraction.js";
 import { tagTurnEvents } from "../reducers/event-tagging.js";
 import { type GroupedTurn, groupRecordsIntoTurns } from "../reducers/turn-grouping.js";
+import { ensureStagingRoot, getReducedStagingArtifactPath } from "../storage/staging.js";
 
 export type ReducedArtifact = {
   events: Event[];
@@ -28,6 +28,7 @@ export async function runReducePhase(input: {
   resume?: boolean;
   sourceSession: SourceSessionRow;
 }): Promise<ReducePhaseResult> {
+  await ensureStagingRoot();
   const artifactPath = getReducedArtifactPath(input.sourceSession.session_id);
   const checkpoint = getPhaseCheckpoint(input.database, input.sourceSession.id, "reduced");
 
@@ -123,7 +124,7 @@ export async function runReducePhase(input: {
 }
 
 export function getReducedArtifactPath(sessionId: string): string {
-  return join(getRuntimePath("staging"), sessionId, "reduced-session.json");
+  return getReducedStagingArtifactPath(sessionId);
 }
 
 export const defaultAssistantSummaryBudget = 240;

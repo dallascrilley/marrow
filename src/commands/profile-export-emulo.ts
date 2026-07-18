@@ -15,6 +15,7 @@ import {
   looksLikeEmbeddedAgentPrompt,
 } from "../pipeline/prompt-sanitize.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
+import { preflightStagingReadRoot } from "../storage/staging.js";
 
 export const emuloMessageSchemaVersion = "asd.user_message.v1" as const;
 export const emuloCorpusSchemaVersion = "asd.emulo_corpus.v1" as const;
@@ -102,6 +103,7 @@ export async function executeProfileExportEmulo(
 export async function buildEmuloCorpusExport(
   database: DatabaseSync,
 ): Promise<EmuloCorpusExportResult> {
+  await preflightStagingReadRoot();
   const exportRoot = getRuntimePath("emuloExports");
   const temporaryRoot = join(exportRoot, `.tmp-${randomUUID()}`);
   const sessions = listSourceSessions(database).sort(compareSourceSessions);

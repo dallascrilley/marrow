@@ -2,7 +2,7 @@
 project: agent-session-distillery
 owner: dallascrilley
 last_reviewed: 2026-07-09
-version: 1.2.0
+version: 1.3.0
 ---
 
 # Launch Criteria
@@ -86,6 +86,15 @@ retention workflows.
   status: validated
   validated_on: 2026-07-13
   proof: test/integration/ingest-lifecycle.test.mjs, test/parsed-cleanup.test.mjs, test/scheduled-memory-pipeline.test.mjs
+
+- id: external-staging-storage
+  feature: Parsed and reduced intermediates can use a pre-created external filesystem without moving the durable control plane or weakening cleanup recovery.
+  test: Run `storage migrate-staging` dry-run/apply against an isolated runtime and `/Volumes/SSK`, cut over with `AGENT_SESSION_DISTILLERY_STAGING_ROOT`, exercise inventory and cleanup, make the proof root temporarily unavailable, then restore it.
+  proof_required: Matching source/destination hashes and different device IDs; local migration receipt; external inventory; nonzero absent-root reader; successful rollback; source intact; proof root removed.
+  proof_level: B
+  status: validated
+  validated_on: 2026-07-18
+  proof: docs/ops/proofs/2026-07-18-external-staging-storage.md
 
 - id: emulo-profile-evidence-bridge
   feature: ASD publishes a private, versioned user-message corpus that the private Emulo mirror can validate without reparsing raw logs or starting model work.

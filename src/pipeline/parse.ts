@@ -1,5 +1,5 @@
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type {
   ParseTranscriptOptions,
@@ -11,9 +11,9 @@ import type { CursorTranscriptRecord } from "../adapters/cursor/intermediate.js"
 import { parseCursorTranscript } from "../adapters/cursor/parse-transcript.js";
 import { parseKimiTranscript } from "../adapters/kimi/parse-transcript.js";
 import { parsePiTranscript } from "../adapters/pi/parse-transcript.js";
-import { getRuntimePath } from "../config/paths.js";
 import { getPhaseCheckpoint, insertRunHistory, transitionPhase } from "../db/ledger.js";
 import type { SourceSessionRow } from "../db/queries.js";
+import { ensureStagingRoot, getParsedStagingArtifactPath } from "../storage/staging.js";
 
 export type ParsePhaseResult = {
   artifactPath: string;
@@ -27,6 +27,7 @@ export async function runParsePhase(input: {
   resume?: boolean;
   sourceSession: SourceSessionRow;
 }): Promise<ParsePhaseResult> {
+  await ensureStagingRoot();
   const artifactPath = getParsedArtifactPath(input.sourceSession.session_id);
   const checkpoint = getPhaseCheckpoint(input.database, input.sourceSession.id, "parsed");
 
@@ -110,7 +111,7 @@ export async function runParsePhase(input: {
 }
 
 export function getParsedArtifactPath(sessionId: string): string {
-  return join(getRuntimePath("staging"), sessionId, "parsed-records.json");
+  return getParsedStagingArtifactPath(sessionId);
 }
 
 async function writeJsonArtifact(path: string, value: unknown): Promise<void> {

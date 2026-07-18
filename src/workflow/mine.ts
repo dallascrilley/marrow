@@ -7,6 +7,7 @@ import { type Summary, summarySchema, type Turn, turnSchema } from "../models/ca
 import { sanitizeLearningStatement } from "../pipeline/prompt-sanitize.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
 import { loadSessionIndexRecords, type SessionIndexRecord } from "../read/session-index.js";
+import { preflightStagingReadRoot } from "../storage/staging.js";
 import { loadGlobalInstinct, loadGlobalInstinctIds } from "../v2/instinct/global-store.js";
 import { canonicalKey } from "../v2/instinct/id.js";
 import type { Instinct } from "../v2/instinct/schema.js";
@@ -177,6 +178,7 @@ const markerRules: Array<{
 export async function mineWorkflowCandidates(
   options: MineWorkflowOptions = {},
 ): Promise<WorkflowMineResult> {
+  await preflightStagingReadRoot();
   const days = options.days ?? DEFAULT_DAYS;
   const limit = options.limit ?? DEFAULT_LIMIT;
   const source = options.source ?? null;

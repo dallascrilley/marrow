@@ -4,6 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { listSourceSessions } from "../db/ledger.js";
 import type { SourceSessionRow } from "../db/queries.js";
 import { summarySchema } from "../models/canonical.js";
+import { preflightStagingReadRoot } from "../storage/staging.js";
 import {
   getSessionManifestPath,
   getSessionManifestPathForRevision,
@@ -233,6 +234,7 @@ async function loadOrBuildReduced(
   database: DatabaseSync,
   sourceSession: SourceSessionRow,
 ): Promise<ReducedArtifact> {
+  await preflightStagingReadRoot();
   const artifactPath = getReducedArtifactPath(sourceSession.session_id);
   if (await fileExists(artifactPath)) {
     return JSON.parse(await readFile(artifactPath, "utf8")) as ReducedArtifact;

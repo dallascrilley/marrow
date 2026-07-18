@@ -20,11 +20,13 @@ import { runSummarizePhase } from "../dist/pipeline/summarize-phase.js";
 import { getSessionSummaryJsonPath } from "../dist/writers/summary-writer.js";
 
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const stagingOverrideEnvVar = "AGENT_SESSION_DISTILLERY_STAGING_ROOT";
 
 async function withRuntimeRoot(run) {
   const sandboxBase = await mkdtemp(join(tmpdir(), "asd-rereduce-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
+  const previousStagingOverride = process.env[stagingOverrideEnvVar];
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
   try {
     await run(runtimeRoot);
@@ -33,6 +35,11 @@ async function withRuntimeRoot(run) {
       delete process.env[runtimeOverrideEnvVar];
     } else {
       process.env[runtimeOverrideEnvVar] = previousOverride;
+    }
+    if (previousStagingOverride === undefined) {
+      delete process.env[stagingOverrideEnvVar];
+    } else {
+      process.env[stagingOverrideEnvVar] = previousStagingOverride;
     }
     await rm(sandboxBase, { force: true, recursive: true });
   }
@@ -120,6 +127,25 @@ test("executePipelineRereduce refuses to run without an explicit selector", asyn
     await assert.rejects(
       executePipelineRereduce({ args: [], commandPath: [], output: makeOutput() }, database),
       /explicit selector/,
+    );
+    database.close();
+  });
+});
+
+test("pipeline rereduce fails closed when configured staging is unavailable", async () => {
+  await withRuntimeRoot(async (runtimeRoot) => {
+    const database = await createLedger();
+    process.env[stagingOverrideEnvVar] = join(runtimeRoot, "missing-volume", "staging");
+    await assert.rejects(
+      executePipelineRereduce(
+        {
+          args: ["--all-with-parsed", "--dry-run"],
+          commandPath: [],
+          output: makeOutput(),
+        },
+        database,
+      ),
+      /staging root is unavailable/,
     );
     database.close();
   });
