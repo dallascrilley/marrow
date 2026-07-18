@@ -861,8 +861,12 @@ test("report --html writes a static dashboard artifact via CLI", async () => {
     assert.match(html, /Show me the phase 1 dashboard\./);
     assert.match(html, /node dist\/cli\.js report --html/);
 
-    assert.match(html, /Pipeline health/);
-    assert.match(html, /Read-only operational snapshot from the current runtime ledger\./);
+    assert.match(html, /Operator health/);
+    assert.match(
+      html,
+      /Shared read-only health, recall delivery, and pipeline snapshot from the current runtime\./,
+    );
+    assert.match(html, /"operator_health":\{"reasons":/);
     assert.match(html, /Knowledge & instincts/);
     assert.match(
       html,
