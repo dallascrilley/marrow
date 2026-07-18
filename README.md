@@ -389,6 +389,9 @@ budget, judge cache, and telemetry plumbing before appending `judged` decision
 notes. `workflow apply` is draft-only: it requires `--dry-run` and writes
 Markdown/JSON drafts under `reports/workflow-drafts/`.
 
+The installed weekly consumer cadence and its evolve-intake routing policy are
+documented in [`docs/recipes/workflow-mining.md`](docs/recipes/workflow-mining.md).
+
 Audit summary and deletion-readiness quality across already-ingested sessions:
 
 ```bash
