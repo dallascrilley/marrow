@@ -183,10 +183,19 @@ async function validateDestination(requested: string, sourceRoot: string): Promi
     }
     const value = JSON.parse(await readFile(join(destinationRoot, markerName), "utf8")) as {
       kind?: unknown;
+      source_root?: unknown;
       version?: unknown;
     };
-    if (value.kind !== markerKind || value.version !== markerVersion) {
+    if (
+      value.kind !== markerKind ||
+      value.version !== markerVersion ||
+      typeof value.source_root !== "string"
+    ) {
       throw new Error("invalid ASD staging ownership marker");
+    }
+    const markerSource = await realpath(value.source_root).catch(() => null);
+    if (markerSource !== sourceCanonical) {
+      throw new Error(`ASD staging ownership marker source mismatch: expected ${sourceCanonical}`);
     }
     await validateOwnedDestinationEntries(destinationRoot);
   }
@@ -237,6 +246,14 @@ async function inspectSourceFiles(
         source_path: sourcePath,
         status: destinationHash === hash ? "skip" : "copy",
       });
+    }
+  }
+  const sourceRelativePaths = new Set(files.map((file) => file.relative_path));
+  for (const destinationRelativePath of await listDestinationArtifacts(destinationRoot)) {
+    if (!sourceRelativePaths.has(destinationRelativePath)) {
+      throw new Error(
+        `destination contains an artifact absent from source: ${join(destinationRoot, destinationRelativePath)}`,
+      );
     }
   }
   return files;
@@ -292,6 +309,19 @@ async function validateOwnedDestinationEntries(root: string): Promise<void> {
       }
     }
   }
+}
+
+async function listDestinationArtifacts(root: string): Promise<string[]> {
+  const artifacts: string[] = [];
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    for (const artifact of await readdir(join(root, entry.name), { withFileTypes: true })) {
+      if (artifact.isFile() && artifactNames.has(artifact.name)) {
+        artifacts.push(join(entry.name, artifact.name));
+      }
+    }
+  }
+  return artifacts;
 }
 
 async function removeIncompleteTemporaryFiles(root: string): Promise<void> {

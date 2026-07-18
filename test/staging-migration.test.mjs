@@ -164,3 +164,28 @@ test("staging migration never overwrites a mismatched destination artifact", asy
     assert.equal(await readFile(destinationArtifact, "utf8"), "different\n");
   });
 });
+
+test("staging migration rejects a destination owned by another source or containing stale sessions", async () => {
+  await withMigrationSandbox(async ({ destinationRoot, runtimeRoot, sandbox }) => {
+    await runStagingMigration({ apply: true, to: destinationRoot });
+
+    const staleArtifact = join(destinationRoot, "stale-session", "reduced-session.json");
+    await mkdir(dirname(staleArtifact), { recursive: true });
+    await writeFile(staleArtifact, '{"turns":[]}\n');
+    await assert.rejects(
+      runStagingMigration({ apply: false, to: destinationRoot }),
+      /artifact absent from source/,
+    );
+    await rm(dirname(staleArtifact), { force: true, recursive: true });
+
+    const otherRuntime = join(sandbox, "other-runtime");
+    await mkdir(join(otherRuntime, "staging", "session-a"), { recursive: true });
+    await writeFile(join(otherRuntime, "staging", "session-a", "parsed-records.json"), "[1,2,3]\n");
+    process.env[runtimeRootOverrideEnvVar] = otherRuntime;
+    await assert.rejects(
+      runStagingMigration({ apply: false, to: destinationRoot }),
+      /ownership marker source mismatch/,
+    );
+    process.env[runtimeRootOverrideEnvVar] = runtimeRoot;
+  });
+});
