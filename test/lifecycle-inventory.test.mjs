@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import { executeStorageInventory } from "../dist/commands/storage-inventory.js";
-import { runtimeRootOverrideEnvVar } from "../dist/config/paths.js";
+import { runtimeRootOverrideEnvVar, stagingRootOverrideEnvVar } from "../dist/config/paths.js";
 import {
   createLedger,
   transitionPhase,
@@ -217,6 +217,32 @@ test("inventory groups runtime artifacts by lifecycle and conservative retention
       assert.match(reclaimable.reason, /durable downstream retention artifacts/i);
     } finally {
       database.close();
+    }
+  });
+});
+
+test("inventory reports an unavailable configured staging root without creating it", async () => {
+  await withRuntimeRoot(async (runtimeRoot) => {
+    const database = await createLedger();
+    const missingStagingRoot = join(runtimeRoot, "missing-volume", "staging");
+    const previousStagingRoot = process.env[stagingRootOverrideEnvVar];
+    process.env[stagingRootOverrideEnvVar] = missingStagingRoot;
+    try {
+      const report = await listRuntimeLifecycleInventory(database);
+      assert.equal(report.staging.available, false);
+      assert.equal(report.staging.configured, true);
+      assert.equal(report.staging.root, missingStagingRoot);
+      assert.match(report.staging.error, /staging root is unavailable/);
+      await assert.rejects(access(missingStagingRoot), {
+        code: "ENOENT",
+      });
+    } finally {
+      database.close();
+      if (previousStagingRoot === undefined) {
+        delete process.env[stagingRootOverrideEnvVar];
+      } else {
+        process.env[stagingRootOverrideEnvVar] = previousStagingRoot;
+      }
     }
   });
 });

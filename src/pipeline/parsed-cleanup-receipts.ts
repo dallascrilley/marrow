@@ -7,6 +7,11 @@ import type { DatabaseSync } from "node:sqlite";
 import { getRuntimePath } from "../config/paths.js";
 import type { ParsedIntermediateCleanupCandidate } from "../read/lifecycle-inventory.js";
 import {
+  getParsedStagingArtifactPath,
+  getStagingQuarantineRoot,
+  getStagingRoot,
+} from "../storage/staging.js";
+import {
   applyParsedIntermediateCleanup,
   ParsedIntermediateCleanupError,
   type ParsedIntermediateCleanupFileSystem,
@@ -14,6 +19,7 @@ import {
   type ParsedIntermediateCleanupResult,
   planParsedIntermediateCleanupQuarantines,
   prepareParsedIntermediateCleanupQuarantines,
+  selectParsedCleanupQuarantineRoot,
 } from "./parsed-cleanup.js";
 
 type ParsedCleanupReceiptStatus = "applying" | "completed" | "failed";
@@ -382,14 +388,19 @@ function makeReceiptConflict(
 }
 
 function isCentralQuarantinePath(path: string): boolean {
-  const root = join(getRuntimePath("deletes"), "parsed-cleanup-quarantine");
-  const segments = relative(root, path).split(sep);
-  return (
-    segments.length === 1 &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.quarantine$/i.test(
-      segments[0] ?? "",
-    )
-  );
+  const roots = [
+    join(getRuntimePath("deletes"), "parsed-cleanup-quarantine"),
+    getStagingQuarantineRoot(),
+  ];
+  return roots.some((root) => {
+    const segments = relative(root, path).split(sep);
+    return (
+      segments.length === 1 &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.quarantine$/i.test(
+        segments[0] ?? "",
+      )
+    );
+  });
 }
 
 export async function applyParsedIntermediateCleanupWithReceipt(input: {
@@ -406,8 +417,12 @@ export async function applyParsedIntermediateCleanupWithReceipt(input: {
   supersedesReceiptPaths?: readonly string[];
 }): Promise<{ cleanup: ParsedIntermediateCleanupResult; receiptPath: string }> {
   const candidates = input.candidates.map((candidate) => ({ ...candidate }));
+  const quarantineRoot =
+    candidates.length > 0 && (input.quarantines === undefined || input.quarantines.length === 0)
+      ? await selectParsedCleanupQuarantineRoot(input.fileSystem)
+      : undefined;
   const quarantines = await prepareParsedIntermediateCleanupQuarantines(
-    planParsedIntermediateCleanupQuarantines(candidates, input.quarantines),
+    planParsedIntermediateCleanupQuarantines(candidates, input.quarantines, quarantineRoot),
     input.fileSystem,
   );
   const receiptPath = getReceiptPath(input.createdAt);
@@ -563,12 +578,13 @@ function parseCandidate(value: unknown, receiptPath: string): ParsedIntermediate
   ) {
     throw new Error(`Invalid candidate in parsed cleanup receipt ${receiptPath}`);
   }
-  const stagingRoot = getRuntimePath("staging");
+  const stagingRoot = getStagingRoot();
   const segments = relative(stagingRoot, value.path).split(sep);
   if (
     segments.length !== 2 ||
     segments[0] !== value.session_id ||
-    segments[1] !== "parsed-records.json"
+    segments[1] !== "parsed-records.json" ||
+    value.path !== getParsedStagingArtifactPath(value.session_id)
   ) {
     throw new Error(`Unsafe candidate path in parsed cleanup receipt ${receiptPath}`);
   }
