@@ -32,12 +32,6 @@ export function getRuntimeRoot(): string {
 }
 
 export function getRuntimePath(name: RuntimePathName): string {
-  if (name === "staging") {
-    const stagingOverride = process.env[stagingRootOverrideEnvVar];
-    if (stagingOverride && stagingOverride.length > 0) {
-      return stagingOverride;
-    }
-  }
   const suffix = runtimePathSuffixes[name];
   return suffix.length > 0 ? join(getRuntimeRoot(), suffix) : getRuntimeRoot();
 }
