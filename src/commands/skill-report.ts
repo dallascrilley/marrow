@@ -15,6 +15,7 @@ import {
 } from "../skill/adherence.js";
 import { parseSkillCommandOptions } from "../skill/parse-skill-options.js";
 import { readSkillMetadata, resolveSkillPath } from "../skill/resolve-skill.js";
+import { preflightStagingReadRoot } from "../storage/staging.js";
 
 export async function executeSkillReport(
   context: CommandContext,
@@ -35,6 +36,7 @@ export async function executeSkillReport(
   const skillContents = await readFile(skillPath, "utf8");
   const skill = await readSkillMetadata(skillPath);
   const checklist = parseSkillChecklist(skillContents);
+  await preflightStagingReadRoot();
   const records = await loadSessionIndexRecords({ database, fallbackToBuild: true });
   const sessions: SessionAdherenceScore[] = [];
 

@@ -24,7 +24,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { executeStorageParsedCleanup } from "../dist/commands/storage-parsed-cleanup.js";
-import { runtimeRootOverrideEnvVar } from "../dist/config/paths.js";
+import { runtimeRootOverrideEnvVar, stagingRootOverrideEnvVar } from "../dist/config/paths.js";
 import {
   createLedger,
   transitionPhase,
@@ -37,7 +37,10 @@ import {
   ParsedIntermediateCleanupError,
   planParsedIntermediateCleanupQuarantines,
 } from "../dist/pipeline/parsed-cleanup.js";
-import { applyParsedIntermediateCleanupWithReceipt } from "../dist/pipeline/parsed-cleanup-receipts.js";
+import {
+  applyParsedIntermediateCleanupWithReceipt,
+  loadPendingParsedIntermediateCleanup,
+} from "../dist/pipeline/parsed-cleanup-receipts.js";
 import {
   listParsedIntermediateCleanupCandidates,
   listParsedIntermediateCleanupCandidatesForSessions,
@@ -59,6 +62,7 @@ const parsedCleanupHelper = join(projectRoot, "scripts", "parsed-cleanup-fs.py")
 
 async function withRuntimeRoot(run) {
   const previousRoot = process.env[runtimeRootOverrideEnvVar];
+  const previousStagingRoot = process.env[stagingRootOverrideEnvVar];
   const runtimeRoot = await mkdtemp(join(tmpdir(), "asd-parsed-cleanup-"));
   process.env[runtimeRootOverrideEnvVar] = runtimeRoot;
 
@@ -70,9 +74,57 @@ async function withRuntimeRoot(run) {
     } else {
       process.env[runtimeRootOverrideEnvVar] = previousRoot;
     }
+    if (previousStagingRoot === undefined) {
+      delete process.env[stagingRootOverrideEnvVar];
+    } else {
+      process.env[stagingRootOverrideEnvVar] = previousStagingRoot;
+    }
     await rm(runtimeRoot, { force: true, recursive: true });
   }
 }
+
+test("completed cleanup receipts do not bind a later staging-root cutover", async () => {
+  await withRuntimeRoot(async (runtimeRoot) => {
+    const receiptDirectory = join(runtimeRoot, "deletes", "receipts");
+    const originalPath = join(runtimeRoot, "staging", "completed", "parsed-records.json");
+    await mkdir(receiptDirectory, { recursive: true });
+    await writeFile(
+      join(receiptDirectory, "parsed-cleanup-completed.json"),
+      `${JSON.stringify({
+        candidates: [
+          {
+            bytes: 1,
+            device: 1,
+            inode: 1,
+            lifecycle_state: "deletion_candidate",
+            modified_at: now.toISOString(),
+            path: originalPath,
+            reason: "completed",
+            session_id: "completed",
+          },
+        ],
+        created_at: now.toISOString(),
+        deleted_paths: [originalPath],
+        max_total_bytes: null,
+        older_than_days: 30,
+        pending_retry_count: 0,
+        quarantines: [],
+        receipt_path: "completed.json",
+        retried_by: null,
+        skipped_paths: [],
+        status: "completed",
+      })}\n`,
+      "utf8",
+    );
+    const externalRoot = join(runtimeRoot, "external-staging");
+    await mkdir(externalRoot);
+    process.env[stagingRootOverrideEnvVar] = externalRoot;
+
+    const pending = await loadPendingParsedIntermediateCleanup();
+    assert.equal(pending.pendingReceiptCount, 0);
+    assert.deepEqual(pending.candidates, []);
+  });
+});
 
 function session(sessionId, ingestStatus = "archived") {
   return {

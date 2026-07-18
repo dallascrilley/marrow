@@ -39,6 +39,7 @@ import { executeSkillEvidence } from "./commands/skill-evidence.js";
 import { executeSkillReport } from "./commands/skill-report.js";
 import { executeStats } from "./commands/stats.js";
 import { executeStorageInventory } from "./commands/storage-inventory.js";
+import { executeStorageMigrateStaging } from "./commands/storage-migrate-staging.js";
 import { executeStorageParsedCleanup } from "./commands/storage-parsed-cleanup.js";
 import { executeStorageReportRetention } from "./commands/storage-report-retention.js";
 import { executeWorkflowApply } from "./commands/workflow-apply.js";
@@ -221,6 +222,11 @@ const commandTree: Record<string, CommandDefinition> = {
         description:
           "Classify runtime files by artifact kind, lifecycle state, age, and conservative retention dependency. Pass --json, --state, or --older-than-days.",
         execute: async (context) => withLedger(context, executeStorageInventory),
+      },
+      "migrate-staging": {
+        description:
+          "Dry-run or apply a verified staging copy to a pre-created local filesystem. Requires --to; add --apply to copy. Source files are never deleted.",
+        execute: async (context) => executeStorageMigrateStaging(context),
       },
       "retain-reports": {
         description:

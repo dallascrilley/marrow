@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 export const runtimeRootOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+export const stagingRootOverrideEnvVar = "AGENT_SESSION_DISTILLERY_STAGING_ROOT";
 
 const runtimePathSuffixes = {
   root: "",

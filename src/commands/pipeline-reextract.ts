@@ -10,6 +10,7 @@ import { runArchivePhase } from "../pipeline/archive.js";
 import { hasProcessChatter } from "../pipeline/artifact-heuristics.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
 import { runSummarizePhase } from "../pipeline/summarize-phase.js";
+import { preflightStagingReadRoot } from "../storage/staging.js";
 import { getSessionSummaryJsonPath } from "../writers/summary-writer.js";
 import { runExtractPhase } from "./ingest-backfill.js";
 
@@ -91,6 +92,7 @@ export async function executePipelineReextract(
       "Refusing to re-extract all sessions without an explicit selector. Pass --process-chatter-only or --session-id <id>.",
     );
   }
+  await preflightStagingReadRoot();
 
   const sessions = await selectReextractSessions(database, options);
 
