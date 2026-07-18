@@ -3,9 +3,9 @@ import {
   access,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   realpath,
-  readdir,
   rm,
   symlink,
   writeFile,
@@ -13,9 +13,8 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
-
-import { runtimeRootOverrideEnvVar, stagingRootOverrideEnvVar } from "../dist/config/paths.js";
 import { parseStorageMigrateStagingOptions } from "../dist/commands/storage-migrate-staging.js";
+import { runtimeRootOverrideEnvVar, stagingRootOverrideEnvVar } from "../dist/config/paths.js";
 import { runStagingMigration } from "../dist/pipeline/staging-migration.js";
 
 test("storage migrate-staging options are explicit and dry-run by default", () => {

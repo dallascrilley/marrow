@@ -6,7 +6,6 @@ import type { CommandContext } from "../cli.js";
 import { summarySchema, turnSchema } from "../models/canonical.js";
 import { getReducedArtifactPath } from "../pipeline/reduce.js";
 import { loadSessionIndexRecords } from "../read/session-index.js";
-import { preflightStagingReadRoot } from "../storage/staging.js";
 import {
   buildSkillSuggestions,
   parseSkillChecklist,
@@ -16,6 +15,7 @@ import {
 } from "../skill/adherence.js";
 import { parseSkillCommandOptions } from "../skill/parse-skill-options.js";
 import { readSkillMetadata, resolveSkillPath } from "../skill/resolve-skill.js";
+import { preflightStagingReadRoot } from "../storage/staging.js";
 
 export async function executeSkillReport(
   context: CommandContext,

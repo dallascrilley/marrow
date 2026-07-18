@@ -6,12 +6,6 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { getRuntimePath, getRuntimeRoot } from "../config/paths.js";
 import {
-  getParsedStagingArtifactPath,
-  getStagingRoot,
-  inspectStagingRoot,
-  preflightStagingReadRoot,
-} from "../storage/staging.js";
-import {
   getDeletionCandidateBySessionId,
   getSourceSessionBySessionId,
   listDeletionCandidates,
@@ -19,6 +13,12 @@ import {
 } from "../db/ledger.js";
 import type { DeletionCandidateRow, SourceSessionRow } from "../db/queries.js";
 import { ingestStatuses } from "../models/canonical.js";
+import {
+  getParsedStagingArtifactPath,
+  getStagingRoot,
+  inspectStagingRoot,
+  preflightStagingReadRoot,
+} from "../storage/staging.js";
 import {
   getProjectKnowledgeSessionPath,
   getUserKnowledgeSessionPath,

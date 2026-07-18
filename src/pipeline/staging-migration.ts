@@ -4,16 +4,15 @@ import {
   lstat,
   mkdir,
   open,
-  readFile,
   readdir,
+  readFile,
   realpath,
   rename,
   rm,
-  stat,
   statfs,
   writeFile,
 } from "node:fs/promises";
-import { isAbsolute, dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Transform, Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 

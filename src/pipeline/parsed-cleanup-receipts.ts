@@ -82,13 +82,15 @@ export async function loadPendingParsedIntermediateCleanup(): Promise<PendingPar
       continue;
     }
     const path = join(receiptDirectory, entry.name);
-    const receipt = parseReceipt(await readFile(path, "utf8"), path);
+    const contents = await readFile(path, "utf8");
+    const header = parseReceiptHeader(contents, path);
     if (
-      (receipt.status !== "applying" && receipt.status !== "failed") ||
-      receipt.retried_by !== null
+      (header.status !== "applying" && header.status !== "failed") ||
+      header.retried_by !== null
     ) {
       continue;
     }
+    const receipt = parseReceipt(contents, path);
     pendingReceiptCount += 1;
     receiptPaths.push(path);
     for (const candidate of receipt.candidates) {
@@ -131,6 +133,25 @@ export async function loadPendingParsedIntermediateCleanup(): Promise<PendingPar
     pendingReceiptCount,
     quarantines,
     receiptPaths,
+  };
+}
+
+function parseReceiptHeader(
+  contents: string,
+  path: string,
+): Pick<ParsedCleanupReceipt, "retried_by" | "status"> {
+  let value: unknown;
+  try {
+    value = JSON.parse(contents);
+  } catch (error) {
+    throw new Error(`Invalid parsed cleanup receipt JSON at ${path}`, { cause: error });
+  }
+  if (!isRecord(value) || !isReceiptStatus(value.status)) {
+    throw new Error(`Invalid parsed cleanup receipt at ${path}`);
+  }
+  return {
+    retried_by: typeof value.retried_by === "string" ? value.retried_by : null,
+    status: value.status,
   };
 }
 

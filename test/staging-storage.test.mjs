@@ -19,6 +19,7 @@ import {
   runtimeRootOverrideEnvVar,
   stagingRootOverrideEnvVar,
 } from "../dist/config/paths.js";
+import { selectParsedCleanupQuarantineRoot } from "../dist/pipeline/parsed-cleanup.js";
 import {
   ensureStagingRoot,
   getParsedStagingArtifactPath,
@@ -28,7 +29,6 @@ import {
   inspectStagingRoot,
   requireStagingRoot,
 } from "../dist/storage/staging.js";
-import { selectParsedCleanupQuarantineRoot } from "../dist/pipeline/parsed-cleanup.js";
 
 async function withStagingEnvironment(run) {
   const sandboxBase = await mkdtemp(join(await realpath(tmpdir()), "asd-staging-storage-"));

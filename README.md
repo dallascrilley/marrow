@@ -68,7 +68,11 @@ npm link
 asd --help
 ```
 
-By default the runtime lives at `~/.agent-session-distillery`. Override it with `AGENT_SESSION_DISTILLERY_ROOT` when you want an isolated sandbox or a scheduled-job-specific path.
+By default the runtime lives at `~/.agent-session-distillery`. Override it with
+`AGENT_SESSION_DISTILLERY_ROOT` when you want an isolated sandbox or a scheduled-job-specific
+path. `AGENT_SESSION_DISTILLERY_STAGING_ROOT` moves only parsed and reduced staging artifacts to
+a pre-created absolute directory; durable state remains under the runtime root. A configured
+staging root must be a real, writable directory and fails closed if its volume is unavailable.
 
 ```bash
 AGENT_SESSION_DISTILLERY_ROOT=/tmp/asd-demo node dist/cli.js stats
@@ -146,7 +150,8 @@ The CLI writes a local runtime under `~/.agent-session-distillery` or the path s
 Important directories:
 
 - `ledger/` — SQLite lifecycle state and operational history
-- `staging/<session-id>/` — parsed and reduced intermediates
+- `staging/<session-id>/` — parsed and reduced intermediates; may be relocated with
+  `AGENT_SESSION_DISTILLERY_STAGING_ROOT`
 - `summaries/by-session/<session-id>/` — `summary.json` and `summary.md`
 - `knowledge/projects/<project-key>/` — deterministic project-learning candidate JSONL
 - `knowledge/projects-reviewed/<project-key>/` — LLM-reviewed project learnings applied as a non-mutating sidecar
@@ -323,14 +328,38 @@ The manual command defaults to a 30-day dry run. `--apply` deletes only
 downstream retention, writes a receipt under `deletes/receipts/`, and never removes
 `reduced-session.json`, ledgers, normalized outputs, reports, or audit artifacts. Applying
 receipts freeze candidates before mutation and persist exact original/quarantine mappings for
-fail-closed restart recovery. Temporary files live only under the fixed
-`deletes/parsed-cleanup-quarantine/` boundary; path conflicts or redirected session directories
-retain that copy and fail without overwriting a replacement. Descriptor-relative quarantine
+fail-closed restart recovery. Temporary files use `deletes/parsed-cleanup-quarantine/` when
+staging and the runtime share a filesystem. Across filesystems they use the reserved
+`.parsed-cleanup-quarantine/` directory in the configured staging root so quarantine remains
+atomic. The selected root and directory identity are persisted in the applying receipt; path
+conflicts or redirected session directories retain that copy and fail without overwriting a
+replacement. Descriptor-relative quarantine
 operations use the bundled Python helper with `python3` (`ASD_PYTHON` or `PYTHON` overrides the
 executable); an unavailable helper fails before mutation. Use `--older-than-days <n>` to tune
 the ordinary age gate and
 `--max-total-bytes <n>` to select the oldest safe records until safe parsed staging is under
 the byte ceiling. Unsafe, stale, incomplete, and unknown records remain untouched.
+
+Copy staging to a pre-created local filesystem without deleting the source:
+
+```bash
+mkdir -p /Volumes/SSK/agent-session-distillery/staging
+node dist/cli.js storage migrate-staging --to /Volumes/SSK/agent-session-distillery/staging
+node dist/cli.js storage migrate-staging --to /Volumes/SSK/agent-session-distillery/staging --apply
+```
+
+The first command is a non-mutating dry run. Apply copies only exact `parsed-records.json` and
+`reduced-session.json` files through destination-side temporary files, verifies SHA-256 hashes,
+fsyncs and atomically renames them, and writes a manifest plus receipt under
+`reports/storage-migrations/`. Reruns skip matching files. Pending cleanup receipts, insufficient
+capacity, symlinks, unsupported entries, changed source identities, mismatched destination files,
+or a destination owned by another source fail before cutover. The original staging tree is never
+deleted automatically. Follow the [external staging recipe](docs/recipes/external-staging-storage.md)
+before setting the environment variable in an operator launcher or scheduled job.
+
+S3 is not supported as the live staging filesystem. It remains a deferred, separately approved
+cold-tier offload/restore option because object storage does not provide the directory,
+descriptor, and atomic-rename semantics required by parsed cleanup.
 
 Retain bounded generated archive and review reports without touching audit evidence:
 
@@ -357,6 +386,8 @@ state, retention dependency, count, bytes, and oldest/newest modification time. 
 intermediates are only labeled `reclaimable` when a safe deletion candidate confirms
 durable downstream retention artifacts; all other recognized artifacts remain conservatively
 required. Unclassified paths are reported as `unknown` and are never cleanup-eligible.
+JSON and human output also report the selected staging root, whether it is configured and
+available, its device identity, and write readiness without creating a missing configured path.
 
 Static offline dashboard export:
 
