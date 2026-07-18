@@ -58,6 +58,41 @@ Markdown draft plus JSON apply report under `reports/workflow-drafts/` without
 modifying skills, rules, docs, or vault files. Dismissed and already-encoded
 candidates are refused.
 
+## Weekly consumer cadence
+
+The Codex automation `asd-weekly-workflow-triage` runs every Monday at 9:10 AM
+local time in an app-managed worktree. It builds ASD with Node 22, runs the
+90-day `workflow mine` and `workflow review` commands, and consumes undecided
+candidates with this fail-closed policy:
+
+- strong, adopt-recommended candidates with zero contradictions are checked
+  against current Hub contracts and installed skills;
+- already-covered guidance is adopted with a note naming the covering section;
+- uncovered strong guidance is written to the canonical global evolve intake
+  before the ASD decision records the evolve receipt;
+- weak candidates are dismissed, medium candidates are deferred, and
+  contradicted or ambiguous candidates are deferred for operator review.
+
+All `workflow show`, `adopt`, `dismiss`, and `defer` commands use `--days 90`
+so decisions resolve the same candidate set produced by the scheduled mine and
+review commands.
+
+The automation never runs `workflow judge`, `workflow apply`, OpenRouter, Emulo
+mining, or direct skill/contract writes. New authoring signals use:
+
+```bash
+python ~/.hub/artifacts/skills/evolve/source/scripts/intake.py \
+  --scope global \
+  --type pattern \
+  --confidence high \
+  --source "asd:<candidate-id>" \
+  --body "<sanitized candidate summary and proposed target>"
+```
+
+Each run reports command exits, sessions scanned, candidate decisions and notes,
+evolve receipts, and any remaining undecided candidates. A run with no candidates
+is a successful no-op.
+
 ## Privacy boundary
 
 The report cites ASD session IDs and topics. It does not include local transcript
