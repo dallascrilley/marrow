@@ -27,16 +27,26 @@ export type PiDiscoverSkipReason = "ephemeral_path" | "test_session_name";
  *
  * The walker descends one level per workspace dir and collects every
  * `.jsonl` file as a session. Symlinks and dotfiles are skipped. For each
- * session the walker reads only the `session` line (line 0) to populate
- * the workspace mapping; the full file is streamed later by the parse
- * phase.
+ * session the walker reads the leading `session` record (line 0, or after an
+ * OMP `title` pad line) to populate the workspace mapping; the full file is
+ * streamed later by the parse phase.
+ *
+ * Override the sessions root with `options.piSessionsRoot` or env
+ * `ASD_PI_SESSIONS_ROOT` / `PI_SESSIONS_ROOT` (e.g. `~/.omp/agent/sessions`).
  */
 export async function discoverPiInputs(
   options: DiscoverPiInputsOptions = {},
 ): Promise<PiDiscoveryResult> {
   const homeDir = resolve(options.homeDir ?? homedir());
+  // ASD_PI_SESSIONS_ROOT (or PI_SESSIONS_ROOT) lets operators point at OMP
+  // (~/.omp/agent/sessions) or other Pi-compatible trees without code changes.
+  const envSessionsRoot =
+    process.env.ASD_PI_SESSIONS_ROOT?.trim() || process.env.PI_SESSIONS_ROOT?.trim();
   const piSessionsRoot = resolve(
-    options.piSessionsRoot ?? join(homeDir, ".pi", "agent", "sessions"),
+    options.piSessionsRoot ??
+      (envSessionsRoot && envSessionsRoot.length > 0
+        ? envSessionsRoot
+        : join(homeDir, ".pi", "agent", "sessions")),
   );
   const sessionPaths = await discoverSessionPaths(piSessionsRoot);
   const transcripts: PiTranscriptDiscovery[] = [];
