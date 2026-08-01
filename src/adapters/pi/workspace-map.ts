@@ -6,16 +6,22 @@ import { parseJsonLine } from "../_common/jsonl.js";
 import { pickFirstString, readValueAtPath } from "../_common/text-extract.js";
 import type { PiSessionMeta, PiWorkspaceMapping } from "./intermediate.js";
 
-const PI_SESSIONS_DIRNAME_MARKER = ".pi";
+// Compared after stripDotPrefix(".pi" → "pi", ".omp" → "omp").
+const PI_SESSIONS_DIRNAME_MARKER = "pi";
+const OMP_SESSIONS_DIRNAME_MARKER = "omp";
 const PI_AGENT_DIRNAME_MARKER = "agent";
 const PI_SESSIONS_LEAF_DIRNAME_MARKER = "sessions";
 
 /**
- * Read the `session` line (line 0) from a Pi session JSONL file and pull the
- * workspace-mapping fields plus sidecar metadata. Returns null when the file
- * is empty or doesn't start with a `session` line.
+ * Read the `session` record from a Pi/OMP session JSONL file and pull the
+ * workspace-mapping fields plus sidecar metadata. Returns null when no
+ * `session` line is found in the leading preamble.
  *
- * The Pi adapter prefers this content-derived cwd over the path-encoded
+ * Classic Pi files start with `session` on line 0. OMP (oh-my-pi) files often
+ * write a `title` pad line first, then `session` — scan the first few
+ * non-empty lines so both layouts resolve a content-derived cwd.
+ *
+ * The adapter prefers this content-derived cwd over the path-encoded
  * workspace slug because the path encoding can collide if a workspace
  * itself contains `--`.
  */
@@ -24,27 +30,34 @@ export async function readPiSessionMeta(sessionPath: string): Promise<PiSessionM
   const lines = createInterface({ crlfDelay: Infinity, input: stream });
 
   let result: PiSessionMeta | null = null;
+  let nonEmptyLinesSeen = 0;
+  const maxPreambleLines = 16;
 
   try {
     for await (const rawLine of lines) {
       const line = rawLine.trim();
       if (line.length === 0) continue;
 
-      const parsed = parseJsonLine(line, sessionPath, 1, "Pi session JSONL");
-      if (parsed.type !== "session") {
-        return null;
+      nonEmptyLinesSeen += 1;
+      const parsed = parseJsonLine(line, sessionPath, nonEmptyLinesSeen, "Pi session JSONL");
+      if (parsed.type === "session") {
+        const versionValue = readValueAtPath(parsed, ["version"]);
+        const version = typeof versionValue === "number" ? versionValue : null;
+
+        result = {
+          cwd: pickFirstString(parsed, [["cwd"]]),
+          id: pickFirstString(parsed, [["id"]]),
+          timestamp: pickFirstString(parsed, [["timestamp"]]),
+          version,
+        };
+        break;
       }
 
-      const versionValue = readValueAtPath(parsed, ["version"]);
-      const version = typeof versionValue === "number" ? versionValue : null;
-
-      result = {
-        cwd: pickFirstString(parsed, [["cwd"]]),
-        id: pickFirstString(parsed, [["id"]]),
-        timestamp: pickFirstString(parsed, [["timestamp"]]),
-        version,
-      };
-      break;
+      // Skip known pad/preamble types (OMP title line). Give up on unexpected
+      // preambles or after the scan budget so multi-MB files stay cheap.
+      if (parsed.type !== "title" || nonEmptyLinesSeen >= maxPreambleLines) {
+        break;
+      }
     }
   } finally {
     lines.close();
@@ -82,12 +95,13 @@ function extractWorkspaceSlug(absoluteSessionPath: string): string {
   const segments = absoluteSessionPath.split(/[\\/]/).filter((segment) => segment.length > 0);
 
   for (let index = 0; index < segments.length - 3; index += 1) {
-    // Look for `.pi/agent/sessions/<slug>/...`. macOS sees `.pi` as a leading
-    // hidden segment; on Windows the same parents apply.
+    // Look for `.pi/agent/sessions/<slug>/...` or `.omp/agent/sessions/...`.
+    // macOS sees `.pi` / `.omp` as a leading hidden segment.
     const segment = segments[index];
+    const rootName = segment !== undefined ? stripDotPrefix(segment) : "";
     if (
       segment !== undefined &&
-      stripDotPrefix(segment) === PI_SESSIONS_DIRNAME_MARKER &&
+      (rootName === PI_SESSIONS_DIRNAME_MARKER || rootName === OMP_SESSIONS_DIRNAME_MARKER) &&
       segments[index + 1] === PI_AGENT_DIRNAME_MARKER &&
       segments[index + 2] === PI_SESSIONS_LEAF_DIRNAME_MARKER
     ) {

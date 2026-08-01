@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -53,4 +53,37 @@ test("shouldSkipPiSessionPath does not skip production paths in macOS temp sandb
 test("shouldSkipPiSessionPath skips pi-test session basenames by default", () => {
   const path = "/Users/example/.pi/agent/sessions/--Users-example-Code-demo--/pi-test-smoke.jsonl";
   assert.equal(shouldSkipPiSessionPath(path, { includeTestSessions: false }), "test_session_name");
+});
+
+test("ASD_PI_SESSIONS_ROOT env points discovery at an alternate sessions tree", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "asd-pi-env-root-"));
+  const previous = process.env.ASD_PI_SESSIONS_ROOT;
+  try {
+    const workspaceDir = join(dir, "--Users-example-Code-env-demo--");
+    await mkdir(workspaceDir, { recursive: true });
+    const sessionPath = join(workspaceDir, "2026-07-31T00-00-00-000Z_envdemo.jsonl");
+    await writeFile(
+      sessionPath,
+      `${JSON.stringify({
+        type: "session",
+        version: 3,
+        id: "envdemo",
+        timestamp: "2026-07-31T00:00:00.000Z",
+        cwd: "/Users/example/Code/env-demo",
+      })}\n`,
+      "utf8",
+    );
+    process.env.ASD_PI_SESSIONS_ROOT = dir;
+    const result = await discoverPiInputs();
+    assert.equal(result.transcripts.length, 1);
+    assert.equal(result.transcripts[0]?.workspacePath, "/Users/example/Code/env-demo");
+    assert.equal(result.transcripts[0]?.projectKey, "env-demo");
+  } finally {
+    if (previous === undefined) {
+      delete process.env.ASD_PI_SESSIONS_ROOT;
+    } else {
+      process.env.ASD_PI_SESSIONS_ROOT = previous;
+    }
+    await rm(dir, { force: true, recursive: true });
+  }
 });
