@@ -637,3 +637,7 @@ Project attribution comes from the workspace slug plus any local workspace hint 
 ### Parser-version invalidation
 
 `--resume` reuses completed phase artifacts only when the stored `source_hash` still matches the current transcript. If parsing behavior changes or the transcript contents change, rerun without `--resume` so parsed and reduced artifacts are regenerated from the current source. If you use an isolated runtime root for testing parser changes, point `AGENT_SESSION_DISTILLERY_ROOT` at a fresh directory.
+
+## Issue tracking
+
+Agent work is tracked with **[beads](https://github.com/gastownhall/beads)** (`bd`). Linear holds the human product board; GitHub Issues are for public intake only. See `docs/recipes/beads-linear-github-workflow.md` and `docs/decisions/0010-multi-tracker-hub-spoke.md`.
