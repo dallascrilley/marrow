@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "agent_session_distillery",
+  "project_id": "05b3cc7f-d1b2-4f24-bb91-bd9e258b768a"
+}
