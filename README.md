@@ -23,6 +23,24 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 | Inspect linked worktrees | `asd worktree check --json` — read-only classifications and safe next commands |
 | First-time offline proof | `script/proof-first-time` — ingests a fixture into a temporary runtime, verifies summary/learning/search/deletion readiness, then prints retained artifact paths, a cleanup command, and the next live command |
 
+
+## Workspace onboarding
+
+This repository is an adopted Workspace project. The local contract, orientation
+adapter, and Beads task adapter are generated from Workspace Harness.
+
+```bash
+bin/orient
+bin/work-items doctor
+```
+
+Validate the contract against the installed Workspace Harness release:
+
+```bash
+$HOME/.local/bin/workspace-harness \
+  --project-root "$PWD" --format json contract validate
+```
+
 ## Automation
 
 | Task | Command / doc |
