@@ -13,6 +13,11 @@ import {
 } from "../dist/workflow/judge.js";
 
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const RECENT_FIXTURE_BASE_MS = Date.now() - 60 * 60 * 1000;
+
+function fixtureTimestamp(minutes = 0) {
+  return new Date(RECENT_FIXTURE_BASE_MS + minutes * 60 * 1000).toISOString();
+}
 
 function summary(sessionId, overrides = {}) {
   return {
@@ -36,11 +41,11 @@ function turn(sessionId, overrides = {}) {
   return {
     assistant_summary: "Implemented the requested change.",
     commands_seen: [],
-    ended_at: "2026-07-08T00:01:00.000Z",
+    ended_at: fixtureTimestamp(1),
     files_touched: [],
     index: 0,
     session_id: sessionId,
-    started_at: "2026-07-08T00:00:00.000Z",
+    started_at: fixtureTimestamp(),
     tool_stub_count: 0,
     turn_id: `${sessionId}:turn-0000`,
     user_prompt: "Proceed.",
@@ -78,7 +83,7 @@ async function writeRuntime(records) {
       topic_source: record.summary.topic_source,
       next_step: record.summary.next_step,
       summary_json_path: summaryPath,
-      updated_at: record.updatedAt ?? "2026-07-08T00:00:00.000Z",
+      updated_at: record.updatedAt ?? fixtureTimestamp(),
     });
   }
 
@@ -120,7 +125,7 @@ function candidate(overrides = {}) {
         matched_rule_id: "validation-explicit-verify",
         source_tool: "cursor",
         topic: "Workflow judge fixture",
-        updated_at: "2026-07-08T00:00:00.000Z",
+        updated_at: fixtureTimestamp(),
       },
     ],
     guidance: "Always run verification before final summary.",

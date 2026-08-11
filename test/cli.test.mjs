@@ -14,6 +14,10 @@ const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
 const cliPath = join(projectRoot, "dist", "cli.js");
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const RECENT_WORKFLOW_TIMESTAMP = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+const RECENT_WORKFLOW_END_TIMESTAMP = new Date(
+  Date.parse(RECENT_WORKFLOW_TIMESTAMP) + 60 * 1000,
+).toISOString();
 
 function runCli(args, env = {}) {
   return spawnSync(process.execPath, [cliPath, ...args], {
@@ -224,11 +228,11 @@ test("workflow mine emits read-only JSON candidates", async () => {
           {
             assistant_summary: "Captured validation preference.",
             commands_seen: [],
-            ended_at: "2026-07-08T00:01:00.000Z",
+            ended_at: RECENT_WORKFLOW_END_TIMESTAMP,
             files_touched: [],
             index: 0,
             session_id: sessionId,
-            started_at: "2026-07-08T00:00:00.000Z",
+            started_at: RECENT_WORKFLOW_TIMESTAMP,
             tool_stub_count: 0,
             turn_id: `${sessionId}:turn-0000`,
             user_prompt: "Always verify before saying it works.",
@@ -250,7 +254,7 @@ test("workflow mine emits read-only JSON candidates", async () => {
         topic_source: "deterministic",
         next_step: "Continue.",
         summary_json_path: summaryPath,
-        updated_at: "2026-07-08T00:00:00.000Z",
+        updated_at: RECENT_WORKFLOW_TIMESTAMP,
       })}\n`,
       "utf8",
     );
@@ -324,7 +328,7 @@ test("workflow review accepts limit", async () => {
         topic_source: "deterministic",
         next_step: "Continue.",
         summary_json_path: summaryPath,
-        updated_at: "2026-07-08T00:00:00.000Z",
+        updated_at: RECENT_WORKFLOW_TIMESTAMP,
       });
     }
     await writeFile(
@@ -394,7 +398,7 @@ test("workflow decisions exclude dismissed candidates unless included", async ()
         topic_source: "deterministic",
         next_step: "Continue.",
         summary_json_path: summaryPath,
-        updated_at: "2026-07-08T00:00:00.000Z",
+        updated_at: RECENT_WORKFLOW_TIMESTAMP,
       })}\n`,
       "utf8",
     );
@@ -521,7 +525,7 @@ test("workflow apply writes dry-run drafts and refuses dismissed candidates", as
         topic_source: "deterministic",
         next_step: "Continue.",
         summary_json_path: summaryPath,
-        updated_at: "2026-07-08T00:00:00.000Z",
+        updated_at: RECENT_WORKFLOW_TIMESTAMP,
       })}\n`,
       "utf8",
     );
@@ -625,7 +629,7 @@ test("workflow mine filters by cluster and recommendation", async () => {
         topic_source: "deterministic",
         next_step: "Continue.",
         summary_json_path: summaryPath,
-        updated_at: "2026-07-08T00:00:00.000Z",
+        updated_at: RECENT_WORKFLOW_TIMESTAMP,
       });
     }
     await writeFile(

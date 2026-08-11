@@ -7,6 +7,13 @@ import { saveGlobalInstinct } from "../dist/v2/instinct/global-store.js";
 import { appendWorkflowDecision } from "../dist/workflow/decisions.js";
 import { mineWorkflowCandidates } from "../dist/workflow/mine.js";
 
+const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const RECENT_FIXTURE_BASE_MS = Date.now() - 60 * 60 * 1000;
+
+function fixtureTimestamp(minutes = 0) {
+  return new Date(RECENT_FIXTURE_BASE_MS + minutes * 60 * 1000).toISOString();
+}
+
 function globalInstinct(overrides = {}) {
   return {
     schema_version: 1,
@@ -21,21 +28,17 @@ function globalInstinct(overrides = {}) {
     project_id: "",
     source: {
       first_session: "instinct-session",
-      first_observed_at: "2026-07-01T00:00:00.000Z",
+      first_observed_at: fixtureTimestamp(),
       source_refs: [],
-      observations: [
-        { session: "instinct-session", reinforcing: true, at: "2026-07-01T00:00:00.000Z" },
-      ],
+      observations: [{ session: "instinct-session", reinforcing: true, at: fixtureTimestamp() }],
     },
     related: [],
-    created_at: "2026-07-01T00:00:00.000Z",
-    updated_at: "2026-07-01T00:00:00.000Z",
-    last_promoted_at: "2026-07-01T00:00:00.000Z",
+    created_at: fixtureTimestamp(),
+    updated_at: fixtureTimestamp(),
+    last_promoted_at: fixtureTimestamp(),
     ...overrides,
   };
 }
-
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
 
 function summary(sessionId, overrides = {}) {
   return {
@@ -59,11 +62,11 @@ function turn(sessionId, overrides = {}) {
   return {
     assistant_summary: "Implemented the requested change.",
     commands_seen: [],
-    ended_at: "2026-07-08T00:01:00.000Z",
+    ended_at: fixtureTimestamp(1),
     files_touched: [],
     index: 0,
     session_id: sessionId,
-    started_at: "2026-07-08T00:00:00.000Z",
+    started_at: fixtureTimestamp(),
     tool_stub_count: 0,
     turn_id: `${sessionId}:turn-0000`,
     user_prompt: "Proceed.",
@@ -101,7 +104,7 @@ async function writeRuntime(records) {
       topic_source: record.summary.topic_source,
       next_step: record.summary.next_step,
       summary_json_path: summaryPath,
-      updated_at: record.updatedAt ?? "2026-07-08T00:00:00.000Z",
+      updated_at: record.updatedAt ?? fixtureTimestamp(),
     });
   }
 
@@ -466,7 +469,7 @@ test("mineWorkflowCandidates does not suppress unrelated global instincts", asyn
 test("mineWorkflowCandidates caps evidence sessions and preserves evidence count", async () => {
   const records = Array.from({ length: 15 }, (_, index) => ({
     sessionId: `wf-cap-${String(index).padStart(2, "0")}`,
-    updatedAt: `2026-07-08T00:${String(index).padStart(2, "0")}:00.000Z`,
+    updatedAt: fixtureTimestamp(index),
     summary: summary(`wf-cap-${String(index).padStart(2, "0")}`, {
       what_was_decided: ["Always run verification before final summary."],
     }),
@@ -671,13 +674,21 @@ test("mineWorkflowCandidates applies source and day filters", async () => {
       turns: [turn("wf-cursor-1")],
     },
     {
-      sessionId: "wf-codex-old",
-      sourceTool: "codex-cli",
-      updatedAt: "2026-06-01T00:00:00.000Z",
-      summary: summary("wf-codex-old", {
+      sessionId: "wf-cursor-old",
+      sourceTool: "cursor",
+      updatedAt: fixtureTimestamp(-45 * 24 * 60),
+      summary: summary("wf-cursor-old", {
         what_was_decided: ["Always run verification before final summary."],
       }),
-      turns: [turn("wf-codex-old")],
+      turns: [turn("wf-cursor-old")],
+    },
+    {
+      sessionId: "wf-codex-recent",
+      sourceTool: "codex-cli",
+      summary: summary("wf-codex-recent", {
+        what_was_decided: ["Always run verification before final summary."],
+      }),
+      turns: [turn("wf-codex-recent")],
     },
   ]);
 
