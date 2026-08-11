@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_path="${BASH_SOURCE[0]:-$0}"
+ADAPTER_ROOT="$(CDPATH='' cd -P -- "$(dirname "$script_path")/.." && pwd)"
+# This repository-local helper only verifies the installed release and supplies
+# the bounded read-only recovery view below; executable lifecycle logic lives in
+# the release.
+# shellcheck disable=SC1091
+source "$ADAPTER_ROOT/lib/adapter.sh"
+
+if adapter_resolve; then
+  # Contract and identity failures remain fatal; they are structural and must
+  # not be obscured by the read-only dependency fallback below.
+  "$HARNESS_EXEC" --project-root "$ADAPTER_ROOT" orient
+  if ! command -v bd >/dev/null 2>&1; then
+    printf 'Beads: unavailable; active-claim and recovery-origin checks were skipped.\n'
+    printf 'Continue: install or restore bd, then rerun bin/orient before claiming or mutating work.\n'
+    exit 0
+  fi
+  if ! "$HARNESS_EXEC" --project-root "$ADAPTER_ROOT" work-items inspect; then
+    printf 'Beads: unavailable or invalid; active-claim and recovery-origin checks were skipped.\n'
+    printf 'Continue: repair Beads, then rerun bin/orient before claiming or mutating work.\n'
+    exit 0
+  fi
+  exec "$HARNESS_EXEC" --project-root "$ADAPTER_ROOT" ledger status
+fi
+
+printf 'Workspace Harness recovery orientation (read-only)\n'
+printf 'Repository: %s\n' "$ADAPTER_ROOT"
+printf 'Project: %s\n' "$(awk '$1 == "id:" {print $2; exit}' "$ADAPTER_ROOT/project.yaml" 2>/dev/null || printf unknown)"
+printf 'Outcome: %s\n' "$(awk '$1 == "outcome:" {print $2; exit}' "$ADAPTER_ROOT/project.yaml" 2>/dev/null || printf unknown)"
+if [[ -f "$ADAPTER_ROOT/STATUS.md" ]]; then sed -n '1,80p' "$ADAPTER_ROOT/STATUS.md"; fi
+adapter_repair_guidance
+printf 'Mutation is blocked until the pinned installed release verifies.\n'
+exit 0

@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "project": "agent-session-distillery",
+  "policy": {
+    "linearOwns": [
+      "human commitments",
+      "portfolio priority",
+      "project health",
+      "cross-project coordination"
+    ],
+    "beadsOwns": [
+      "local execution tasks",
+      "dependency graphs",
+      "agent-discovered work",
+      "implementation notes"
+    ],
+    "promotionLabel": "promote:linear",
+    "pushScope": "exact-bead-ids",
+    "automaticBidirectionalSync": false,
+    "boundedReconciliation": true,
+    "stopConditions": [
+      "irreversible action without a verified recovery path",
+      "ambiguous target or conflicting intent that cannot be resolved from evidence",
+      "required authority cannot be safely scoped",
+      "recovery or verification step fails"
+    ]
+  },
+  "linear": {
+    "workspace": "dallascrilley",
+    "team": {
+      "id": "8b799053-907f-4ddf-a416-95a29140b475",
+      "key": "WKS",
+      "name": "Workspace"
+    },
+    "project": {
+      "id": "2c363bff-5dda-448f-9c4c-eac5161be42a",
+      "name": "Agent Session Distillery"
+    }
+  },
+  "credentials": {
+    "provider": "1Password service account via Keychain-backed op shim",
+    "vault": "Agent Automation",
+    "linearApiKey": "op://nijmtsgv2ajhcrm6voh3h7ylha/xtjpkgtz3gdqtn3b6xwt6eabem/credential"
+  },
+  "beads": {
+    "prefix": "agent-session-distillery",
+    "doltRemote": "git+https://github.com/dallascrilley/agent-session-distillery.git",
+    "automaticRemotePush": false,
+    "databaseInitialized": true,
+    "state": "initialized-pending-remote-verification",
+    "databaseProjectId": "05b3cc7f-d1b2-4f24-bb91-bd9e258b768a"
+  },
+  "receipts": {
+    "root": "/Users/dallascrilley/Backups/Receipts/agent-session-distillery"
+  },
+  "preflightHooks": []
+}

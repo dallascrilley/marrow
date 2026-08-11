@@ -1,0 +1,31 @@
+schema_version: 1
+harness_contract_version: 2
+id: agent-session-distillery
+name: Agent Session Distillery
+domain: operations
+status: active
+owner: dallascrilley
+created: 2026-08-11
+canonical_path: /Users/dallascrilley/Workspace/operations/agent-session-distillery
+remote: https://github.com/dallascrilley/agent-session-distillery.git
+data_classification: internal
+backup: github-and-dolt
+generated_state_root: /Users/dallascrilley/.local/state/agents/agent-session-distillery
+linear:
+  team: Workspace
+  project: Agent Session Distillery
+  project_id: 2c363bff-5dda-448f-9c4c-eac5161be42a
+beads:
+  prefix: agent-session-distillery
+  recovery_remote: git+https://github.com/dallascrilley/agent-session-distillery.git
+  policy: organization/work-items.json
+credentials:
+  provider: 1password
+  vault: Agent Automation
+  references:
+    - op://nijmtsgv2ajhcrm6voh3h7ylha/xtjpkgtz3gdqtn3b6xwt6eabem/credential
+receipts:
+  root: /Users/dallascrilley/Backups/Receipts/agent-session-distillery
+adr:
+  project: docs/adr
+  workspace: /Users/dallascrilley/Workspace/_shared/adr

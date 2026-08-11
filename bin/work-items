@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_path="${BASH_SOURCE[0]:-$0}"
+ADAPTER_ROOT="$(CDPATH='' cd -P -- "$(dirname "$script_path")/.." && pwd)"
+# shellcheck disable=SC1091
+source "$ADAPTER_ROOT/lib/adapter.sh"
+
+if ! adapter_resolve; then
+  adapter_repair_guidance >&2
+  printf 'Mutation through bin/work-items is blocked. Read-only recovery: bin/orient\n' >&2
+  [[ "${ADAPTER_FAILURE:-missing}" == missing ]] && exit 6
+  exit 4
+fi
+
+format_args=(--format human)
+if [[ "${1:-}" == --format && ("${2:-}" == human || "${2:-}" == json) ]]; then
+  format_args=(--format "$2")
+  shift 2
+fi
+
+case "${1:-}" in
+  inspect) exec "$HARNESS_EXEC" --project-root "$ADAPTER_ROOT" "${format_args[@]}" work-items inspect ;;
+  ready) exec "$HARNESS_EXEC" --project-root "$ADAPTER_ROOT" "${format_args[@]}" work-items ready ;;
+  next) exec "$HARNESS_EXEC" --project-root "$ADAPTER_ROOT" "${format_args[@]}" work-items next ;;
+  close) shift; exec "$HARNESS_EXEC" --project-root "$ADAPTER_ROOT" "${format_args[@]}" work-items close "$@" ;;
+  reconcile) exec "$HARNESS_EXEC" --project-root "$ADAPTER_ROOT" "${format_args[@]}" work-items reconcile ;;
+  doctor) exec "$HARNESS_EXEC" --project-root "$ADAPTER_ROOT" "${format_args[@]}" ledger doctor ;;
+  ledger-status) exec "$HARNESS_EXEC" --project-root "$ADAPTER_ROOT" "${format_args[@]}" ledger status ;;
+  ledger-fingerprint) shift; exec "$HARNESS_EXEC" --project-root "$ADAPTER_ROOT" "${format_args[@]}" ledger fingerprint "$@" ;;
+  ledger-verify) shift; exec "$HARNESS_EXEC" --project-root "$ADAPTER_ROOT" "${format_args[@]}" ledger verify "$@" ;;
+  ledger-sync) shift; exec "$HARNESS_EXEC" --project-root "$ADAPTER_ROOT" "${format_args[@]}" ledger sync "$@" ;;
+  *)
+    printf '%s\n' \
+      'Usage: bin/work-items [--format human|json] <inspect|ready|next|close|reconcile|doctor|ledger-status|ledger-fingerprint|ledger-verify|ledger-sync>' \
+      'Bootstrap mutation commands have been retired; use the verified shared lifecycle.' >&2
+    exit 2
+    ;;
+esac

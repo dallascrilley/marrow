@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "releaseVersion": "0.1.4",
+  "contractVersion": 2,
+  "installRoot": "/Users/dallascrilley/.local/lib/workspace-harness",
+  "files": [
+    {
+      "mode": "0755",
+      "path": "bin/workspace-harness",
+      "sha256": "9e4abb33725589a89a74988b7e9f59f8cd3e575c1156cf9b50562c66d0b0e1d2"
+    },
+    {
+      "mode": "0644",
+      "path": "lib/contract.sh",
+      "sha256": "d042fc1bb9dda88e6b1527441113bb4e2389bb39b326bbf3f69fed98e3e84b40"
+    },
+    {
+      "mode": "0644",
+      "path": "lib/ledger.sh",
+      "sha256": "f8f1a6ccde17317db81091b900ea8cf69be557f1ce5714d9794b52923a910aee"
+    },
+    {
+      "mode": "0644",
+      "path": "lib/receipts.sh",
+      "sha256": "c6fee5504cbecc5cef9f1d3ad505e44cefe383673b5758ca401056a14ba3c786"
+    },
+    {
+      "mode": "0644",
+      "path": "schemas/command-result.schema.json",
+      "sha256": "96f2865900b1c5402a8ebf4dcb1dab0e9094cf79f1c6b1e3d4a39566f2d1cc2c"
+    },
+    {
+      "mode": "0644",
+      "path": "schemas/project-contract.schema.json",
+      "sha256": "ca955b84abf0a535b1ef71d1de200badebe036b1ecc8457ea5a5f4e16acfbe8b"
+    }
+  ]
+}
