@@ -7,7 +7,7 @@ export const commandStarterPattern =
   /^(?:\.\/[\w./-]+|script\/[\w./-]+|(?:npm|pnpm|yarn|bun|node|python3?|uv|git|just|make|cargo|go|docker|sqlite3|gh|jq|curl|wget|rg|grep|ls|cat|sed|awk|ssh|kubectl|brew|td|hubctl|qa|wt|op|gog|mise|tar)\b)/i;
 const inlineCodePattern = /`([^`\n]+)`/g;
 const trailingPunctuationPattern = /[.,;:!?]+$/;
-// td task ids (td-2a8b94, td-2a8b94-some-slug) match the `td` starter via the
+// td task ids (td-1a2b3c, td-1a2b3c-some-slug) match the `td` starter via the
 // word boundary before `-` but are identifiers, not invocations — real td
 // commands are `td <subcommand> …`.
 const tdTaskIdPattern = /^td-[0-9a-z]{4,}/i;
