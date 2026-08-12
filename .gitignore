@@ -13,7 +13,33 @@ node_modules/
 !test/fixtures/pi/**/*.jsonl
 !test/fixtures/kimi/
 !test/fixtures/kimi/**/*.jsonl
+
+# Screenshots referenced by the README. A global gitignore that excludes *.png
+# is common, and this repo's rules take precedence over it.
+!docs/media/
+!docs/media/*.png
+
+# Agent-harness and tracker state. These belong to whoever is working on the
+# repo, not to the repo. Keep them local.
+.agents/
+.agents-state/
+.beads/
+.claude/
+.codex/
+.cursor/
+.grok/
+.hub/
+.pi/
 .todos/
+AGENTS.md
+CLAUDE.md
+STATUS.md
+handoff.md
+prd.json
+project.yaml
+docs/plans/
+docs/ideation/
+docs/whats-next/
 
 # --- added by project-bootstrap ---
 # Assembled to .gitignore (core + language profile appended).

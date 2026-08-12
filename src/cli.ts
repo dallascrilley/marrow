@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { executeArchiveRun } from "./commands/archive-run.js";
@@ -541,9 +542,29 @@ export async function main(
   }
 }
 
-function isDirectEntryPoint(currentImportMetaUrl: string): boolean {
+/**
+ * True when this module is the process entry point.
+ *
+ * `process.argv[1]` is whatever path the shell invoked, which for an installed
+ * binary is a symlink (`npm link` and `npm install -g` both put a link on PATH),
+ * while `import.meta.url` always resolves to the real file. Comparing the two
+ * directly makes the guard false for every installed invocation, so the CLI
+ * would exit 0 and print nothing. Resolve both sides before comparing.
+ */
+export function isDirectEntryPoint(currentImportMetaUrl: string): boolean {
   const entryPath = process.argv[1];
-  return typeof entryPath === "string" && fileURLToPath(currentImportMetaUrl) === entryPath;
+  if (typeof entryPath !== "string" || entryPath.length === 0) {
+    return false;
+  }
+  return realPathOrSelf(fileURLToPath(currentImportMetaUrl)) === realPathOrSelf(entryPath);
+}
+
+function realPathOrSelf(target: string): string {
+  try {
+    return realpathSync(target);
+  } catch {
+    return target;
+  }
 }
 
 if (isDirectEntryPoint(import.meta.url)) {
