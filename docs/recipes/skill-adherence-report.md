@@ -41,4 +41,4 @@ skills with explicit triggers (`verify-before-complete`).
 
 - No LLM judge; word-overlap matching only.
 - Broad skill ids (e.g. `git`) match many sessions by substring.
-- Improvement suggestions are advisory; edit SKILL.md manually or via hub ship.
+- Improvement suggestions are advisory; edit SKILL.md manually.

@@ -728,7 +728,8 @@ async function runDescriptorHelper(
 function startDescriptorHelper(
   trustedDirectory: Omit<TrustedQuarantineDirectory, "helper">,
 ): DescriptorHelperClient {
-  const python = process.env.ASD_PYTHON ?? process.env.PYTHON ?? "python3";
+  const python =
+    process.env.MARROW_PYTHON ?? process.env.ASD_PYTHON ?? process.env.PYTHON ?? "python3";
   const child = spawn(python, [descriptorHelperPath, "serve"], {
     stdio: ["pipe", "pipe", "pipe", trustedDirectory.handle.fd],
   });

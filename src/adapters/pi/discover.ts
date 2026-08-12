@@ -32,16 +32,18 @@ export type PiDiscoverSkipReason = "ephemeral_path" | "test_session_name";
  * streamed later by the parse phase.
  *
  * Override the sessions root with `options.piSessionsRoot` or env
- * `ASD_PI_SESSIONS_ROOT` / `PI_SESSIONS_ROOT` (e.g. `~/.omp/agent/sessions`).
+ * `MARROW_PI_SESSIONS_ROOT` (legacy `ASD_PI_SESSIONS_ROOT`) / `PI_SESSIONS_ROOT` (e.g. `~/.omp/agent/sessions`).
  */
 export async function discoverPiInputs(
   options: DiscoverPiInputsOptions = {},
 ): Promise<PiDiscoveryResult> {
   const homeDir = resolve(options.homeDir ?? homedir());
-  // ASD_PI_SESSIONS_ROOT (or PI_SESSIONS_ROOT) lets operators point at OMP
+  // MARROW_PI_SESSIONS_ROOT (legacy ASD_PI_SESSIONS_ROOT, or PI_SESSIONS_ROOT) lets operators point at OMP
   // (~/.omp/agent/sessions) or other Pi-compatible trees without code changes.
   const envSessionsRoot =
-    process.env.ASD_PI_SESSIONS_ROOT?.trim() || process.env.PI_SESSIONS_ROOT?.trim();
+    process.env.MARROW_PI_SESSIONS_ROOT?.trim() ||
+    process.env.ASD_PI_SESSIONS_ROOT?.trim() ||
+    process.env.PI_SESSIONS_ROOT?.trim();
   const piSessionsRoot = resolve(
     options.piSessionsRoot ??
       (envSessionsRoot && envSessionsRoot.length > 0

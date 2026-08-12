@@ -203,7 +203,7 @@ function extractProjectLearningCandidates(
 const defaultProjectLearningCap = 12;
 
 export function getProjectLearningCap(): number {
-  const raw = process.env.ASD_MAX_PROJECT_LEARNINGS;
+  const raw = process.env.MARROW_MAX_PROJECT_LEARNINGS ?? process.env.ASD_MAX_PROJECT_LEARNINGS;
   if (raw === undefined || raw.length === 0) return defaultProjectLearningCap;
   const parsed = Number.parseInt(raw, 10);
   return Number.isNaN(parsed) || parsed < 1 ? defaultProjectLearningCap : parsed;
@@ -215,7 +215,7 @@ function applyProjectLearningCap(
   const cap = getProjectLearningCap();
   if (candidates.length <= cap) return candidates.slice();
   console.warn(
-    `[marrow] project learning cap reached: ${candidates.length} candidates truncated to ${cap} (set ASD_MAX_PROJECT_LEARNINGS to override)`,
+    `[marrow] project learning cap reached: ${candidates.length} candidates truncated to ${cap} (set MARROW_MAX_PROJECT_LEARNINGS to override)`,
   );
   return candidates.slice(0, cap);
 }

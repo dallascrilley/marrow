@@ -15,7 +15,7 @@ ingest sync --resume --source <adapter>
   → [optional] quality review-learnings --if-new --max-total-learnings 100   # emits immutable batch_path
   → quality apply-learning-review --batch <that-batch-path>                 # only when this run generated one
   → memory export-wiki
-  → memory push-wiki                      # requires ~/vault or ASD_VAULT_ROOT
+  → memory push-wiki                      # requires ~/vault or MARROW_VAULT_ROOT
 ```
 
 Repeat `ingest sync` per adapter you care about (`cursor`, `claude-code`,
@@ -56,7 +56,7 @@ summary topics and re-exports the session index; manifests stay immutable):
 npm run corpus:resummarize
 ```
 
-Uses the same `ASD_LLM_MAX_PER` sliding-window budget file
+Uses the same `MARROW_LLM_MAX_PER` sliding-window budget file
 (`reports/llm-budget.json`) as `quality review-learnings` when `--llm-topic` is
 enabled (default unless `resummarize-corpus.mjs --no-llm-topic`).
 
@@ -69,7 +69,7 @@ enabled (default unless `resummarize-corpus.mjs --no-llm-topic`).
 
 When the count budget is exhausted, `review-learnings` exits early with
 `skipped: true`. The default count cap is intentionally generous (`50/24h`) and
-only smooths bursts; the tighter financial guard is `ASD_LLM_MAX_USD` (default
+only smooths bursts; the tighter financial guard is `MARROW_LLM_MAX_USD` (default
 `1/24h`). Resummarize continues with deterministic topics only when its LLM
 topic budget is exhausted.
 
@@ -78,14 +78,16 @@ topic budget is exhausted.
 | Variable | Purpose |
 | --- | --- |
 | `MARROW_ROOT` | Runtime dir (default `~/.marrow`) |
-| `ASD_VAULT_ROOT` | Vault root for `memory push-wiki` (default `~/vault`) |
+| `MARROW_VAULT_ROOT` | Vault root for `memory push-wiki` (default `~/vault`) |
 | `OPENROUTER_API_KEY` | Required only when running `quality review-learnings`; source from your own secret manager or environment |
-| `ASD_LLM_MAX_PER` | Sliding-window LLM count budget shared by review-learnings and corpus resummarize (default `50/24h`; use smaller `--max-per` values for deliberate trials) |
-| `ASD_LLM_MAX_USD` | USD ceiling for LLM review spend (default `1/24h`; the real financial guard) |
+| `MARROW_LLM_MAX_PER` | Sliding-window LLM count budget shared by review-learnings and corpus resummarize (default `50/24h`; use smaller `--max-per` values for deliberate trials) |
+| `MARROW_LLM_MAX_USD` | USD ceiling for LLM review spend (default `1/24h`; the real financial guard) |
 | `OPENROUTER_MODEL` | Model for `quality review-learnings` (launcher default: `google/gemini-3-flash-preview`) |
-| `ASD_PARSED_RETENTION_OLDER_THAN_DAYS` | Ordinary parsed cleanup age gate (default `30` days); pending receipt retries ignore this gate |
-| `ASD_PARSED_MAX_TOTAL_BYTES` | Ordinary parsed staging byte ceiling (default `1073741824`, or 1 GB); pending receipt retries remain included |
-| `ASD_ENABLE_COMPACTION` | Set to `1` to retain bounded generated reports after a newly generated review batch is applied |
+| `MARROW_PARSED_RETENTION_OLDER_THAN_DAYS` | Ordinary parsed cleanup age gate (default `30` days); pending receipt retries ignore this gate |
+| `MARROW_PARSED_MAX_TOTAL_BYTES` | Ordinary parsed staging byte ceiling (default `1073741824`, or 1 GB); pending receipt retries remain included |
+| `MARROW_ENABLE_COMPACTION` | Set to `1` to retain bounded generated reports after a newly generated review batch is applied |
+
+Every `MARROW_*` variable in this table also accepts its legacy `ASD_*` spelling; the `MARROW_*` name wins when both are set.
 
 Build the CLI once after checkout updates:
 
@@ -128,7 +130,7 @@ Save as `~/Library/LaunchAgents/com.example.marrow-memory-pipeline.plist`:
     <dict>
       <key>MARROW_ROOT</key>
       <string>/Users/you/.marrow</string>
-      <key>ASD_VAULT_ROOT</key>
+      <key>MARROW_VAULT_ROOT</key>
       <string>/Users/you/vault</string>
     </dict>
   </dict>
@@ -153,9 +155,9 @@ apply ledger.
 
 Parsed staging retention is independent of review generation and runs before audit/LLM steps.
 Every scheduled run applies the safe parsed cleanup with a 30-day age gate and a 1 GB byte
-ceiling by default. Override them with `ASD_PARSED_RETENTION_OLDER_THAN_DAYS` and
-`ASD_PARSED_MAX_TOTAL_BYTES`. Report compaction remains opt-in via
-`ASD_ENABLE_COMPACTION=1` and bound to a newly generated and applied review batch.
+ceiling by default. Override them with `MARROW_PARSED_RETENTION_OLDER_THAN_DAYS` and
+`MARROW_PARSED_MAX_TOTAL_BYTES`. Report compaction remains opt-in via
+`MARROW_ENABLE_COMPACTION=1` and bound to a newly generated and applied review batch.
 Failed or interrupted applying receipts are retried immediately before/alongside ordinary
 age/size-selected candidates. The retry uses the exact immutable candidate snapshot recorded
 before the prior mutation, so the 30-day gate cannot postpone recovery and the retry cannot
@@ -172,7 +174,7 @@ operator-local launcher, **not** at the repo script directly:
 launchd (6h) → ~/.marrow/run-pipeline.sh   # operator-local, outside the repo
                  → sources ~/.marrow/secrets.env  (600; OPENROUTER_API_KEY)
                  → exports OPENROUTER_MODEL (default google/gemini-3-flash-preview)
-                 → exports ASD_LLM_MAX_USD (default 0.50/24h)
+                 → exports MARROW_LLM_MAX_USD (default 0.50/24h)
                  → exec scripts/scheduled-memory-pipeline.sh          # this repo, primary checkout dist/
 ```
 
@@ -200,7 +202,7 @@ Consequences:
   original session directory is redirected or a replacement occupies the original path, retry
   retains the trusted quarantine and exits non-zero rather than restoring through that path.
 - Parsed cleanup uses the bundled descriptor-relative Python helper (`python3`; override with
-  `ASD_PYTHON` or `PYTHON`; Python 3.9+ is required). If it is unavailable, cleanup fails before
+  `MARROW_PYTHON` or `PYTHON`; Python 3.9+ is required). If it is unavailable, cleanup fails before
   moving or unlinking data.
 - **apply interrupted:** rerun the explicit `quality apply-learning-review --batch <batch-path>` command shown in the prior pipeline log; the apply ledger records `applying`/`failed`/`applied` transitions and the retry merges by learning id.
 - **credentials absent:** the wrapper skips both review and apply; it never applies a previous batch implicitly.

@@ -193,8 +193,7 @@ const commandTree: Record<string, CommandDefinition> = {
     description: "Export evidence for personal-profile compilers.",
     subcommands: {
       "export-emulo": {
-        description:
-          "Export canonical user prompts and provenance for the private Emulo integration.",
+        description: "Export canonical user prompts and provenance for downstream profile tooling.",
         execute: async (context) => withLedger(context, executeProfileExportEmulo),
       },
     },

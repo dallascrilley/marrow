@@ -30,7 +30,10 @@ type ReadbackCheckPaths = {
 export async function executeReadbackCheck(context: CommandContext): Promise<number> {
   const verify = parseReadbackCheckOptions(context.args);
   const projectRoot = process.cwd();
-  const vaultRoot = process.env.ASD_VAULT_ROOT?.trim() || join(homedir(), "vault");
+  const vaultRoot =
+    process.env.MARROW_VAULT_ROOT?.trim() ||
+    process.env.ASD_VAULT_ROOT?.trim() ||
+    join(homedir(), "vault");
   const report = await assessReadbackSetup({
     hookPath: join(projectRoot, ".claude", "hooks", "marrow-session-start-recall.sh"),
     mcpConfigPath: join(homedir(), ".claude.json"),

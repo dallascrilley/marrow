@@ -66,7 +66,7 @@ local time in an app-managed worktree. It builds Marrow with Node 22, runs the
 candidates with this fail-closed policy:
 
 - strong, adopt-recommended candidates with zero contradictions are checked
-  against current Hub contracts and installed skills;
+  against your agent-harness contracts and installed skills;
 - already-covered guidance is adopted with a note naming the covering section;
 - uncovered strong guidance is written to the canonical global evolve intake
   before the Marrow decision records the evolve receipt;

@@ -71,9 +71,9 @@ reinforcement guarantees.
 
 - The live hook was wired **surgically** into `~/.claude/settings.json` rather
   than via a whole-runtime `hubctl runtime install claude`, because that path
-  re-merges every enabled hub SessionStart hook and would re-introduce the
+  re-merges every enabled SessionStart hook and would re-introduce the
   banner/axi hooks that were deliberately removed from the live config. Formal
-  hub adoption (which would generate `.hook-lock.json` and reconcile all hooks)
+  harness adoption (which would generate `.hook-lock.json` and reconcile all hooks)
   is therefore a deferred, opt-in follow-up, not a silent side effect.
 
 - Reachability is now governed by two independent gates that must not be
