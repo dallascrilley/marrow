@@ -8,7 +8,7 @@ claim but the code does not do.
 ## Getting set up
 
 ```bash
-script/setup      # install toolchain and dependencies (Node 22.x)
+script/setup      # install toolchain and dependencies (Node 22+)
 script/test       # run the suite
 script/cibuild    # exactly what CI runs: install, lint, test, build
 ```

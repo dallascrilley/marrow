@@ -4,7 +4,7 @@ Turn AI coding-session transcripts into durable, searchable lessons.
 
 [![CI](https://github.com/dallascrilley/marrow/actions/workflows/ci.yml/badge.svg)](https://github.com/dallascrilley/marrow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Node 22](https://img.shields.io/badge/node-22.x-brightgreen.svg)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
 
 Cursor, Claude Code, Codex CLI and friends each leave a pile of JSONL transcripts
 on your disk. There is real knowledge in there, and none of it is reachable:
@@ -28,8 +28,8 @@ Exported 9 session index records.
 Export path: ~/index/session-index.jsonl
 
 $ marrow search worktree
-9c6686c3-7663-495b-bd35-8e31b5a231df	cursor	deterministic	help prune old/stale worktrees. check them for valuable code first that hasn't been merged
 2dc7df27-6993-4113-9ad0-d27d5e2c2143	cursor	deterministic	@.cursor/worktrees.json develop a worktree setup script for this project
+9c6686c3-7663-495b-bd35-8e31b5a231df	cursor	deterministic	help prune old/stale worktrees. check them for valuable code first that hasn't been merged
 2 matches.
 ```
 
@@ -77,7 +77,9 @@ keeping in them, which is the intended answer.
 
 ## Requirements
 
-- Node 22.x (see `engines` in [package.json](package.json))
+- Node 22 or newer (see `engines` in [package.json](package.json)). On Node 22
+  the CLI prints a one-line `ExperimentalWarning` for `node:sqlite`; Node 24+
+  does not.
 - Python `3.9+` for the parsed-intermediate cleanup helper
   ([`scripts/parsed-cleanup-fs.py`](scripts/parsed-cleanup-fs.py))
 - Transcripts on local disk from at least one supported tool
@@ -159,6 +161,8 @@ By default everything goes under `~/.marrow`:
 | `index/session-index.jsonl` | The searchable index |
 | `reports/` | Archive receipts and the HTML dashboard |
 | `deletes/` | Deletion candidates and receipts |
+| `sources/` | Immutable provenance manifests for ingested transcripts |
+| `cache/` | LLM response cache (appears after LLM commands) |
 
 Set `MARROW_ROOT` to move the whole tree, and `MARROW_STAGING_ROOT` to put the
 staging directory on a different filesystem. Both accept an absolute path.
@@ -230,7 +234,8 @@ See [ADR-0010](docs/decisions/0010-recall-read-back.md) for the contract and
 - `marrow search` queries the session index by topic, session id and source
   tool. It is not full-text search over transcripts. Lessons themselves are
   reachable through the HTML report, the JSONL under `knowledge/`, and the MCP
-  query surface (`search_instincts`, `instincts_for_file`, `recent_instincts`).
+  query surface (`search_instincts`, `instincts_for_file`, `recent_instincts`;
+  project-scoped queries take `--project-id`).
 - Confidence values are heuristic labels, not calibrated probabilities.
 - Adapter coverage tracks the transcript formats these tools shipped when each
   adapter was written. Formats change; the fixture corpora under `test/fixtures/`

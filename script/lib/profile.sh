@@ -11,7 +11,7 @@ run_bootstrap() {
   command -v node >/dev/null 2>&1 || die "node not found — need Node 22.x (see README)"
   local major
   major="$(node -p "process.versions.node.split('.')[0]")"
-  [[ "$major" == "22" ]] || die "Node 22.x required (package.json engines); got $(node -v)"
+  [[ "$major" -ge 22 ]] || die "Node 22+ required (package.json engines); got $(node -v)"
 }
 
 run_install_hooks() {

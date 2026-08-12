@@ -146,6 +146,6 @@ test("scheduled cleanup runs before audit and docs describe receipt retries and 
     /pipeline gate --skip-ingest[\s\S]*storage cleanup-parsed --apply[\s\S]*quality audit/,
   );
   assert.match(recipe, /failed or interrupted applying receipts are retried immediately/i);
-  assert.match(recipe, /`ASD_PARSED_RETENTION_OLDER_THAN_DAYS`/);
-  assert.match(recipe, /`ASD_PARSED_MAX_TOTAL_BYTES`/);
+  assert.match(recipe, /`MARROW_PARSED_RETENTION_OLDER_THAN_DAYS`/);
+  assert.match(recipe, /`MARROW_PARSED_MAX_TOTAL_BYTES`/);
 });

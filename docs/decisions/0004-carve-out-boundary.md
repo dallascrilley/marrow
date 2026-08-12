@@ -3,7 +3,7 @@
 - Date: 2026-05-19
 - Status: accepted (2026-05-19)
 - Deciders: operator
-- Related: [ADR-0003](0003-primary-render.md), `~/.claude/CLAUDE.md` Personal Hub Vault section
+- Related: [ADR-0003](0003-primary-render.md), the operator's global assistant-config vault section
 
 ## Context
 

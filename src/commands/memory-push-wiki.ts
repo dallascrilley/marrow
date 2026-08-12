@@ -17,7 +17,8 @@ import {
 } from "../v2/vault/render-memory.js";
 import { executeMemoryExportWiki } from "./memory-export-wiki.js";
 
-export const vaultRootEnvVar = "ASD_VAULT_ROOT";
+export const vaultRootEnvVar = "MARROW_VAULT_ROOT";
+export const legacyVaultRootEnvVar = "ASD_VAULT_ROOT";
 
 type PushWikiOptions = {
   noOverwrite: boolean;
@@ -64,7 +65,7 @@ export function parsePushWikiOptions(args: readonly string[]): PushWikiOptions {
 }
 
 function defaultVaultRoot(): string {
-  const override = process.env[vaultRootEnvVar];
+  const override = process.env[vaultRootEnvVar] ?? process.env[legacyVaultRootEnvVar];
   return override && override.length > 0 ? override : join(homedir(), "vault");
 }
 

@@ -26,9 +26,9 @@ type BudgetState = {
 };
 
 // Courtesy throttle on LLM review-call count. The financial guardrail is the
-// USD ceiling (ASD_LLM_MAX_USD); this count cap only smooths bursts, so it is
+// USD ceiling (MARROW_LLM_MAX_USD); this count cap only smooths bursts, so it is
 // set generously to let the review backlog drain at the cost pace rather than
-// an artificial call count. Override via ASD_LLM_MAX_PER.
+// an artificial call count. Override via MARROW_LLM_MAX_PER.
 const defaultMaxPer = "50/24h";
 
 export function parseMaxPerWindow(spec: string): MaxPerWindow {
@@ -56,7 +56,7 @@ export function parseMaxPerWindow(spec: string): MaxPerWindow {
 }
 
 export function getDefaultMaxPerWindow(): string {
-  const fromEnv = process.env.ASD_LLM_MAX_PER?.trim();
+  const fromEnv = (process.env.MARROW_LLM_MAX_PER ?? process.env.ASD_LLM_MAX_PER)?.trim();
   return fromEnv && fromEnv.length > 0 ? fromEnv : defaultMaxPer;
 }
 
@@ -129,7 +129,7 @@ export type LlmUsdBudgetStatus = {
 const defaultMaxUsd = "1/24h";
 
 export function getDefaultMaxUsd(): string {
-  const fromEnv = process.env.ASD_LLM_MAX_USD?.trim();
+  const fromEnv = (process.env.MARROW_LLM_MAX_USD ?? process.env.ASD_LLM_MAX_USD)?.trim();
   return fromEnv && fromEnv.length > 0 ? fromEnv : defaultMaxUsd;
 }
 

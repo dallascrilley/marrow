@@ -13,7 +13,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   to `~/.marrow`, the `AGENT_SESSION_DISTILLERY_ROOT` and
   `AGENT_SESSION_DISTILLERY_STAGING_ROOT` overrides became `MARROW_ROOT` and
   `MARROW_STAGING_ROOT`, and the MCP server registers under the key `marrow`.
-  Those are the only mentions of the old identifiers you should need.
+  Operational tuning variables are read as `MARROW_*` first with the legacy
+  `ASD_*` spellings still honored (`MARROW_VAULT_ROOT`, `MARROW_LLM_MAX_PER`,
+  `MARROW_LLM_MAX_USD`, `MARROW_MAX_PROJECT_LEARNINGS`, `MARROW_PYTHON`,
+  `MARROW_PI_SESSIONS_ROOT`, and the scheduled-pipeline knobs).
 
   Two compatibility paths remain so an existing local runtime keeps working:
   the pre-rename environment variables are still read when the new ones are

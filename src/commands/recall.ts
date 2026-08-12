@@ -100,7 +100,10 @@ export async function executeRecall(context: CommandContext): Promise<number> {
 
 export function parseRecallOptions(args: readonly string[]): RecallOptions {
   let cwd = process.cwd();
-  let vaultRoot = process.env.ASD_VAULT_ROOT?.trim() || join(homedir(), "vault");
+  let vaultRoot =
+    process.env.MARROW_VAULT_ROOT?.trim() ||
+    process.env.ASD_VAULT_ROOT?.trim() ||
+    join(homedir(), "vault");
   let maxBytes = DEFAULT_MAX_BYTES;
 
   for (let i = 0; i < args.length; i += 1) {
