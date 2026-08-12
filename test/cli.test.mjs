@@ -38,6 +38,18 @@ function runCli(args, env = {}) {
   });
 }
 
+test("marrow --version prints package version", () => {
+  const result = runCli(["--version"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout.trim(), /^\d+\.\d+\.\d+/);
+});
+
+test("marrow -V prints package version", () => {
+  const result = runCli(["-V"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout.trim(), /^\d+\.\d+\.\d+/);
+});
+
 test("marrow --help lists every Task 1 command", () => {
   const result = runCli(["--help"]);
 
