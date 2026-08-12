@@ -433,7 +433,6 @@ function padCommandLabel(path: string[], width: number): string {
   return formatCommandLabel(path).padEnd(width, " ");
 }
 
-
 function getPackageVersion(): string {
   const here = dirname(fileURLToPath(import.meta.url));
   // Works from src/ (tsx) and dist/ (built binary).
