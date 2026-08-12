@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { executeArchiveRun } from "./commands/archive-run.js";
@@ -432,6 +433,26 @@ function padCommandLabel(path: string[], width: number): string {
   return formatCommandLabel(path).padEnd(width, " ");
 }
 
+function getPackageVersion(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  // Works from src/ (tsx) and dist/ (built binary).
+  for (const candidate of [join(here, "../package.json"), join(here, "../../package.json")]) {
+    try {
+      const parsed = JSON.parse(readFileSync(candidate, "utf8")) as { version?: string };
+      if (typeof parsed.version === "string" && parsed.version.length > 0) {
+        return parsed.version;
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+  return "0.0.0";
+}
+
+function isVersionFlag(value: string | undefined): boolean {
+  return value === "-V" || value === "--version";
+}
+
 function formatHelp(): string {
   const commandEntries = collectCommandEntries(commandTree);
   const widestLabel = commandEntries.reduce((width, entry) => {
@@ -450,6 +471,7 @@ function formatHelp(): string {
     "",
     "Options:",
     "  -h, --help           Show this help",
+    "  -V, --version        Print marrow version",
   ].join("\n");
 }
 
@@ -508,6 +530,11 @@ export async function main(
 ): Promise<number> {
   if (argv.length === 0 || isHelpFlag(argv[0])) {
     output.info(formatHelp());
+    return 0;
+  }
+
+  if (isVersionFlag(argv[0])) {
+    output.info(getPackageVersion());
     return 0;
   }
 
