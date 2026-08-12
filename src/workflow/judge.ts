@@ -60,6 +60,8 @@ export type WorkflowJudgeOptions = {
   maxPer?: string | undefined;
   maxUsd?: string | undefined;
   model?: string | undefined;
+  /** Clock anchoring the mining recency window. Defaults to the wall clock. */
+  now?: Date | undefined;
   source?: string | null | undefined;
   apiKey?: string | undefined;
 };
@@ -161,6 +163,7 @@ export async function runWorkflowJudge(
     limit: Number.MAX_SAFE_INTEGER,
     source: options.source ?? null,
     ...(options.database ? { database: options.database } : {}),
+    ...(options.now ? { now: options.now } : {}),
   };
   const mined = await mineWorkflowCandidates(mineOptions);
   const candidates = mined.candidates

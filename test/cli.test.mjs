@@ -15,6 +15,18 @@ const projectRoot = dirname(testDir);
 const cliPath = join(projectRoot, "dist", "cli.js");
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
 
+/**
+ * These fixtures are read by a spawned CLI process, which reads the wall clock
+ * and cannot take an injected one. So anything that has to land inside a
+ * `--days` recency window is expressed relative to now. A fixed date here would
+ * pass on the day it was written and silently start failing once it aged out.
+ */
+function daysAgoIso(days) {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+const RECENT_SESSION_UPDATED_AT = daysAgoIso(1);
+
 function runCli(args, env = {}) {
   return spawnSync(process.execPath, [cliPath, ...args], {
     cwd: projectRoot,
@@ -250,7 +262,7 @@ test("workflow mine emits read-only JSON candidates", async () => {
         topic_source: "deterministic",
         next_step: "Continue.",
         summary_json_path: summaryPath,
-        updated_at: "2026-07-08T00:00:00.000Z",
+        updated_at: RECENT_SESSION_UPDATED_AT,
       })}\n`,
       "utf8",
     );
@@ -324,7 +336,7 @@ test("workflow review accepts limit", async () => {
         topic_source: "deterministic",
         next_step: "Continue.",
         summary_json_path: summaryPath,
-        updated_at: "2026-07-08T00:00:00.000Z",
+        updated_at: RECENT_SESSION_UPDATED_AT,
       });
     }
     await writeFile(
@@ -394,7 +406,7 @@ test("workflow decisions exclude dismissed candidates unless included", async ()
         topic_source: "deterministic",
         next_step: "Continue.",
         summary_json_path: summaryPath,
-        updated_at: "2026-07-08T00:00:00.000Z",
+        updated_at: RECENT_SESSION_UPDATED_AT,
       })}\n`,
       "utf8",
     );
@@ -521,7 +533,7 @@ test("workflow apply writes dry-run drafts and refuses dismissed candidates", as
         topic_source: "deterministic",
         next_step: "Continue.",
         summary_json_path: summaryPath,
-        updated_at: "2026-07-08T00:00:00.000Z",
+        updated_at: RECENT_SESSION_UPDATED_AT,
       })}\n`,
       "utf8",
     );
@@ -625,7 +637,7 @@ test("workflow mine filters by cluster and recommendation", async () => {
         topic_source: "deterministic",
         next_step: "Continue.",
         summary_json_path: summaryPath,
-        updated_at: "2026-07-08T00:00:00.000Z",
+        updated_at: RECENT_SESSION_UPDATED_AT,
       });
     }
     await writeFile(

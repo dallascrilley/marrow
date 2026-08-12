@@ -5,6 +5,13 @@ on:
   pull_request:
   push:
     branches: [main]
+  # A daily run on an unchanged tree. Push and pull_request triggers only prove
+  # the suite passes on the day someone happens to commit; anything that depends
+  # on the calendar (recency windows, expiring fixtures, cert or token lifetimes)
+  # can rot silently for months between commits. This catches that within a day.
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read

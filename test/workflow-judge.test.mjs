@@ -14,6 +14,20 @@ import {
 
 const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
 
+/**
+ * Session fixtures below are pinned to fixed dates, so the mining recency
+ * window is anchored to a fixed clock rather than the wall clock. Otherwise the
+ * suite would start failing once the fixtures aged past the window.
+ */
+const FIXED_NOW = new Date("2026-07-09T00:00:00.000Z");
+
+/**
+ * One test below crosses into a spawned CLI process, which reads the wall clock
+ * and cannot take an injected one. Its fixture is dated relative to now so it
+ * stays inside the `--days` window on both sides of that boundary.
+ */
+const RECENT_UPDATED_AT = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
 function summary(sessionId, overrides = {}) {
   return {
     session_id: sessionId,
@@ -201,6 +215,7 @@ test("runWorkflowJudge appends judged decisions and reuses cache without network
     const first = await runWorkflowJudge({
       apiKey: "test-key",
       days: 30,
+      now: FIXED_NOW,
       fetchImpl,
       limit: 1,
       maxPer: "5/24h",
@@ -221,6 +236,7 @@ test("runWorkflowJudge appends judged decisions and reuses cache without network
     const second = await runWorkflowJudge({
       apiKey: "test-key",
       days: 30,
+      now: FIXED_NOW,
       fetchImpl: async () => {
         throw new Error("cache hit should not call fetch");
       },
@@ -258,6 +274,7 @@ test("runWorkflowJudge skips paid calls when count budget is exhausted", async (
     const result = await runWorkflowJudge({
       apiKey: "test-key",
       days: 30,
+      now: FIXED_NOW,
       fetchImpl: async () => {
         throw new Error("budget-exhausted run should not call fetch");
       },
@@ -281,6 +298,7 @@ test("workflow show surfaces judged verdict notes", async () => {
   const { runtimeRoot, sandbox } = await writeRuntime([
     {
       sessionId: "wf-show-judge-1",
+      updatedAt: RECENT_UPDATED_AT,
       summary: summary("wf-show-judge-1", {
         what_was_decided: ["Always run script/cibuild before claiming CI is green."],
       }),
@@ -290,6 +308,8 @@ test("workflow show surfaces judged verdict notes", async () => {
   const previousRoot = process.env[runtimeOverrideEnvVar];
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
   try {
+    // No injected clock here on purpose: the spawned `workflow show` below uses
+    // the wall clock, so both sides have to agree on the same window.
     const judged = await runWorkflowJudge({
       apiKey: "test-key",
       days: 30,
