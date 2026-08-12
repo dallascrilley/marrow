@@ -5,16 +5,16 @@ import { eventSchema, sourceSessionFixture, turnSchema } from "../dist/models/ca
 import { extractLearnings } from "../dist/pipeline/extract.js";
 
 // Deterministic proof harness for the rejected quality tasks:
-//   td-a0038f  cap project learnings per session at 12 (priority survival)
-//   td-6600c2  reject multi-sentence non-verified candidates + 240-char ceiling
-//   td-aceb5a  shared isAtomicStatement heuristic governs the gate
+//   cap project learnings per session at 12 (priority survival)
+//   reject multi-sentence non-verified candidates + 240-char ceiling
+//   shared isAtomicStatement heuristic governs the gate
 // These assert the extraction-time behaviour the live audit cannot show until
 // historical learnings are reprocessed.
 
 function sourceSession(overrides = {}) {
   return {
     ...sourceSessionFixture,
-    project_key: "studio-tools",
+    project_key: "service-tools",
     session_id: "cap-atomicity-session",
     source_hash: "sha256:cap-atomicity",
     ...overrides,
@@ -51,7 +51,7 @@ function decisionEvent(turnId, seq, summary) {
   });
 }
 
-test("td-a0038f: project learnings are capped at 12 by default", () => {
+test("project learnings are capped at 12 by default", () => {
   const source = sourceSession();
   const turns = [];
   const events = [];
@@ -77,7 +77,7 @@ test("td-a0038f: project learnings are capped at 12 by default", () => {
   assert.equal(learnings.project.length, 12);
 });
 
-test("td-a0038f: an explicit higher cap is honoured", () => {
+test("an explicit higher cap is honoured", () => {
   const source = sourceSession({ session_id: "cap-override-session" });
   const turns = [];
   const events = [];
@@ -107,7 +107,7 @@ test("td-a0038f: an explicit higher cap is honoured", () => {
   }
 });
 
-test("td-6600c2/td-aceb5a: multi-sentence non-verified candidate is dropped, atomic kept", () => {
+test("multi-sentence non-verified candidate is dropped, atomic kept", () => {
   const source = sourceSession({ session_id: "atomicity-session" });
   const firstTurn = turn(0, { session_id: "atomicity-session" });
   const events = [
@@ -130,7 +130,7 @@ test("td-6600c2/td-aceb5a: multi-sentence non-verified candidate is dropped, ato
   assert.match(learnings.project[0].statement, /retry budget bounded/);
 });
 
-test("td-6600c2: kept statements respect the 240-char ceiling", () => {
+test("kept statements respect the 240-char ceiling", () => {
   const source = sourceSession({ session_id: "ceiling-session" });
   const firstTurn = turn(0, { session_id: "ceiling-session" });
   const longReason = "x".repeat(400);

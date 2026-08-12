@@ -195,7 +195,7 @@ export async function assessUsdBudget(
   }
   if (unknownCostInWindow > 0) {
     console.warn(
-      `[asd] usd-budget: ${unknownCostInWindow} in-window receipt(s) had no usable cost and were excluded; spend may be understated.`,
+      `[marrow] usd-budget: ${unknownCostInWindow} in-window receipt(s) had no usable cost and were excluded; spend may be understated.`,
     );
   }
 

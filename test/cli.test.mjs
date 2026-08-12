@@ -13,7 +13,7 @@ import { hashToProjectId } from "../dist/v2/project/resolve.js";
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
 const cliPath = join(projectRoot, "dist", "cli.js");
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 /**
  * These fixtures are read by a spawned CLI process, which reads the wall clock
@@ -38,7 +38,7 @@ function runCli(args, env = {}) {
   });
 }
 
-test("asd --help lists every Task 1 command", () => {
+test("marrow --help lists every Task 1 command", () => {
   const result = runCli(["--help"]);
 
   assert.equal(result.status, 0, result.stderr);
@@ -82,7 +82,7 @@ test("unknown command exits non-zero and prints help", () => {
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Unknown command: bogus/);
-  assert.match(result.stdout, /Usage: asd/);
+  assert.match(result.stdout, /Usage: marrow/);
 });
 
 test("missing subcommand exits non-zero and prints available subcommands", () => {
@@ -92,11 +92,11 @@ test("missing subcommand exits non-zero and prints available subcommands", () =>
   assert.match(result.stderr, /Unknown or missing subcommand for ingest/);
   assert.match(result.stderr, /backfill/);
   assert.match(result.stderr, /sync/);
-  assert.match(result.stdout, /Usage: asd/);
+  assert.match(result.stdout, /Usage: marrow/);
 });
 
 test("search finds sessions in the exported session index", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-search-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-search-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const indexDir = join(runtimeRoot, "index");
   const indexPath = join(indexDir, "session-index.jsonl");
@@ -183,7 +183,7 @@ test("search without query exits non-zero", () => {
 });
 
 test("search reports missing session index", async () => {
-  const runtimeRoot = await mkdtemp(join(tmpdir(), "asd-search-missing-index-"));
+  const runtimeRoot = await mkdtemp(join(tmpdir(), "marrow-search-missing-index-"));
 
   try {
     const result = runCli(["search", "topic"], {
@@ -199,7 +199,7 @@ test("search reports missing session index", async () => {
 });
 
 test("workflow mine emits read-only JSON candidates", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-cli-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-workflow-cli-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const sessionId = "workflow-cli-session";
   const summaryDir = join(runtimeRoot, "summaries", "by-session", sessionId);
@@ -286,7 +286,7 @@ test("workflow mine emits read-only JSON candidates", async () => {
 });
 
 test("workflow review accepts limit", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-review-limit-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-workflow-review-limit-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const indexDir = join(runtimeRoot, "index");
   const records = ["validation-session", "review-session"];
@@ -359,7 +359,7 @@ test("workflow review accepts limit", async () => {
 });
 
 test("workflow decisions exclude dismissed candidates unless included", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-decision-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-workflow-decision-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const sessionId = "workflow-decision-session";
   const summaryDir = join(runtimeRoot, "summaries", "by-session", sessionId);
@@ -486,7 +486,7 @@ test("workflow decisions exclude dismissed candidates unless included", async ()
 });
 
 test("workflow apply writes dry-run drafts and refuses dismissed candidates", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-apply-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-workflow-apply-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const sessionId = "workflow-apply-session";
   const summaryDir = join(runtimeRoot, "summaries", "by-session", sessionId);
@@ -587,7 +587,7 @@ test("workflow apply writes dry-run drafts and refuses dismissed candidates", as
 });
 
 test("workflow mine filters by cluster and recommendation", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-filter-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-workflow-filter-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const indexDir = join(runtimeRoot, "index");
   const sessions = [
@@ -684,7 +684,7 @@ test("workflow mine validates cluster and recommendation filters", () => {
   assert.match(recommendationResult.stderr, /adopt/);
 });
 test("report --html writes a static dashboard artifact via CLI", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-report-html-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-report-html-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const outputPath = join(sandbox, "dashboard.html");
   const { createLedger, upsertSourceSession } = await import("../dist/db/ledger.js");
@@ -806,7 +806,7 @@ test("report --html writes a static dashboard artifact via CLI", async () => {
         scope_key: "demo",
         kind: "workflow",
         title: "Reuse shared read surfaces",
-        trigger: "When adding a dashboard view in ASD.",
+        trigger: "When adding a dashboard view in Marrow.",
         statement: "Reuse shared typed readers instead of adding a dashboard-only query path.",
         evidence: ["The report exporter already consumed shared read modules."],
         confidence: "high",
@@ -869,7 +869,7 @@ test("report --html writes a static dashboard artifact via CLI", async () => {
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Wrote dashboard HTML for 1 session/);
     const html = await readFile(outputPath, "utf8");
-    assert.match(html, /ASD Dashboard/);
+    assert.match(html, /Marrow Dashboard/);
     assert.match(html, /Dashboard detail topic/);
     assert.match(html, /Show me the phase 1 dashboard\./);
     assert.match(html, /node dist\/cli\.js report --html/);
@@ -904,7 +904,7 @@ test("report --html writes a static dashboard artifact via CLI", async () => {
       /Read-only triage snapshot from the current review queue; act through CLI commands\./,
     );
     assert.match(html, /Summary and reduced artifacts are ready for review\./);
-    assert.match(html, /CLI: asd review show /);
+    assert.match(html, /CLI: marrow review show /);
     assert.match(html, /review_items":\[\{"current_lifecycle_state":"archived","enqueued_at":/);
   } finally {
     delete process.env[runtimeOverrideEnvVar];
@@ -913,7 +913,7 @@ test("report --html writes a static dashboard artifact via CLI", async () => {
 });
 
 test("report --html handles large runtimes without rereading the session index per session", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-report-large-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-report-large-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const outputPath = join(sandbox, "dashboard-large.html");
   const { createLedger, upsertSourceSession } = await import("../dist/db/ledger.js");
@@ -1030,7 +1030,7 @@ test("report --html handles large runtimes without rereading the session index p
 });
 
 test("runtime-path creation is isolated by the root override", async () => {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-runtime-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-runtime-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
 
   try {
@@ -1054,7 +1054,7 @@ test("runtime-path creation is isolated by the root override", async () => {
 });
 
 test("export-index writes a consolidated v1 JSONL from manifests and summaries", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-session-index-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-session-index-"));
   const runtimeRoot = join(sandbox, "runtime-root");
 
   try {
@@ -1226,7 +1226,7 @@ test("export-index writes a consolidated v1 JSONL from manifests and summaries",
 });
 
 test("export-index dedupes legacy and revision manifests by identity keeping newest", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-session-index-dedupe-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-session-index-dedupe-"));
   const runtimeRoot = join(sandbox, "runtime-root");
 
   try {
@@ -1360,7 +1360,7 @@ test("export-index dedupes legacy and revision manifests by identity keeping new
 });
 
 test("export-index omits ledger-deleted sessions even when manifests remain on disk", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-session-index-deleted-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-session-index-deleted-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const { createLedger, upsertSourceSession } = await import("../dist/db/ledger.js");
 
@@ -1473,7 +1473,7 @@ test("export-index omits ledger-deleted sessions even when manifests remain on d
 });
 
 test("quality resummarize upgrades a low-signal topic via CLI", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-cli-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-cli-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const { createLedger, upsertSourceSession } = await import("../dist/db/ledger.js");
   const { writeSessionSummary } = await import("../dist/writers/summary-writer.js");
@@ -1587,7 +1587,7 @@ test("quality resummarize upgrades a low-signal topic via CLI", async () => {
 });
 
 test("quality resummarize --low-signal-only skips high-signal topics via CLI", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-cli-filter-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-cli-filter-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const { createLedger, upsertSourceSession } = await import("../dist/db/ledger.js");
   const { writeSessionSummary } = await import("../dist/writers/summary-writer.js");
@@ -1708,7 +1708,7 @@ test("quality resummarize --low-signal-only skips high-signal topics via CLI", a
 });
 
 test("quality resummarize --export-index refreshes session-index.jsonl via CLI", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-cli-export-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-cli-export-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const { createLedger, upsertSourceSession } = await import("../dist/db/ledger.js");
   const { writeSessionSummary } = await import("../dist/writers/summary-writer.js");
@@ -1818,7 +1818,7 @@ test("quality resummarize --export-index refreshes session-index.jsonl via CLI",
 });
 
 test("quality resummarize --dry-run reports would_process_count via CLI", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-cli-dry-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-cli-dry-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const { createLedger, upsertSourceSession } = await import("../dist/db/ledger.js");
   const { writeSessionSummary } = await import("../dist/writers/summary-writer.js");
@@ -1948,7 +1948,7 @@ test("doctor provider exits 1 when OPENROUTER_API_KEY is unset", () => {
 });
 
 test("health prints typed JSON and fails open for the optional provider integration", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-health-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-health-"));
   const runtimeRoot = join(sandbox, "runtime-root");
 
   try {
@@ -1967,16 +1967,16 @@ test("health prints typed JSON and fails open for the optional provider integrat
     assert.equal(humanResult.status, 1, humanResult.stderr || humanResult.stdout);
     assert.match(
       humanResult.stdout,
-      /Provider: not checked \(optional; run `asd doctor provider`\)/,
+      /Provider: not checked \(optional; run `marrow doctor provider`\)/,
     );
-    assert.match(humanResult.stdout, /Next: asd /);
+    assert.match(humanResult.stdout, /Next: marrow /);
   } finally {
     await rm(sandbox, { force: true, recursive: true });
   }
 });
 
 test("health exits 2 with an explicit unverifiable report when a reader fails", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-health-unverifiable-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-health-unverifiable-"));
 
   try {
     const result = runCli(["health", "--json"], {
@@ -1995,7 +1995,7 @@ test("health exits 2 with an explicit unverifiable report when a reader fails", 
 });
 
 test("health exits 2 when opening the ledger is unverifiable", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-health-ledger-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-health-ledger-"));
   const runtimeRoot = join(sandbox, "not-a-directory");
 
   try {

@@ -24,16 +24,16 @@ const HOOK_SPECS: readonly HookSpec[] = [
   {
     key: "end",
     event: "SessionEnd",
-    destName: "asd-session-end-ingest.sh",
+    destName: "marrow-session-end-ingest.sh",
     templateName: "claude-session-end-ingest.sh",
-    marker: "asd-session-end-ingest",
+    marker: "marrow-session-end-ingest",
   },
   {
     key: "start",
     event: "SessionStart",
-    destName: "asd-session-start-recall.sh",
+    destName: "marrow-session-start-recall.sh",
     templateName: "claude-session-start-recall.sh",
-    marker: "asd-session-start-recall",
+    marker: "marrow-session-start-recall",
   },
 ];
 
@@ -196,7 +196,7 @@ function projectHookCommand(destName: string): string {
   return `"$CLAUDE_PROJECT_DIR/.claude/hooks/${destName}"`;
 }
 
-/** Merge an asd hook command into the given hook event, idempotently. */
+/** Merge an marrow hook command into the given hook event, idempotently. */
 export function mergeHookEvent(
   settings: ClaudeSettings,
   event: HookEvent,
@@ -230,7 +230,7 @@ export function mergeHookEvent(
 
 /** Back-compat wrapper retained for callers/tests targeting SessionEnd. */
 export function mergeSessionEndHook(settings: ClaudeSettings, hookCommand: string): ClaudeSettings {
-  return mergeHookEvent(settings, "SessionEnd", hookCommand, "asd-session-end-ingest");
+  return mergeHookEvent(settings, "SessionEnd", hookCommand, "marrow-session-end-ingest");
 }
 
 function normalizeHookEntries(value: unknown): Array<Record<string, unknown>> {

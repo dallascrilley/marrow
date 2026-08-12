@@ -26,7 +26,7 @@ test("discovers the smoke fixture and attributes the workspace via cwd", async (
 });
 
 test("returns an empty list when the sessions root is missing", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-pi-empty-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-pi-empty-"));
   try {
     const result = await discoverPiInputs({
       piSessionsRoot: join(dir, "no-such-root"),
@@ -46,7 +46,7 @@ test("shouldSkipPiSessionPath skips pi-test basenames under var/folders by defau
 
 test("shouldSkipPiSessionPath does not skip production paths in macOS temp sandboxes", () => {
   const path =
-    "/var/folders/xx/yy/T/asd-pi-int-abc/home/.pi/agent/sessions/--Users-example-Code-demo--/2026-05-18T00-28-01-780Z_019e387b.jsonl";
+    "/var/folders/xx/yy/T/marrow-pi-int-abc/home/.pi/agent/sessions/--Users-example-Code-demo--/2026-05-18T00-28-01-780Z_019e387b.jsonl";
   assert.equal(shouldSkipPiSessionPath(path, { includeTestSessions: false }), null);
 });
 
@@ -56,7 +56,7 @@ test("shouldSkipPiSessionPath skips pi-test session basenames by default", () =>
 });
 
 test("ASD_PI_SESSIONS_ROOT env points discovery at an alternate sessions tree", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-pi-env-root-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-pi-env-root-"));
   const previous = process.env.ASD_PI_SESSIONS_ROOT;
   try {
     const workspaceDir = join(dir, "--Users-example-Code-env-demo--");

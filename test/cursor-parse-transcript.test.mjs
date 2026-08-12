@@ -7,7 +7,7 @@ import test from "node:test";
 import { parseCursorTranscript } from "../dist/adapters/cursor/parse-transcript.js";
 
 async function withTranscript(content, run) {
-  const sandboxRoot = await mkdtemp(join(tmpdir(), "asd-cursor-transcript-"));
+  const sandboxRoot = await mkdtemp(join(tmpdir(), "marrow-cursor-transcript-"));
   const transcriptPath = join(sandboxRoot, "agent-transcripts", "composer.jsonl");
 
   try {
@@ -43,7 +43,7 @@ test("parses Cursor transcript JSONL as adapter-local intermediate records with 
         content: [
           {
             type: "text",
-            text: "Open /Users/example/Code/distillery/src/main.ts and run npm test",
+            text: "Open /Users/example/Code/marrow/src/main.ts and run npm test",
           },
         ],
       },
@@ -55,7 +55,7 @@ test("parses Cursor transcript JSONL as adapter-local intermediate records with 
         content: [
           {
             type: "text",
-            text: "I'll inspect /Users/example/Code/distillery/src/main.ts before running `npm test`.",
+            text: "I'll inspect /Users/example/Code/marrow/src/main.ts before running `npm test`.",
           },
         ],
       },
@@ -66,14 +66,14 @@ test("parses Cursor transcript JSONL as adapter-local intermediate records with 
       id: "tool-001",
       arguments: {
         command: "npm test",
-        cwd: "/Users/example/Code/distillery",
+        cwd: "/Users/example/Code/marrow",
       },
     }),
     JSON.stringify({
       type: "tool_result",
       toolName: "read_file",
       metadata: {
-        path: "/Users/example/Code/distillery/src/main.ts",
+        path: "/Users/example/Code/marrow/src/main.ts",
       },
     }),
   ].join("\n");
@@ -91,10 +91,10 @@ test("parses Cursor transcript JSONL as adapter-local intermediate records with 
         rawType: "user",
         lineNumber: 1,
         timestampHint: "2026-05-16T08:30:00.000Z",
-        messageText: "Open /Users/example/Code/distillery/src/main.ts and run npm test",
+        messageText: "Open /Users/example/Code/marrow/src/main.ts and run npm test",
         contentRedacted: false,
         commandStrings: ["npm test"],
-        filePaths: ["/Users/example/Code/distillery/src/main.ts"],
+        filePaths: ["/Users/example/Code/marrow/src/main.ts"],
         toolName: null,
         toolCallId: null,
       },
@@ -104,10 +104,10 @@ test("parses Cursor transcript JSONL as adapter-local intermediate records with 
         lineNumber: 2,
         timestampHint: "2026-05-16T08:30:02.000Z",
         messageText:
-          "I'll inspect /Users/example/Code/distillery/src/main.ts before running `npm test`.",
+          "I'll inspect /Users/example/Code/marrow/src/main.ts before running `npm test`.",
         contentRedacted: false,
         commandStrings: ["npm test"],
-        filePaths: ["/Users/example/Code/distillery/src/main.ts"],
+        filePaths: ["/Users/example/Code/marrow/src/main.ts"],
         toolName: null,
         toolCallId: null,
       },
@@ -119,7 +119,7 @@ test("parses Cursor transcript JSONL as adapter-local intermediate records with 
         messageText: null,
         contentRedacted: false,
         commandStrings: ["npm test"],
-        filePaths: ["/Users/example/Code/distillery"],
+        filePaths: ["/Users/example/Code/marrow"],
         toolName: "run_terminal_command",
         toolCallId: "tool-001",
       },
@@ -131,7 +131,7 @@ test("parses Cursor transcript JSONL as adapter-local intermediate records with 
         messageText: null,
         contentRedacted: false,
         commandStrings: [],
-        filePaths: ["/Users/example/Code/distillery/src/main.ts"],
+        filePaths: ["/Users/example/Code/marrow/src/main.ts"],
         toolName: "read_file",
         toolCallId: null,
       },
@@ -153,7 +153,7 @@ test("tolerates missing fields, redacted content, and partial tool metadata", as
     JSON.stringify({
       type: "tool_call",
       arguments: {
-        path: "/Users/example/Code/distillery/src/partial.ts",
+        path: "/Users/example/Code/marrow/src/partial.ts",
       },
     }),
     JSON.stringify({
@@ -188,7 +188,7 @@ test("tolerates missing fields, redacted content, and partial tool metadata", as
         messageText: null,
         contentRedacted: false,
         commandStrings: [],
-        filePaths: ["/Users/example/Code/distillery/src/partial.ts"],
+        filePaths: ["/Users/example/Code/marrow/src/partial.ts"],
         toolName: null,
         toolCallId: null,
       },

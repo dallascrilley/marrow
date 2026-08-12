@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launcher for asd's MCP query server (`asd mcp serve`).
+# Launcher for marrow's MCP query server (`marrow mcp serve`).
 #
 # Why this exists instead of `{ "command": "node", "args": ["dist/cli.js", ...] }`:
 # GUI/IDE-launched MCP clients (Claude Code desktop app, IDE extensions) spawn
@@ -37,7 +37,7 @@ resolve_node() {
 }
 
 node_bin="$(resolve_node)" || {
-  echo "asd mcp-serve: could not locate a node binary (PATH, mise shim, or mise install)" >&2
+  echo "marrow mcp-serve: could not locate a node binary (PATH, mise shim, or mise install)" >&2
   exit 1
 }
 

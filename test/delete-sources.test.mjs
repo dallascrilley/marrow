@@ -20,11 +20,11 @@ const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
 const cliPath = join(projectRoot, "dist", "cli.js");
 const cleanupScriptPath = join(projectRoot, "scripts", "cleanup-codex-sources.mjs");
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withFixture(run) {
-  const root = await mkdtemp(join(tmpdir(), "asd-delete-sources-runtime-"));
-  const home = await mkdtemp(join(tmpdir(), "asd-delete-sources-home-"));
+  const root = await mkdtemp(join(tmpdir(), "marrow-delete-sources-runtime-"));
+  const home = await mkdtemp(join(tmpdir(), "marrow-delete-sources-home-"));
   const previousRuntimeRoot = process.env[runtimeOverrideEnvVar];
   const previousHome = process.env.HOME;
   process.env[runtimeOverrideEnvVar] = root;

@@ -43,7 +43,7 @@ test("workspace mapping falls back to decoded slug when session_meta is null", (
 });
 
 test("reads session after OMP title pad preamble", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-omp-title-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-omp-title-"));
   try {
     const sessionPath = join(dir, "session.jsonl");
     await writeFile(

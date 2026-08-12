@@ -31,7 +31,7 @@ import {
 } from "../dist/storage/staging.js";
 
 async function withStagingEnvironment(run) {
-  const sandboxBase = await mkdtemp(join(await realpath(tmpdir()), "asd-staging-storage-"));
+  const sandboxBase = await mkdtemp(join(await realpath(tmpdir()), "marrow-staging-storage-"));
   const runtimeRoot = join(sandboxBase, "runtime");
   const previousRuntimeRoot = process.env[runtimeRootOverrideEnvVar];
   const previousStagingRoot = process.env[stagingRootOverrideEnvVar];

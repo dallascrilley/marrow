@@ -2,7 +2,7 @@ import { constants } from "node:fs";
 import { access, lstat, mkdir, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 
-import { getRuntimePath, stagingRootOverrideEnvVar } from "../config/paths.js";
+import { getRuntimePath, readOverrideEnvVar, stagingRootOverrideEnvVar } from "../config/paths.js";
 
 const parsedArtifactName = "parsed-records.json";
 const reducedArtifactName = "reduced-session.json";
@@ -20,7 +20,7 @@ export type StagingRootInspection = {
 };
 
 export function getStagingRoot(): string {
-  const configuredRoot = process.env[stagingRootOverrideEnvVar];
+  const configuredRoot = readOverrideEnvVar(stagingRootOverrideEnvVar);
   const root =
     configuredRoot && configuredRoot.length > 0 ? configuredRoot : getRuntimePath("staging");
   if (isStagingRootConfigured() && !isAbsolute(root)) {
@@ -37,7 +37,8 @@ export async function inspectStagingRoot(
   try {
     root = getStagingRoot();
   } catch (error) {
-    const requestedRoot = process.env[stagingRootOverrideEnvVar] ?? getRuntimePath("staging");
+    const requestedRoot =
+      readOverrideEnvVar(stagingRootOverrideEnvVar) ?? getRuntimePath("staging");
     return unavailableInspection(requestedRoot, configured, error);
   }
 
@@ -132,7 +133,7 @@ function assertStagingSessionId(sessionId: string): void {
 }
 
 function isStagingRootConfigured(): boolean {
-  const configuredRoot = process.env[stagingRootOverrideEnvVar];
+  const configuredRoot = readOverrideEnvVar(stagingRootOverrideEnvVar);
   return configuredRoot !== undefined && configuredRoot.length > 0;
 }
 

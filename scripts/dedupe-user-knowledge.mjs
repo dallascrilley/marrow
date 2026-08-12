@@ -115,9 +115,7 @@ export async function runBackfill({ root, apply = false }) {
 function parseArgs(argv) {
   const options = {
     apply: false,
-    root:
-      process.env.AGENT_SESSION_DISTILLERY_ROOT ??
-      join(process.env.HOME ?? "", ".agent-session-distillery"),
+    root: process.env.MARROW_ROOT ?? join(process.env.HOME ?? "", ".marrow"),
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];

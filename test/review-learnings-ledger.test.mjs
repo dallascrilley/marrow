@@ -9,10 +9,10 @@ import { createLedger, upsertSourceSession } from "../dist/db/ledger.js";
 import { learningFixture, sourceSessionFixture } from "../dist/models/canonical.js";
 import { getProjectKnowledgeSessionPath } from "../dist/writers/knowledge-writer.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntimeRoot(run) {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-review-ledger-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-review-ledger-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
   const previousKey = process.env.OPENROUTER_API_KEY;
@@ -41,7 +41,7 @@ async function withRuntimeRoot(run) {
 function makeSession(index) {
   return {
     ...sourceSessionFixture,
-    project_key: "agent-session-distillery",
+    project_key: "marrow",
     session_id: `ledger-session-${index}`,
     conversation_id: `ledger-conversation-${index}`,
     source_path: `/tmp/ledger-session-${index}.jsonl`,

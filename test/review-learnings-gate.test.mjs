@@ -6,10 +6,10 @@ import test from "node:test";
 import { executeQualityReviewLearnings } from "../dist/commands/quality-review-learnings.js";
 import { createLedger } from "../dist/db/ledger.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntimeRoot(run) {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-review-learnings-gate-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-review-learnings-gate-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
 
@@ -60,7 +60,7 @@ test("review-learnings --if-new skips when no unreviewed project learnings exist
 });
 
 test("review-learnings blocks when in-window telemetry spend exceeds ASD_LLM_MAX_USD", async () => {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-review-usd-gate-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-review-usd-gate-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
   const previousMaxUsd = process.env.ASD_LLM_MAX_USD;

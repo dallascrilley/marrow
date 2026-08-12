@@ -8,7 +8,7 @@ import test from "node:test";
 import { discoverCursorInputs } from "../dist/adapters/cursor/discover.js";
 
 async function withSyntheticHome(run) {
-  const sandboxRoot = await mkdtemp(join(tmpdir(), "asd-cursor-discovery-"));
+  const sandboxRoot = await mkdtemp(join(tmpdir(), "marrow-cursor-discovery-"));
   const homeDir = join(sandboxRoot, "home");
   await mkdir(homeDir, { recursive: true });
 
@@ -34,7 +34,7 @@ function sha256(content) {
 
 test("discovers Cursor transcripts with hashes, metadata, and optional support databases", async () => {
   await withSyntheticHome(async (homeDir) => {
-    const workspaceOne = join(homeDir, "Code", "agent-session-distillery");
+    const workspaceOne = join(homeDir, "Code", "marrow");
     const workspaceTwo = join(homeDir, "Code", "secondary-workspace");
     await mkdir(workspaceOne, { recursive: true });
     await mkdir(workspaceTwo, { recursive: true });
@@ -113,7 +113,7 @@ test("discovers Cursor transcripts with hashes, metadata, and optional support d
       [
         {
           modifiedAt: firstModifiedAt.toISOString(),
-          projectKey: "agent-session-distillery",
+          projectKey: "marrow",
           sizeBytes: Buffer.byteLength(firstTranscriptContent),
           sourceFormat: "jsonl",
           sourceHash: sha256(firstTranscriptContent),

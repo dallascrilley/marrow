@@ -12,7 +12,7 @@ export async function executeQualityResummarize(
 ): Promise<number> {
   const options = parseResummarizeOptions(context.args);
   if (options.maxPer !== undefined && options.llmTopic !== true) {
-    console.warn("[asd] quality resummarize: --max-per has no effect without --llm-topic");
+    console.warn("[marrow] quality resummarize: --max-per has no effect without --llm-topic");
   }
 
   const result = await resummarizeSessions(database, {

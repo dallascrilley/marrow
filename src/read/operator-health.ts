@@ -231,34 +231,34 @@ function recommendNextAction(
   input: Pick<OperatorHealthModel, "pipeline" | "provider" | "recall" | "review" | "storage">,
 ): OperatorHealthRecommendation {
   if (!input.pipeline.gate.session_integrity.ok) {
-    return { command: "asd check", reason: "session_integrity_violations" };
+    return { command: "marrow check", reason: "session_integrity_violations" };
   }
   if (input.provider !== null && !input.provider.ok) {
-    return { command: "asd doctor provider", reason: "provider_unavailable" };
+    return { command: "marrow doctor provider", reason: "provider_unavailable" };
   }
   if (!input.pipeline.gate.llm_budget.allowed || !input.pipeline.gate.usd_budget.allowed) {
-    return { command: "asd quality cost-report", reason: "llm_budget_exhausted" };
+    return { command: "marrow quality cost-report", reason: "llm_budget_exhausted" };
   }
   if (input.pipeline.pending_sessions > 0) {
-    return { command: "asd ingest sync --source cursor", reason: "pending_ingest" };
+    return { command: "marrow ingest sync --source cursor", reason: "pending_ingest" };
   }
   if (input.pipeline.pending_learnings > 0) {
-    return { command: "asd quality review-learnings --if-new", reason: "pending_review" };
+    return { command: "marrow quality review-learnings --if-new", reason: "pending_review" };
   }
   if (input.review.freshness === "stale" || input.review.freshness === "missing") {
     return {
-      command: "asd quality review-learnings --if-new",
+      command: "marrow quality review-learnings --if-new",
       reason: input.review.freshness === "stale" ? "review_stale" : "review_missing",
     };
   }
   if (input.recall.failed_fires > 0 || !hasReachableMemory(input.recall.reachability)) {
     return {
-      command: "asd recall --cwd .",
+      command: "marrow recall --cwd .",
       reason: input.recall.failed_fires > 0 ? "recall_failures" : "no_reachable_memory",
     };
   }
   if (input.storage.pressure === "elevated") {
-    return { command: "asd storage inventory --older-than-days 30", reason: "storage_pressure" };
+    return { command: "marrow storage inventory --older-than-days 30", reason: "storage_pressure" };
   }
-  return { command: "asd stats", reason: "healthy" };
+  return { command: "marrow stats", reason: "healthy" };
 }

@@ -20,8 +20,8 @@ import { getRuntimePath, stagingRootOverrideEnvVar } from "../config/paths.js";
 import { requireStagingRoot } from "../storage/staging.js";
 import { loadPendingParsedIntermediateCleanup } from "./parsed-cleanup-receipts.js";
 
-const markerName = ".asd-staging-root.json";
-const markerKind = "agent-session-distillery-staging";
+const markerName = ".marrow-staging-root.json";
+const markerKind = "marrow-staging";
 const markerVersion = 1;
 const artifactNames = new Set(["parsed-records.json", "reduced-session.json"]);
 
@@ -44,7 +44,7 @@ export type StagingMigrationResult = {
   apply: boolean;
   copied_count: number;
   destination_root: string;
-  environment: { AGENT_SESSION_DISTILLERY_STAGING_ROOT: string };
+  environment: { MARROW_STAGING_ROOT: string };
   files: StagingMigrationFile[];
   manifest_path: string | null;
   receipt_path: string | null;
@@ -88,7 +88,7 @@ export async function runStagingMigration(
   const baseResult = {
     destination_root: destinationRoot,
     environment: { [stagingRootOverrideEnvVar]: destinationRoot } as {
-      AGENT_SESSION_DISTILLERY_STAGING_ROOT: string;
+      MARROW_STAGING_ROOT: string;
     },
     files,
     source_root: sourceRoot,
@@ -173,12 +173,12 @@ async function validateDestination(requested: string, sourceRoot: string): Promi
   const marker = entries.find((entry) => entry.name === markerName);
   if (entries.length > 0 && marker === undefined) {
     throw new Error(
-      "staging migration destination must be empty or contain an ASD ownership marker",
+      "staging migration destination must be empty or contain an Marrow ownership marker",
     );
   }
   if (marker !== undefined) {
     if (!marker.isFile()) {
-      throw new Error("invalid ASD staging ownership marker");
+      throw new Error("invalid Marrow staging ownership marker");
     }
     const value = JSON.parse(await readFile(join(destinationRoot, markerName), "utf8")) as {
       kind?: unknown;
@@ -190,11 +190,13 @@ async function validateDestination(requested: string, sourceRoot: string): Promi
       value.version !== markerVersion ||
       typeof value.source_root !== "string"
     ) {
-      throw new Error("invalid ASD staging ownership marker");
+      throw new Error("invalid Marrow staging ownership marker");
     }
     const markerSource = await realpath(value.source_root).catch(() => null);
     if (markerSource !== sourceCanonical) {
-      throw new Error(`ASD staging ownership marker source mismatch: expected ${sourceCanonical}`);
+      throw new Error(
+        `Marrow staging ownership marker source mismatch: expected ${sourceCanonical}`,
+      );
     }
     await validateOwnedDestinationEntries(destinationRoot);
   }
@@ -261,7 +263,7 @@ async function inspectSourceFiles(
 async function copyOne(file: StagingMigrationFile): Promise<void> {
   await assertSourceIdentity(file.source_path, file);
   await mkdir(dirname(file.destination_path), { recursive: true });
-  const temporaryPath = `${file.destination_path}.asd-migrate-${process.pid}-${randomUUID()}.tmp`;
+  const temporaryPath = `${file.destination_path}.marrow-migrate-${process.pid}-${randomUUID()}.tmp`;
   const hash = createHash("sha256");
   try {
     await pipeline(
@@ -300,7 +302,7 @@ async function validateOwnedDestinationEntries(root: string): Promise<void> {
       throw new Error(`unsupported staging migration destination entry: ${join(root, entry.name)}`);
     }
     for (const artifact of await readdir(join(root, entry.name), { withFileTypes: true })) {
-      const allowedTemporary = /^.+\.asd-migrate-\d+-[0-9a-f-]+\.tmp$/i.test(artifact.name);
+      const allowedTemporary = /^.+\.marrow-migrate-\d+-[0-9a-f-]+\.tmp$/i.test(artifact.name);
       if ((!artifactNames.has(artifact.name) && !allowedTemporary) || !artifact.isFile()) {
         throw new Error(
           `unsupported staging migration destination entry: ${join(root, entry.name, artifact.name)}`,
@@ -328,7 +330,7 @@ async function removeIncompleteTemporaryFiles(root: string): Promise<void> {
     if (!entry.isDirectory()) continue;
     const directory = join(root, entry.name);
     for (const artifact of await readdir(directory, { withFileTypes: true })) {
-      if (artifact.isFile() && /^.+\.asd-migrate-\d+-[0-9a-f-]+\.tmp$/i.test(artifact.name)) {
+      if (artifact.isFile() && /^.+\.marrow-migrate-\d+-[0-9a-f-]+\.tmp$/i.test(artifact.name)) {
         await rm(join(directory, artifact.name), { force: true });
       }
     }

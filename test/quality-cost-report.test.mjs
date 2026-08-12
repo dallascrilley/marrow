@@ -96,10 +96,10 @@ test("buildCostReport handles an empty corpus without dividing by zero", () => {
 });
 
 test("executeQualityCostReport reads telemetry and emits JSON", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-cost-report-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-cost-report-"));
   const runtimeRoot = join(sandbox, "runtime-root");
-  const previous = process.env.AGENT_SESSION_DISTILLERY_ROOT;
-  process.env.AGENT_SESSION_DISTILLERY_ROOT = runtimeRoot;
+  const previous = process.env.MARROW_ROOT;
+  process.env.MARROW_ROOT = runtimeRoot;
   const messages = [];
   try {
     const reportsDir = join(runtimeRoot, "reports");
@@ -122,9 +122,9 @@ test("executeQualityCostReport reads telemetry and emits JSON", async () => {
     assert.equal(payload.cost_per_session_usd.max, 0.004);
   } finally {
     if (previous === undefined) {
-      delete process.env.AGENT_SESSION_DISTILLERY_ROOT;
+      delete process.env.MARROW_ROOT;
     } else {
-      process.env.AGENT_SESSION_DISTILLERY_ROOT = previous;
+      process.env.MARROW_ROOT = previous;
     }
     await rm(sandbox, { force: true, recursive: true });
   }

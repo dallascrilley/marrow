@@ -37,7 +37,7 @@ function telemetryRecord({ cost, costIsKnown = true, createdAt }) {
 }
 
 async function withTelemetryFile(lines, run) {
-  const dir = await mkdtemp(join(tmpdir(), "asd-usd-budget-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-usd-budget-"));
   const path = join(dir, "llm-telemetry.jsonl");
   await writeFile(path, lines.length === 0 ? "" : `${lines.join("\n")}\n`, "utf8");
   try {
@@ -47,10 +47,10 @@ async function withTelemetryFile(lines, run) {
   }
 }
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntimeRoot(run) {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-llm-budget-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-llm-budget-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
   const previousMaxPer = process.env.ASD_LLM_MAX_PER;

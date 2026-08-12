@@ -1,16 +1,16 @@
 import { isAbsolute, join, normalize, sep } from "node:path";
 
 /**
- * Allowed relative paths under `wiki/projects/<project-id>/` for asd vault
+ * Allowed relative paths under `wiki/projects/<project-id>/` for marrow vault
  * writes. ADR-0004 defines the carve-out; this array is the source of truth
  * enforced in code.
  *
- * - `asd-learnings/**` is interpreted strictly: files must sit directly inside
- *   `asd-learnings/`, not in nested subdirectories.
+ * - `marrow-learnings/**` is interpreted strictly: files must sit directly inside
+ *   `marrow-learnings/`, not in nested subdirectories.
  * - All other entries are exact filenames.
  */
 export const VAULT_PROJECT_ALLOWLIST = [
-  "asd-learnings/**",
+  "marrow-learnings/**",
   "_asd-manifest.json",
   "MEMORY.md",
   "workflow.md",
@@ -35,7 +35,7 @@ export function vaultProjectDir(vaultRoot: string, projectId: string): string {
  * Return the absolute path for an allowed vault write, throwing if the
  * requested relative path is outside the ADR-0004 carve-out.
  *
- * This is the single call-site that should be used when asd needs to compute a
+ * This is the single call-site that should be used when marrow needs to compute a
  * vault file path. It prevents accidental writes to `hot.md`, `index.md`,
  * `.raw/.manifest.json`, or any other off-limits location.
  */
@@ -58,7 +58,7 @@ export function isAllowedVaultProjectPath(_projectId: string, relativePath: stri
   if (normalised === null) return false;
   if (normalised.includes("/")) {
     const parts = normalised.split("/");
-    if (parts.length !== 2 || parts[0] !== "asd-learnings") return false;
+    if (parts.length !== 2 || parts[0] !== "marrow-learnings") return false;
     const filename = parts[1] ?? "";
     return filename.length > 0 && !filename.startsWith(".");
   }

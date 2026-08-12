@@ -262,7 +262,7 @@ export const turnFixture: Readonly<Turn> = deepFreeze({
   turn_id: "turn-0001",
   session_id: "session-0001",
   index: 0,
-  user_prompt: "Implement canonical distillery models.",
+  user_prompt: "Implement canonical marrow models.",
   assistant_summary: "Added the canonical schemas and validation fixtures.",
   tool_stub_count: 1,
   files_touched: ["src/models/canonical.ts", "test/canonical.test.mjs"],
@@ -290,10 +290,10 @@ export const eventFixture: Readonly<Event> = deepFreeze({
 export const learningFixture: Readonly<Learning> = deepFreeze({
   learning_id: "learning-0001",
   scope: "project",
-  scope_key: "agent-session-distillery",
+  scope_key: "marrow",
   kind: "decision",
   title: "Canonical model lives in one file during early slices",
-  trigger: "When revisiting related design decisions in agent-session-distillery.",
+  trigger: "When revisiting related design decisions in marrow.",
   statement:
     "Keep the canonical contract in one focused module until adapters and pipeline code justify splitting it.",
   evidence: ["Task 2 implementation grouped all model contracts under src/models/canonical.ts."],

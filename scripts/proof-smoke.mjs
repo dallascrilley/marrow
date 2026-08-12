@@ -67,14 +67,14 @@ if (writeSummaryPath) {
 process.exitCode = report.success ? 0 : 1;
 
 async function runV1Proofs({ firstTime = false } = {}) {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-proof-v1-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-proof-v1-"));
   const home = join(sandbox, "home");
   const runtimeRoot = join(sandbox, "runtime");
   const sourcePath = join(
     home,
     ".cursor",
     "projects",
-    "agent-session-distillery",
+    "marrow",
     "agent-transcripts",
     "session-e2e.jsonl",
   );
@@ -87,26 +87,24 @@ async function runV1Proofs({ firstTime = false } = {}) {
     await writeFile(join(cursorProject, "workspace-path.txt"), `${projectRoot}\n`, "utf8");
     await cp(join(projectRoot, "test/fixtures/cursor/transcripts/session-e2e.jsonl"), sourcePath);
 
-    steps.push(
-      runCliStep("install/build/help", ["--help"], { AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot }),
-    );
+    steps.push(runCliStep("install/build/help", ["--help"], { MARROW_ROOT: runtimeRoot }));
     const ingestStep = runCliStep("ingest backfill", ["ingest", "backfill", "--source", "cursor"], {
       HOME: home,
-      AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
+      MARROW_ROOT: runtimeRoot,
     });
     steps.push(ingestStep);
     steps.push(
       runCliStep("review queue", ["review", "queue"], {
-        AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
+        MARROW_ROOT: runtimeRoot,
       }),
     );
     steps.push(
       runCliStep("review show", ["review", "show", "session-e2e"], {
-        AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
+        MARROW_ROOT: runtimeRoot,
       }),
     );
     const explainStep = runCliStep("explain", ["explain", "session-e2e"], {
-      AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
+      MARROW_ROOT: runtimeRoot,
     });
     steps.push(explainStep);
 
@@ -158,11 +156,11 @@ async function runV1Proofs({ firstTime = false } = {}) {
 
       steps.push(
         runCliStep("export index", ["export-index"], {
-          AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
+          MARROW_ROOT: runtimeRoot,
         }),
       );
       const searchStep = runCliStep("bounded search", ["search", "session-e2e"], {
-        AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
+        MARROW_ROOT: runtimeRoot,
       });
       searchStep.status =
         searchStep.status === "passed" && /\b1 match\./.test(searchStep.stdout)
@@ -216,7 +214,7 @@ async function runV1Proofs({ firstTime = false } = {}) {
 }
 
 async function runV2MemoryPipelineProof() {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-proof-v2-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-proof-v2-"));
   const home = join(sandbox, "home");
   const runtimeRoot = join(sandbox, "runtime");
   const vaultRoot = join(sandbox, "vault");
@@ -226,7 +224,7 @@ async function runV2MemoryPipelineProof() {
   try {
     await mkdir(vaultRoot, { recursive: true });
 
-    const cursorProject = join(home, ".cursor", "projects", "agent-session-distillery");
+    const cursorProject = join(home, ".cursor", "projects", "marrow");
     await mkdir(join(cursorProject, "agent-transcripts"), { recursive: true });
     await writeFile(join(cursorProject, "workspace-path.txt"), `${projectRoot}\n`, "utf8");
     await cp(
@@ -236,7 +234,7 @@ async function runV2MemoryPipelineProof() {
 
     const ingestStep = runCliStep("ingest backfill", ["ingest", "backfill", "--source", "cursor"], {
       HOME: home,
-      AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
+      MARROW_ROOT: runtimeRoot,
     });
     steps.push(ingestStep);
 
@@ -286,7 +284,7 @@ async function runV2MemoryPipelineProof() {
       runCliStep(
         "quality apply-learning-review",
         ["quality", "apply-learning-review", "--batch", generatedBatch.batchPath],
-        { AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot },
+        { MARROW_ROOT: runtimeRoot },
       ),
     );
 
@@ -320,14 +318,14 @@ async function runV2MemoryPipelineProof() {
 
     steps.push(
       runCliStep("memory export-wiki", ["memory", "export-wiki"], {
-        AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
+        MARROW_ROOT: runtimeRoot,
       }),
     );
     artifacts.export_path = join(runtimeRoot, "exports/wiki-memory/reviewed-memory.jsonl");
 
     steps.push(
       runCliStep("memory push-wiki", ["memory", "push-wiki", "--vault", vaultRoot], {
-        AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
+        MARROW_ROOT: runtimeRoot,
         ASD_VAULT_ROOT: vaultRoot,
       }),
     );

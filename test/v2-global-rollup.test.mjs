@@ -52,11 +52,11 @@ async function seedGlobalStore(instinct) {
 }
 
 test("renderGlobalMemoryToVault writes _global/MEMORY.md and project render excludes it", async () => {
-  const previousRoot = process.env.AGENT_SESSION_DISTILLERY_ROOT;
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-global-"));
+  const previousRoot = process.env.MARROW_ROOT;
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-global-"));
   const runtimeRoot = join(sandbox, "runtime");
   const vaultRoot = join(sandbox, "vault");
-  process.env.AGENT_SESSION_DISTILLERY_ROOT = runtimeRoot;
+  process.env.MARROW_ROOT = runtimeRoot;
 
   try {
     await seedGlobalStore(globalInstinct());
@@ -80,9 +80,9 @@ test("renderGlobalMemoryToVault writes _global/MEMORY.md and project render excl
     assert.equal(project.includedCount, 0);
   } finally {
     if (previousRoot === undefined) {
-      delete process.env.AGENT_SESSION_DISTILLERY_ROOT;
+      delete process.env.MARROW_ROOT;
     } else {
-      process.env.AGENT_SESSION_DISTILLERY_ROOT = previousRoot;
+      process.env.MARROW_ROOT = previousRoot;
     }
     await rm(sandbox, { recursive: true, force: true });
   }
@@ -103,7 +103,7 @@ async function seedVaultFile(vaultRoot, projectId, name, content) {
 }
 
 const GLOBAL_BODY = `---
-tags: [asd, memory, curated]
+tags: [marrow, memory, curated]
 generated_at: 2026-06-29T07:40:12.416Z
 ---
 
@@ -113,7 +113,7 @@ generated_at: 2026-06-29T07:40:12.416Z
 `;
 
 const PROJECT_BODY = `---
-tags: [asd, memory, curated]
+tags: [marrow, memory, curated]
 ---
 
 # Project memory (curated)
@@ -122,8 +122,8 @@ tags: [asd, memory, curated]
 `;
 
 test("recall surfaces the global rollup ahead of the project rollup", async () => {
-  const work = await mkdtemp(join(tmpdir(), "asd-grecall-work-"));
-  const vault = await mkdtemp(join(tmpdir(), "asd-grecall-vault-"));
+  const work = await mkdtemp(join(tmpdir(), "marrow-grecall-work-"));
+  const vault = await mkdtemp(join(tmpdir(), "marrow-grecall-vault-"));
   try {
     const projectId = hashToProjectId(work);
     await seedVaultFile(vault, "_global", "MEMORY.md", GLOBAL_BODY);
@@ -148,17 +148,17 @@ test("recall surfaces the global rollup ahead of the project rollup", async () =
 });
 
 test("recall ignores a header-only _global rollup with no instinct bullets", async () => {
-  const work = await mkdtemp(join(tmpdir(), "asd-grecall-work-"));
-  const vault = await mkdtemp(join(tmpdir(), "asd-grecall-vault-"));
+  const work = await mkdtemp(join(tmpdir(), "marrow-grecall-work-"));
+  const vault = await mkdtemp(join(tmpdir(), "marrow-grecall-vault-"));
   try {
     const projectId = hashToProjectId(work);
     const headerOnlyGlobal = `---
-tags: [asd, memory, curated]
+tags: [marrow, memory, curated]
 ---
 
 # Global memory (curated)
 
-Cross-project instincts promoted to global scope. Surfaced in every session via \`asd recall\`.
+Cross-project instincts promoted to global scope. Surfaced in every session via \`marrow recall\`.
 `;
     await seedVaultFile(vault, "_global", "MEMORY.md", headerOnlyGlobal);
     await seedVaultFile(vault, projectId, "MEMORY.md", PROJECT_BODY);

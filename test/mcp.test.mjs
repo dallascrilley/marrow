@@ -20,7 +20,7 @@ async function saveGlobalInstinct(instinct) {
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
 const cliPath = join(projectRoot, "dist", "cli.js");
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 const projectId = "mcptestproj01";
 const matureObservations = [
   { session: "sess-1", reinforcing: true, at: "2026-05-20T00:00:00.000Z" },
@@ -54,7 +54,7 @@ function makeInstinct(overrides = {}) {
 }
 
 async function withRuntime(run) {
-  const root = await mkdtemp(join(tmpdir(), "asd-mcp-"));
+  const root = await mkdtemp(join(tmpdir(), "marrow-mcp-"));
   try {
     const prior = process.env[runtimeOverrideEnvVar];
     process.env[runtimeOverrideEnvVar] = root;

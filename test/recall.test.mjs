@@ -29,7 +29,7 @@ async function seedVaultMemory(vaultRoot, projectId, files) {
 }
 
 const MEMORY_BODY = `---
-tags: [asd, memory, curated]
+tags: [marrow, memory, curated]
 generated_at: 2026-06-29T07:40:12.416Z
 ---
 
@@ -40,8 +40,8 @@ generated_at: 2026-06-29T07:40:12.416Z
 `;
 
 test("recall prints curated MEMORY.md lines for the resolved project", async () => {
-  const work = await mkdtemp(join(tmpdir(), "asd-recall-work-"));
-  const vault = await mkdtemp(join(tmpdir(), "asd-recall-vault-"));
+  const work = await mkdtemp(join(tmpdir(), "marrow-recall-work-"));
+  const vault = await mkdtemp(join(tmpdir(), "marrow-recall-vault-"));
   try {
     const projectId = hashToProjectId(work);
     await seedVaultMemory(vault, projectId, { "MEMORY.md": MEMORY_BODY });
@@ -59,8 +59,8 @@ test("recall prints curated MEMORY.md lines for the resolved project", async () 
 });
 
 test("recall appends present topic files under their own headings", async () => {
-  const work = await mkdtemp(join(tmpdir(), "asd-recall-work-"));
-  const vault = await mkdtemp(join(tmpdir(), "asd-recall-vault-"));
+  const work = await mkdtemp(join(tmpdir(), "marrow-recall-work-"));
+  const vault = await mkdtemp(join(tmpdir(), "marrow-recall-vault-"));
   try {
     const projectId = hashToProjectId(work);
     await seedVaultMemory(vault, projectId, {
@@ -79,8 +79,8 @@ test("recall appends present topic files under their own headings", async () => 
 });
 
 test("recall fails open with empty output when no memory exists", async () => {
-  const work = await mkdtemp(join(tmpdir(), "asd-recall-work-"));
-  const vault = await mkdtemp(join(tmpdir(), "asd-recall-vault-"));
+  const work = await mkdtemp(join(tmpdir(), "marrow-recall-work-"));
+  const vault = await mkdtemp(join(tmpdir(), "marrow-recall-vault-"));
   try {
     const result = runCli(["recall", "--cwd", work, "--vault-root", vault]);
     assert.equal(result.status, 0, result.stderr);
@@ -92,19 +92,19 @@ test("recall fails open with empty output when no memory exists", async () => {
 });
 
 test("recall fails open for a header-only MEMORY.md with no instinct bullets", async () => {
-  const work = await mkdtemp(join(tmpdir(), "asd-recall-work-"));
-  const vault = await mkdtemp(join(tmpdir(), "asd-recall-vault-"));
+  const work = await mkdtemp(join(tmpdir(), "marrow-recall-work-"));
+  const vault = await mkdtemp(join(tmpdir(), "marrow-recall-vault-"));
   try {
     const projectId = hashToProjectId(work);
     // Exactly what render writes for a project with zero reachable instincts:
     // frontmatter + heading + boilerplate, but no `- ` bullets.
     const headerOnly = `---
-tags: [asd, memory, curated]
+tags: [marrow, memory, curated]
 ---
 
 # Project memory (curated)
 
-Regenerated from atomic instincts. Session-level audit pages live under \`asd-learnings/\`.
+Regenerated from atomic instincts. Session-level audit pages live under \`marrow-learnings/\`.
 `;
     await seedVaultMemory(vault, projectId, { "MEMORY.md": headerOnly });
 
@@ -118,8 +118,8 @@ Regenerated from atomic instincts. Session-level audit pages live under \`asd-le
 });
 
 test("recall truncates at a line boundary when over --max-bytes", async () => {
-  const work = await mkdtemp(join(tmpdir(), "asd-recall-work-"));
-  const vault = await mkdtemp(join(tmpdir(), "asd-recall-vault-"));
+  const work = await mkdtemp(join(tmpdir(), "marrow-recall-work-"));
+  const vault = await mkdtemp(join(tmpdir(), "marrow-recall-vault-"));
   try {
     const projectId = hashToProjectId(work);
     const longBody = `${MEMORY_BODY}${Array.from({ length: 200 }, (_, i) => `- line ${i} ${"x".repeat(40)}`).join("\n")}\n`;

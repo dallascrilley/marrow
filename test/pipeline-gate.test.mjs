@@ -11,7 +11,7 @@ import { learningFixture } from "../dist/models/canonical.js";
 import { countPendingLlmReview } from "../dist/pipeline/pipeline-gate.js";
 import { getProjectKnowledgeSessionPath } from "../dist/writers/knowledge-writer.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
 const cliPath = join(projectRoot, "dist", "cli.js");
@@ -28,7 +28,7 @@ function runCli(args, env = {}) {
 }
 
 async function withRuntimeRoot(run) {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-pipeline-gate-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-pipeline-gate-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
 
@@ -49,7 +49,7 @@ async function withRuntimeRoot(run) {
 
 test("countPendingLlmReview ignores per-run sidecar and counts only ledger-reviewed ids", async () => {
   await withRuntimeRoot(async (runtimeRoot) => {
-    const projectKey = "agent-session-distillery";
+    const projectKey = "marrow";
     const sessionId = "gate-session";
     const projectPath = getProjectKnowledgeSessionPath(projectKey, sessionId);
     await mkdir(join(projectPath, ".."), { recursive: true });
@@ -90,7 +90,7 @@ test("countPendingLlmReview ignores per-run sidecar and counts only ledger-revie
 
 test("countPendingLlmReview treats review ledger ids as reviewed", async () => {
   await withRuntimeRoot(async (runtimeRoot) => {
-    const projectKey = "agent-session-distillery";
+    const projectKey = "marrow";
     const sessionId = "ledger-gate-session";
     const projectPath = getProjectKnowledgeSessionPath(projectKey, sessionId);
     await mkdir(join(projectPath, ".."), { recursive: true });
@@ -174,7 +174,7 @@ test("assessPipelineGate skip-ingest avoids adapter discovery scans", async () =
 });
 
 test("pipeline gate --max-per overrides the default and reports the override", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-pipeline-gate-cli-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-pipeline-gate-cli-"));
   const runtimeRoot = join(sandbox, "runtime-root");
 
   try {

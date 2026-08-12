@@ -22,7 +22,7 @@ const reviewedEntries = [
     keep: true,
     learning_id: "learning-a",
     reason: "Durable project guidance.",
-    scope_key: "studio-tools",
+    scope_key: "service-tools",
     session_id: "session-a",
     statement: "Original statement A.",
     suggested_statement: "Reviewed statement A.",
@@ -35,7 +35,7 @@ const reviewedEntries = [
     keep: false,
     learning_id: "learning-b",
     reason: "One-off process detail.",
-    scope_key: "studio-tools",
+    scope_key: "service-tools",
     session_id: "session-b",
     statement: "Original statement B.",
     suggested_statement: "Rejected statement B.",
@@ -160,7 +160,7 @@ test("review batch parsing rejects decisions that do not match batch identity", 
 });
 
 test("identical content from repeated runs writes distinct immutable artifacts", async () => {
-  const reportsDir = await mkdtemp(join(tmpdir(), "asd-review-batches-"));
+  const reportsDir = await mkdtemp(join(tmpdir(), "marrow-review-batches-"));
   try {
     const first = await writeLearningReviewBatch({ batch: build(), reportsDir });
     const second = await writeLearningReviewBatch({
@@ -195,7 +195,7 @@ test("identical content from repeated runs writes distinct immutable artifacts",
 });
 
 test("latest review batch reports a missing target with recovery guidance", async () => {
-  const reportsDir = await mkdtemp(join(tmpdir(), "asd-review-latest-missing-"));
+  const reportsDir = await mkdtemp(join(tmpdir(), "marrow-review-latest-missing-"));
   try {
     const batch = build();
     const missingPath = join(reportsDir, "llm-learning-review-batches", "missing.json");
@@ -222,7 +222,7 @@ test("latest review batch reports a missing target with recovery guidance", asyn
 });
 
 test("parallel batch writes use collision-resistant latest-pointer temp files", async () => {
-  const reportsDir = await mkdtemp(join(tmpdir(), "asd-review-batches-concurrent-"));
+  const reportsDir = await mkdtemp(join(tmpdir(), "marrow-review-batches-concurrent-"));
   try {
     const writes = Array.from({ length: 24 }, (_, index) =>
       writeLearningReviewBatch({

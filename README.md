@@ -1,4 +1,4 @@
-# agent-session-distillery
+# marrow
 
 Standalone CLI for ingesting local Cursor agent transcripts into a durable runtime with summaries, learnings, manifests, review state, and deletion receipts.
 
@@ -8,7 +8,7 @@ Launch proof: [`docs/launch-proof-index.md`](docs/launch-proof-index.md)
 
 ## Repository
 
-[dallascrilley/agent-session-distillery](https://github.com/dallascrilley/agent-session-distillery)
+[dallascrilley/marrow](https://github.com/dallascrilley/marrow)
 
 ## Development (Scripts to Rule Them All)
 
@@ -20,23 +20,23 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 | Run tests | `script/test` or `just test` |
 | CI parity | `script/cibuild` or `just cibuild` |
 | Lint / format | `npm run lint` / `npm run format` |
-| Inspect linked worktrees | `asd worktree check --json` — read-only classifications and safe next commands |
+| Inspect linked worktrees | `marrow worktree check --json` — read-only classifications and safe next commands |
 | First-time offline proof | `script/proof-first-time` — ingests a fixture into a temporary runtime, verifies summary/learning/search/deletion readiness, then prints retained artifact paths, a cleanup command, and the next live command |
 
 ## Automation
 
 | Task | Command / doc |
 |------|----------------|
-| SessionEnd → ingest (Claude Code) | `asd hooks install` — [`docs/recipes/session-end-ingest-hook.md`](docs/recipes/session-end-ingest-hook.md) |
+| SessionEnd → ingest (Claude Code) | `marrow hooks install` — [`docs/recipes/session-end-ingest-hook.md`](docs/recipes/session-end-ingest-hook.md) |
 | Scheduled ingest + wiki push | [`docs/recipes/scheduled-memory-pipeline.md`](docs/recipes/scheduled-memory-pipeline.md) |
-| Pipeline gate (skip LLM when idle) | `asd pipeline gate --max-per 50/24h --max-usd 1/24h` — ADR-0007 |
-| Operator health snapshot | `asd health` / `asd health --json` — [`docs/recipes/scheduled-memory-pipeline.md`](docs/recipes/scheduled-memory-pipeline.md) |
-| Re-extract stale artifacts (deterministic, no LLM) | `asd pipeline reextract --process-chatter-only --dry-run` then drop `--dry-run` to apply (or `--session-id <id>`) |
-| Re-reduce after reduce-layer upgrades | `asd pipeline rereduce --all-with-parsed --dry-run` to see which sessions still have `parsed-records.json`, then drop `--dry-run` to apply (or `--session-id <id>`); sessions without parsed records are locked at their current reduced artifact |
-| Skill usage evidence in corpus | `asd skill evidence <skill-id>` (after `export-index`) |
-| Skill adherence report | `asd skill report <skill-id>` — [`docs/recipes/skill-adherence-report.md`](docs/recipes/skill-adherence-report.md) |
-| Workflow guidance candidates | `asd workflow mine --days 7 --json` — [`docs/recipes/workflow-mining.md`](docs/recipes/workflow-mining.md) |
-| Emulo profile evidence export | `asd profile export-emulo` — writes a private, versioned user-message corpus without model calls |
+| Pipeline gate (skip LLM when idle) | `marrow pipeline gate --max-per 50/24h --max-usd 1/24h` — ADR-0007 |
+| Operator health snapshot | `marrow health` / `marrow health --json` — [`docs/recipes/scheduled-memory-pipeline.md`](docs/recipes/scheduled-memory-pipeline.md) |
+| Re-extract stale artifacts (deterministic, no LLM) | `marrow pipeline reextract --process-chatter-only --dry-run` then drop `--dry-run` to apply (or `--session-id <id>`) |
+| Re-reduce after reduce-layer upgrades | `marrow pipeline rereduce --all-with-parsed --dry-run` to see which sessions still have `parsed-records.json`, then drop `--dry-run` to apply (or `--session-id <id>`); sessions without parsed records are locked at their current reduced artifact |
+| Skill usage evidence in corpus | `marrow skill evidence <skill-id>` (after `export-index`) |
+| Skill adherence report | `marrow skill report <skill-id>` — [`docs/recipes/skill-adherence-report.md`](docs/recipes/skill-adherence-report.md) |
+| Workflow guidance candidates | `marrow workflow mine --days 7 --json` — [`docs/recipes/workflow-mining.md`](docs/recipes/workflow-mining.md) |
+| Emulo profile evidence export | `marrow profile export-emulo` — writes a private, versioned user-message corpus without model calls |
 
 ## Requirements
 
@@ -45,7 +45,7 @@ Canonical entrypoints for agents and CI — see [`AGENTS.md`](AGENTS.md):
 - Python `3.9+` for descriptor-relative parsed-intermediate cleanup
 - Local Cursor transcript files on disk
 - Optional: `OPENROUTER_API_KEY` for LLM-gated project-learning review commands.
-  - Source the key from the 1Password item **OpenRouter API Credentials - agent-session-distillery** (`op read 'op://Private/OpenRouter API Credentials - agent-session-distillery/credential'`).
+  - Source the key from the 1Password item **OpenRouter API Credentials - marrow** (`op read 'op://Private/OpenRouter API Credentials - marrow/credential'`).
   - Load it via `op read` or your secret-manager flow and never commit the key.
 
 ## Install
@@ -61,21 +61,21 @@ Run the CLI directly:
 node dist/cli.js --help
 ```
 
-Or link the package-local `asd` binary into your shell:
+Or link the package-local `marrow` binary into your shell:
 
 ```bash
 npm link
-asd --help
+marrow --help
 ```
 
-By default the runtime lives at `~/.agent-session-distillery`. Override it with
-`AGENT_SESSION_DISTILLERY_ROOT` when you want an isolated sandbox or a scheduled-job-specific
-path. `AGENT_SESSION_DISTILLERY_STAGING_ROOT` moves only parsed and reduced staging artifacts to
+By default the runtime lives at `~/.marrow`. Override it with
+`MARROW_ROOT` when you want an isolated sandbox or a scheduled-job-specific
+path. `MARROW_STAGING_ROOT` moves only parsed and reduced staging artifacts to
 a pre-created absolute directory; durable state remains under the runtime root. A configured
 staging root must be a real, writable directory and fails closed if its volume is unavailable.
 
 ```bash
-AGENT_SESSION_DISTILLERY_ROOT=/tmp/asd-demo node dist/cli.js stats
+MARROW_ROOT=/tmp/marrow-demo node dist/cli.js stats
 ```
 
 ## Supported Sources
@@ -150,13 +150,13 @@ Design and source-surface research: [`docs/research/pi-source-strategy.md`](docs
 
 ## Runtime Layout
 
-The CLI writes a local runtime under `~/.agent-session-distillery` or the path set in `AGENT_SESSION_DISTILLERY_ROOT`.
+The CLI writes a local runtime under `~/.marrow` or the path set in `MARROW_ROOT`.
 
 Important directories:
 
 - `ledger/` — SQLite lifecycle state and operational history
 - `staging/<session-id>/` — parsed and reduced intermediates; may be relocated with
-  `AGENT_SESSION_DISTILLERY_STAGING_ROOT`
+  `MARROW_STAGING_ROOT`
 - `summaries/by-session/<session-id>/` — `summary.json` and `summary.md`
 - `knowledge/projects/<project-key>/` — deterministic project-learning candidate JSONL
 - `knowledge/projects-reviewed/<project-key>/` — LLM-reviewed project learnings applied as a non-mutating sidecar
@@ -348,9 +348,9 @@ the byte ceiling. Unsafe, stale, incomplete, and unknown records remain untouche
 Copy staging to a pre-created local filesystem without deleting the source:
 
 ```bash
-mkdir -p /Volumes/SSK/agent-session-distillery/staging
-node dist/cli.js storage migrate-staging --to /Volumes/SSK/agent-session-distillery/staging
-node dist/cli.js storage migrate-staging --to /Volumes/SSK/agent-session-distillery/staging --apply
+mkdir -p /Volumes/SSK/marrow/staging
+node dist/cli.js storage migrate-staging --to /Volumes/SSK/marrow/staging
+node dist/cli.js storage migrate-staging --to /Volumes/SSK/marrow/staging --apply
 ```
 
 The first command is a non-mutating dry run. Apply copies only exact `parsed-records.json` and
@@ -398,7 +398,7 @@ Static offline dashboard export:
 
 ```bash
 node dist/cli.js report --html
-node dist/cli.js report --html --out /tmp/asd-dashboard.html
+node dist/cli.js report --html --out /tmp/marrow-dashboard.html
 ```
 
 By default this writes `reports/dashboard.html` under the runtime root. The output is
@@ -452,12 +452,12 @@ artifact presence, and the worst sessions by deterministic output-quality checks
 Review deterministic project learnings with OpenRouter memory lint:
 
 ```bash
-# Source the key from 1Password: "OpenRouter API Credentials - agent-session-distillery"
-export OPENROUTER_API_KEY="$(op read 'op://Private/OpenRouter API Credentials - agent-session-distillery/credential')"
+# Source the key from 1Password: "OpenRouter API Credentials - marrow"
+export OPENROUTER_API_KEY="$(op read 'op://Private/OpenRouter API Credentials - marrow/credential')"
 
 node dist/cli.js quality review-learnings --model openrouter/auto
 node dist/cli.js quality review-learnings --limit 25 --max-total-learnings 100
-node dist/cli.js quality review-learnings --cache-dir /tmp/asd-review-cache
+node dist/cli.js quality review-learnings --cache-dir /tmp/marrow-review-cache
 node dist/cli.js quality review-learnings --refresh-llm
 node dist/cli.js quality review-learnings --max-usd 1/24h --batch-size 10
 ```
@@ -532,8 +532,8 @@ Sessions without manifests are skipped (not failed) so bulk runs continue; re-ru
 Run the local memory value loop as a single dry-run command:
 
 ```bash
-npm --silent run memory:pipeline:dry-run -- --root /tmp/asd-memory-demo --limit 100
-npm --silent run memory:pipeline:dry-run -- --root /tmp/asd-memory-demo \
+npm --silent run memory:pipeline:dry-run -- --root /tmp/marrow-memory-demo --limit 100
+npm --silent run memory:pipeline:dry-run -- --root /tmp/marrow-memory-demo \
   --review-batch /path/to/llm-learning-review-batches/<run-id>.json --require-review
 ```
 
@@ -561,18 +561,18 @@ node dist/cli.js memory push-wiki --refresh
 # Target a non-default vault.
 node dist/cli.js memory push-wiki --vault /path/to/vault
 
-# Preserve manual edits to asd-authored pages.
+# Preserve manual edits to marrow-authored pages.
 node dist/cli.js memory push-wiki --no-overwrite
 ```
 
 Output layout, per project (v1 wiki pages + v2 curated rollup):
 
-- `<vault>/wiki/projects/<project-key>/asd-learnings/<page-id>.md` — one page per reviewed learning record.
-- `<vault>/wiki/projects/<project-key>/asd-learnings/_asd-manifest.json` — asd-owned manifest.
+- `<vault>/wiki/projects/<project-key>/marrow-learnings/<page-id>.md` — one page per reviewed learning record.
+- `<vault>/wiki/projects/<project-key>/marrow-learnings/_asd-manifest.json` — marrow-owned manifest.
 - `<vault>/wiki/projects/<project-key>/MEMORY.md` — curated instinct rollup (regenerated on each push).
 - `<vault>/wiki/projects/<project-key>/{workflow,tooling,preferences,pitfalls,debugging}.md` — topic spill files when the rollup exceeds the line cap.
 
-asd writes **only** into those paths under `wiki/projects/<project-key>/`. It never touches `hot.md`, `index.md`,
+marrow writes **only** into those paths under `wiki/projects/<project-key>/`. It never touches `hot.md`, `index.md`,
 `log.md`, `wiki/sources/`, `wiki/entities/`, `wiki/concepts/`, any `_index.md`,
 or `.raw/.manifest.json`. The next vault session's normal autolink / lint flow
 picks up new pages through the same mechanism it uses for any other new file
@@ -589,7 +589,7 @@ Design and contract:
 
 ## Read Back (Recall)
 
-Pushing memory to the vault is only half the loop. `asd recall` is the read-back
+Pushing memory to the vault is only half the loop. `marrow recall` is the read-back
 surface that delivers a project's curated memory into the **next** agent session,
 closing the loop (see [`docs/decisions/0010-recall-read-back.md`](docs/decisions/0010-recall-read-back.md)).
 
@@ -627,7 +627,7 @@ node dist/cli.js readback check --verify
 ```
 
 Each surface is `installed`, `missing`, `drifted`, or `unverifiable`. Missing or drifted
-hook/MCP results include the explicit `asd hooks install --events start` or `asd mcp install`
+hook/MCP results include the explicit `marrow hooks install --events start` or `marrow mcp install`
 command; run it yourself, then rerun `readback check --verify`. The explicit verification
 returns the bounded recall bytes and `delivered`/`missing` result. A reachable vault with no
 project/global memory is reported as actionable missing recall rather than silently healthy.
@@ -635,13 +635,13 @@ project/global memory is reported as actionable missing recall rather than silen
 ### SessionStart delivery
 
 Read-back is wired into the agent harness through a hub-managed SessionStart
-hook, `asd-recall-sessionstart`
-(`~/.hub/artifacts/hooks/asd-recall-sessionstart/`). On `startup|resume` it runs
-`asd recall` for the session's `cwd` and injects the result as
+hook, `marrow-recall-sessionstart`
+(`~/.hub/artifacts/hooks/marrow-recall-sessionstart/`). On `startup|resume` it runs
+`marrow recall` for the session's `cwd` and injects the result as
 `hookSpecificOutput.additionalContext`. It is fail-open by contract: any error,
 missing build, missing vault, or an unmemoried project yields `{}`, so a session
-never breaks. The hook resolves the CLI as `$ASD_BIN` → `asd` on `PATH` →
-`$HOME/Code/agent-session-distillery/dist/cli.js`.
+never breaks. The hook resolves the CLI as `$ASD_BIN` → `marrow` on `PATH` →
+`$HOME/Code/marrow/dist/cli.js`.
 
 The reinforcement contract behind which instincts reach `MEMORY.md` at all —
 persisted `confidence_floor`, the per-project rollup gate, and why cross-project
@@ -669,7 +669,7 @@ deprecated instincts or unapproved promotion candidates.
 
 ### Registering the server
 
-`asd mcp install` registers the server in `~/.claude.json` under `mcpServers.asd`
+`marrow mcp install` registers the server in `~/.claude.json` under `mcpServers.asd`
 as a `type: "stdio"` entry. It is **idempotent** (a re-run that matches the
 existing entry leaves the file byte-identical), preserves every other key, and
 writes atomically. Preview first with `--dry-run`:
@@ -684,17 +684,17 @@ node dist/cli.js mcp install
 ```
 
 Flags: `--config <path>` (default `~/.claude.json`), `--name <server>` (default
-`asd`), `--node <path>` (default the running node), `--cli <path>` (default the
+`marrow`), `--node <path>` (default the running node), `--cli <path>` (default the
 sibling `dist/cli.js` of the running build).
 
 ### Project-scoped registration (committed `.mcp.json`)
 
 This repo also ships a checked-in `.mcp.json` so the server is available in the
-asd repo itself without a global install. It points `command` at
+marrow repo itself without a global install. It points `command` at
 `scripts/mcp-serve.sh` (via `bash`) rather than at `node` directly:
 
 ```json
-{ "mcpServers": { "asd": { "type": "stdio", "command": "bash", "args": ["scripts/mcp-serve.sh"] } } }
+{ "mcpServers": { "marrow": { "type": "stdio", "command": "bash", "args": ["scripts/mcp-serve.sh"] } } }
 ```
 
 The launcher exists because GUI- and IDE-launched MCP clients spawn servers with
@@ -797,4 +797,4 @@ Project attribution comes from the workspace slug plus any local workspace hint 
 
 ### Parser-version invalidation
 
-`--resume` reuses completed phase artifacts only when the stored `source_hash` still matches the current transcript. If parsing behavior changes or the transcript contents change, rerun without `--resume` so parsed and reduced artifacts are regenerated from the current source. If you use an isolated runtime root for testing parser changes, point `AGENT_SESSION_DISTILLERY_ROOT` at a fresh directory.
+`--resume` reuses completed phase artifacts only when the stored `source_hash` still matches the current transcript. If parsing behavior changes or the transcript contents change, rerun without `--resume` so parsed and reduced artifacts are regenerated from the current source. If you use an isolated runtime root for testing parser changes, point `MARROW_ROOT` at a fresh directory.

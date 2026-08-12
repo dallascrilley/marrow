@@ -11,7 +11,7 @@ import { hashToProjectId } from "../dist/v2/project/resolve.js";
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
 const cliPath = join(projectRoot, "dist", "cli.js");
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 function runCli(args, env = {}) {
   return spawnSync(process.execPath, [cliPath, ...args], {
@@ -25,23 +25,22 @@ function runCli(args, env = {}) {
 }
 
 test("memory export-wiki writes stable reviewed-memory JSONL from project learnings", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-wiki-export-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-wiki-export-"));
   const runtimeRoot = join(sandbox, "runtime-root");
 
   try {
-    const knowledgeDir = join(runtimeRoot, "knowledge", "projects", "agent-session-distillery");
+    const knowledgeDir = join(runtimeRoot, "knowledge", "projects", "marrow");
     await mkdir(knowledgeDir, { recursive: true });
     await writeFile(
       join(knowledgeDir, "session-1.jsonl"),
       `${JSON.stringify({
         learning_id: "session-1:project:decision:event-1",
         scope: "project",
-        scope_key: "agent-session-distillery",
+        scope_key: "marrow",
         kind: "decision",
         title: "Keep the wiki import boundary narrow",
-        trigger: "When revisiting related design decisions in agent-session-distillery.",
-        statement:
-          "Use a versioned JSONL export contract between distillery and the wiki importer.",
+        trigger: "When revisiting related design decisions in marrow.",
+        statement: "Use a versioned JSONL export contract between marrow and the wiki importer.",
         evidence: ["The integration design selected a hybrid export/import boundary."],
         confidence: "high",
         evidence_type: "inferred",
@@ -81,12 +80,12 @@ test("memory export-wiki writes stable reviewed-memory JSONL from project learni
     assert.equal(record.schema_version, "asd.wiki_memory.v1");
     assert.match(record.id, /^sha256:[a-f0-9]{64}$/);
     assert.equal(record.kind, "project_learning");
-    assert.equal(record.project.key, hashToProjectId("agent-session-distillery"));
+    assert.equal(record.project.key, hashToProjectId("marrow"));
     assert.equal(record.project.root, null);
     assert.equal(record.title, "Keep the wiki import boundary narrow");
     assert.equal(
       record.body,
-      "Use a versioned JSONL export contract between distillery and the wiki importer.",
+      "Use a versioned JSONL export contract between marrow and the wiki importer.",
     );
     assert.deepEqual(record.evidence.source_refs[0], {
       source_path: "/tmp/session-1.jsonl",
@@ -107,26 +106,21 @@ test("memory export-wiki writes stable reviewed-memory JSONL from project learni
 });
 
 test("memory export-wiki prefers reviewed project learnings when present", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-wiki-reviewed-export-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-wiki-reviewed-export-"));
   const runtimeRoot = join(sandbox, "runtime-root");
 
   try {
-    const deterministicDir = join(runtimeRoot, "knowledge", "projects", "agent-session-distillery");
-    const reviewedDir = join(
-      runtimeRoot,
-      "knowledge",
-      "projects-reviewed",
-      "agent-session-distillery",
-    );
+    const deterministicDir = join(runtimeRoot, "knowledge", "projects", "marrow");
+    const reviewedDir = join(runtimeRoot, "knowledge", "projects-reviewed", "marrow");
     await mkdir(deterministicDir, { recursive: true });
     await mkdir(reviewedDir, { recursive: true });
     const baseLearning = {
       learning_id: "session-1:project:decision:event-1",
       scope: "project",
-      scope_key: "agent-session-distillery",
+      scope_key: "marrow",
       kind: "decision",
       title: "Keep the wiki import boundary narrow",
-      trigger: "When revisiting related design decisions in agent-session-distillery.",
+      trigger: "When revisiting related design decisions in marrow.",
       statement: "Use deterministic project learning only as fallback.",
       evidence: ["The integration design selected a hybrid export/import boundary."],
       confidence: "high",

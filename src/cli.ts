@@ -75,7 +75,7 @@ type CommandDefinition = {
 
 const commandTree: Record<string, CommandDefinition> = {
   ingest: {
-    description: "Ingest source sessions into the local distillery runtime.",
+    description: "Ingest source sessions into the local marrow runtime.",
     subcommands: {
       backfill: {
         description:
@@ -212,7 +212,7 @@ const commandTree: Record<string, CommandDefinition> = {
     execute: async (context) => executeHealth(context),
   },
   stats: {
-    description: "Report high-level distillery runtime statistics.",
+    description: "Report high-level marrow runtime statistics.",
     execute: async (context) => withLedger(context, executeStats),
   },
   storage: {
@@ -259,11 +259,11 @@ const commandTree: Record<string, CommandDefinition> = {
     },
   },
   hooks: {
-    description: "Install harness hooks that trigger asd ingest on session lifecycle events.",
+    description: "Install harness hooks that trigger marrow ingest on session lifecycle events.",
     subcommands: {
       install: {
         description:
-          "Install Claude Code SessionEnd hook → asd ingest sync --source claude-code (project .claude/ by default; pass --global for ~/.claude/settings.json).",
+          "Install Claude Code SessionEnd hook → marrow ingest sync --source claude-code (project .claude/ by default; pass --global for ~/.claude/settings.json).",
         execute: async (context) => executeHooksInstall(context),
       },
     },
@@ -369,7 +369,7 @@ const commandTree: Record<string, CommandDefinition> = {
   },
   mcp: {
     description:
-      "Query distilled instincts through the capped ADR-0005 MCP surface. Subcommands: search_instincts, instincts_for_file, recent_instincts, serve, install (register asd in ~/.claude.json; --dry-run to preview).",
+      "Query distilled instincts through the capped ADR-0005 MCP surface. Subcommands: search_instincts, instincts_for_file, recent_instincts, serve, install (register marrow in ~/.claude.json; --dry-run to preview).",
     execute: async (context) => executeMcp(context),
   },
   readback: {
@@ -439,7 +439,7 @@ function formatHelp(): string {
   }, 0);
 
   return [
-    "Usage: asd <command> [subcommand] [options]",
+    "Usage: marrow <command> [subcommand] [options]",
     "",
     `Runtime root: ${getRuntimeRoot()}`,
     "",

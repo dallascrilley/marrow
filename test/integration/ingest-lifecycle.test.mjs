@@ -15,8 +15,8 @@ import {
   listRunHistory,
 } from "../../dist/db/ledger.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
-const stagingOverrideEnvVar = "AGENT_SESSION_DISTILLERY_STAGING_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
+const stagingOverrideEnvVar = "MARROW_STAGING_ROOT";
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(dirname(testDir));
 const cliPath = join(projectRoot, "dist", "cli.js");
@@ -41,11 +41,11 @@ function runCli(args, env) {
 }
 
 test("ingest backfill advances a fixture transcript through deletion-candidate lifecycle", async () => {
-  const sandboxRoot = await mkdtemp(join(await realpath(tmpdir()), "asd-ingest-e2e-"));
+  const sandboxRoot = await mkdtemp(join(await realpath(tmpdir()), "marrow-ingest-e2e-"));
   const runtimeRoot = join(sandboxRoot, "runtime");
   const stagingRoot = join(sandboxRoot, "external-staging");
   const homeDir = join(sandboxRoot, "home");
-  const workspacePath = join(homeDir, "Code", "agent-session-distillery");
+  const workspacePath = join(homeDir, "Code", "marrow");
   const encodedSlug = encodeURIComponent(workspacePath);
   const transcriptDestination = join(
     homeDir,

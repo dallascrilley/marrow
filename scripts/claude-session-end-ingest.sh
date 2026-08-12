@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code SessionEnd hook — run asd ingest sync for the closing session's harness.
+# Claude Code SessionEnd hook — run marrow ingest sync for the closing session's harness.
 # Fail open: never block session termination on ingest errors.
 set -euo pipefail
 
@@ -10,8 +10,8 @@ fi
 
 run_ingest() {
   local source="$1"
-  if command -v asd >/dev/null 2>&1; then
-    asd ingest sync --resume --source "$source" >/dev/null 2>&1 || true
+  if command -v marrow >/dev/null 2>&1; then
+    marrow ingest sync --resume --source "$source" >/dev/null 2>&1 || true
     return 0
   fi
 

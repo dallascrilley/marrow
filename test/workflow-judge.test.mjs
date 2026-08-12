@@ -12,7 +12,7 @@ import {
   workflowJudgeContentHash,
 } from "../dist/workflow/judge.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 /**
  * Session fixtures below are pinned to fixed dates, so the mining recency
@@ -64,7 +64,7 @@ function turn(sessionId, overrides = {}) {
 }
 
 async function writeRuntime(records) {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-judge-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-workflow-judge-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const indexDir = join(runtimeRoot, "index");
   await mkdir(indexDir, { recursive: true });

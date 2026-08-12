@@ -1,6 +1,6 @@
 # External staging storage
 
-Use a mounted local filesystem for live ASD staging. Keep the SQLite ledger, manifests,
+Use a mounted local filesystem for live Marrow staging. Keep the SQLite ledger, manifests,
 summaries, knowledge, archives, reports, and deletion receipts under the normal runtime root.
 S3 is not a live staging backend; any future S3 cold tier requires separate approval and an
 explicit offload/restore workflow.
@@ -27,9 +27,9 @@ The destination must already exist and be empty, or contain the ownership marker
 migration of the same canonical source root.
 
 ```bash
-mkdir -p /Volumes/SSK/agent-session-distillery/staging
-node dist/cli.js storage migrate-staging --to /Volumes/SSK/agent-session-distillery/staging
-node dist/cli.js storage migrate-staging --to /Volumes/SSK/agent-session-distillery/staging --apply
+mkdir -p /Volumes/SSK/marrow/staging
+node dist/cli.js storage migrate-staging --to /Volumes/SSK/marrow/staging
+node dist/cli.js storage migrate-staging --to /Volumes/SSK/marrow/staging --apply
 ```
 
 Inspect `files`, `total_bytes`, `manifest_path`, `receipt_path`, and the emitted environment value.
@@ -40,10 +40,10 @@ entries, source mutation, a destination mismatch, or foreign ownership.
 
 ## Cut over
 
-Set the override in the exact operator launcher and every scheduled job that runs ASD:
+Set the override in the exact operator launcher and every scheduled job that runs Marrow:
 
 ```bash
-export AGENT_SESSION_DISTILLERY_STAGING_ROOT=/Volumes/SSK/agent-session-distillery/staging
+export MARROW_STAGING_ROOT=/Volumes/SSK/marrow/staging
 node dist/cli.js storage inventory --json
 node dist/cli.js ingest sync --source cursor --resume
 node dist/cli.js storage cleanup-parsed
@@ -51,20 +51,20 @@ node dist/cli.js storage cleanup-parsed
 
 Inventory must show the configured root as available and writable. The runtime root must still
 contain the ledger, reports, receipts, summaries, knowledge, and manifests. If the volume or root
-is absent, staging-dependent commands fail; ASD does not recreate the path or fall back silently.
+is absent, staging-dependent commands fail; Marrow does not recreate the path or fall back silently.
 
 ## Roll back
 
 Unset the staging-only override and restart the launcher or scheduled job:
 
 ```bash
-unset AGENT_SESSION_DISTILLERY_STAGING_ROOT
+unset MARROW_STAGING_ROOT
 node dist/cli.js storage inventory --json
 ```
 
 Because migration never deletes the original staging tree, this immediately returns readers and
-writers to `<AGENT_SESSION_DISTILLERY_ROOT>/staging` (or
-`~/.agent-session-distillery/staging`). Keep that source through an operator-selected soak period.
+writers to `<MARROW_ROOT>/staging` (or
+`~/.marrow/staging`). Keep that source through an operator-selected soak period.
 Retiring it later is a separate destructive action requiring a fresh hash/inventory comparison and
 explicit approval.
 

@@ -8,7 +8,7 @@ import { extractLearnings, normalizeUserPreferenceStatement } from "../dist/pipe
 function sourceSession(overrides = {}) {
   return {
     ...sourceSessionFixture,
-    project_key: "studio-tools",
+    project_key: "service-tools",
     session_id: "project-learning-session",
     source_hash: "sha256:project-learning",
     ...overrides,
@@ -374,7 +374,7 @@ test("promotes workflow learning from project-specific commands", () => {
     learnings.project.some(
       (learning) =>
         learning.statement ===
-        "Use `./.cursor/setup-worktree-unix.sh` for worktree setup in studio-tools.",
+        "Use `./.cursor/setup-worktree-unix.sh` for worktree setup in service-tools.",
     ),
   );
 });
@@ -555,9 +555,7 @@ test("promotes file-scoped implementation learning from payload file arrays", ()
 test("does not promote process-only file-scoped fix events", () => {
   const source = sourceSession();
   const firstTurn = turn({
-    files_touched: [
-      "/Users/dallascrilley/.hub/artifacts/skills/ce-ideate/source/original/SKILL.md",
-    ],
+    files_touched: ["/Users/example/.hub/artifacts/skills/ce-ideate/source/original/SKILL.md"],
     user_prompt: "Please take a look.",
   });
   const events = [
@@ -659,7 +657,7 @@ test("promotes crash diagnostic from fix prompt and diagnostic commands", () => 
   const source = sourceSession({ project_key: "hub" });
   const firstTurn = turn({
     commands_seen: ['bun -e "console.log(process.argv)"'],
-    files_touched: ["/Users/dallascrilley/.pi/agent/pi-crash.log"],
+    files_touched: ["/Users/example/.pi/agent/pi-crash.log"],
     user_prompt: "fix: crash in pi tui at tui.js:974",
   });
 
@@ -679,7 +677,7 @@ test("promotes crash diagnostic from fix prompt and diagnostic commands", () => 
 test("promotes spec decision from speckit prompt and spec files", () => {
   const source = sourceSession({ project_key: "hub" });
   const firstTurn = turn({
-    files_touched: ["/Users/dallascrilley/.hub/specs/004-hub-skills-cli-wrapper/spec.md"],
+    files_touched: ["/Users/example/.hub/specs/004-hub-skills-cli-wrapper/spec.md"],
     user_prompt: "/speckit-specify create a hub wrapper around the skills cli",
   });
 
@@ -892,7 +890,7 @@ test("does not promote markdown-heavy code review summaries", () => {
 });
 
 test("keeps explicit durable decisions", () => {
-  const source = sourceSession({ project_key: "studio-tools" });
+  const source = sourceSession({ project_key: "service-tools" });
   const firstTurn = turn();
   const events = [
     event(
@@ -1260,12 +1258,12 @@ test("promotes verification workflow when command is only in the summary text", 
   assert.equal(learnings.project[0].kind, "verification_rule");
   assert.equal(
     learnings.project[0].statement,
-    "Run cargo check when verifying changes in studio-tools.",
+    "Run cargo check when verifying changes in service-tools.",
   );
 });
 
 test("promotes durable decision even when wrapped in explanatory framing", () => {
-  const source = sourceSession({ project_key: "studio-tools" });
+  const source = sourceSession({ project_key: "service-tools" });
   const firstTurn = turn();
   const events = [
     event(
@@ -1308,7 +1306,7 @@ test("derives project workflow from turn commands when no events are extracted",
   assert.equal(learnings.project[0].kind, "workflow");
   assert.equal(
     learnings.project[0].statement,
-    "Use `./scripts/hot-reload-fix` for fix hot-reload path in studio-tools.",
+    "Use `./scripts/hot-reload-fix` for fix hot-reload path in service-tools.",
   );
 });
 
@@ -1675,7 +1673,7 @@ test("still rejects markdown-heavy summary without recoverable file and action",
 });
 
 test("sanitizes markdown table from decision learning statement", () => {
-  const source = sourceSession({ project_key: "studio-tools" });
+  const source = sourceSession({ project_key: "service-tools" });
   const firstTurn = turn();
   const events = [
     event(
@@ -1702,7 +1700,7 @@ test("sanitizes markdown table from decision learning statement", () => {
 });
 
 test("sanitizes bold emphasis and framing from decision learning statement", () => {
-  const source = sourceSession({ project_key: "cohost-ai-studio" });
+  const source = sourceSession({ project_key: "media-studio" });
   const firstTurn = turn();
   const events = [
     event(
@@ -1735,7 +1733,7 @@ test("does not derive workflow from prompt-instruction turn", () => {
   const firstTurn = turn({
     commands_seen: [],
     files_touched: [
-      "cohost-ai-studio/trigger-real-video-validation/docs/specs/2026-03-30-cloud-mode-design.md",
+      "media-studio/trigger-real-video-validation/docs/specs/2026-03-30-cloud-mode-design.md",
     ],
     user_prompt: "Re-read and review ONLY this file (updated after first review):",
   });

@@ -6,21 +6,21 @@ Evaluate whether hub skills are followed in real distilled sessions.
 
 1. Ingested corpus with summaries and reduced transcripts:
    ```bash
-   asd ingest sync --source claude-code --resume
-   asd export-index
+   marrow ingest sync --source claude-code --resume
+   marrow export-index
    ```
 2. Skill installed under `~/.claude/skills/<id>/`, `~/.cursor/skills/<id>/`, or
-   `~/.hub/artifacts/skills/<id>/`.
+   another shared skills directory configured in your agent harness.
 
 ## Commands
 
 ```bash
 # Sessions whose summaries mention the skill id
-asd skill evidence git --limit 10
+marrow skill evidence git --limit 10
 
 # Checklist adherence score + improvement suggestions
-asd skill report git --limit 5
-asd skill report git --json > /tmp/git-skill-report.json
+marrow skill report git --limit 5
+marrow skill report git --json > /tmp/git-skill-report.json
 ```
 
 Fixture skill for tests: `test/fixtures/skills/demo-skill/`.

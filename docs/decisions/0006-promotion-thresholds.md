@@ -3,7 +3,7 @@
 - Date: 2026-05-19
 - Status: accepted (2026-05-19); supplemented by [ADR-0011](0011-llm-judged-promotion.md) (2026-06-30)
 - Deciders: operator
-- Related: [td-5aeb65](#), [ADR-0001](0001-storage-unit.md), [ADR-0002](0002-project-id.md), [ADR-0011](0011-llm-judged-promotion.md)
+- Related: [ADR-0001](0001-storage-unit.md), [ADR-0002](0002-project-id.md), [ADR-0011](0011-llm-judged-promotion.md)
 
 > **Note (2026-06-30):** The `min_projects: 2` gate this ADR sets almost never
 > fires in practice — the same insight rarely produces the same slug id across
@@ -14,7 +14,7 @@
 
 ## Context
 
-[td-5aeb65] adds cross-project promotion: when the same instinct
+Cross-project promotion: when the same instinct
 appears in multiple projects with sustained confidence, it gets
 promoted from project-scoped to operator-wide (global) scope. ECC
 continuous-learning-v2 uses:
@@ -38,7 +38,7 @@ Default: `min_projects: 2`, `min_avg_confidence: 0.8`,
 `min_age_days: 14` (additional sanity check — must have survived
 14 days as `established` or `proven` in at least one project).
 
-Operator can override in `~/.asd/config.yaml`.
+Operator can override in `~/.marrow/config.yaml`.
 
 ### Option B — Stricter defaults
 
@@ -47,12 +47,12 @@ Less noise, slower promotion.
 
 ### Option C — Manual promotion only
 
-`asd promote <instinct-id>` is the only way to move scope. No
+`marrow promote <instinct-id>` is the only way to move scope. No
 automatic promotion. Operator review on every elevation.
 
 ### Option D — Auto-suggest, manual approve
 
-Automatic detection produces a queue. `asd promote review` shows
+Automatic detection produces a queue. `marrow promote review` shows
 candidates; operator approves/rejects.
 
 ## Tradeoffs
@@ -62,7 +62,7 @@ candidates; operator approves/rejects.
 | Time to first useful global instinct | Medium | Slow | Operator-paced | Medium |
 | Noise risk in global tier | Medium | Low | Lowest | Low |
 | Operator overhead | Low | Low | High | Medium |
-| Matches asd's LLM-gated review culture | Weak | Weak | Strong | Strong |
+| Matches marrow's LLM-gated review culture | Weak | Weak | Strong | Strong |
 | Implementation cost | Low | Low | Lowest | Medium |
 | Reversibility (demote) | Need to ship | Need to ship | N/A | Need to ship |
 
@@ -70,7 +70,7 @@ candidates; operator approves/rejects.
 
 **Option D** (auto-suggest, manual approve), with thresholds from A.
 
-This matches asd's existing review culture: the LLM proposes; the
+This matches marrow's existing review culture: the LLM proposes; the
 operator approves. The current ingest+review flow is exactly this
 pattern at the per-session level. Cross-project promotion should
 inherit the model.
@@ -80,14 +80,14 @@ Concretely:
 - The cron/SessionEnd-triggered pipeline detects promotion candidates
   (instincts meeting `min_projects: 2`, `min_avg_confidence: 0.8`,
   `min_age_days: 14`) and writes them to a queue.
-- `asd promote review` lists pending candidates with their per-project
-  contexts; operator runs `asd promote approve <id>` or
-  `asd promote reject <id> --reason "<...>"`.
+- `marrow promote review` lists pending candidates with their per-project
+  contexts; operator runs `marrow promote approve <id>` or
+  `marrow promote reject <id> --reason "<...>"`.
 - Rejections are persistent (don't re-suggest the same instinct for N
   days).
-- Demotion (`asd promote demote <id>`) exists as the safety valve.
+- Demotion (`marrow promote demote <id>`) exists as the safety valve.
 
-Thresholds are tunable in `~/.asd/config.yaml`, but operator approval
+Thresholds are tunable in `~/.marrow/config.yaml`, but operator approval
 is non-optional. Adopt automatic promotion only if review queue
 turns out to be a bottleneck.
 
@@ -104,20 +104,20 @@ Promotion candidate detection runs on every ingest pipeline:
   `proven` in at least one project)
 
 Candidates land in a queue at
-`~/.agent-session-distillery/promote-queue.json`. The operator
+`~/.marrow/promote-queue.json`. The operator
 approves or rejects via:
 
-- `asd promote review` — list pending candidates with per-project context
-- `asd promote approve <id>`
-- `asd promote reject <id> --reason "<...>"`
-- `asd promote demote <id>` — safety valve
-- `asd promote list` — show global tier
+- `marrow promote review` — list pending candidates with per-project context
+- `marrow promote approve <id>`
+- `marrow promote reject <id> --reason "<...>"`
+- `marrow promote demote <id>` — safety valve
+- `marrow promote list` — show global tier
 
 Rejections persist for 30 days (don't re-suggest the same instinct
-during the window). Thresholds tunable in `~/.asd/config.yaml`; the
+during the window). Thresholds tunable in `~/.marrow/config.yaml`; the
 manual-approve gate is not optional in v1.
 
-This matches asd's existing LLM-gated review culture (LLM proposes,
+This matches marrow's existing LLM-gated review culture (LLM proposes,
 operator approves) and inherits the trust property the per-session
 review path already has.
 
@@ -125,8 +125,8 @@ review path already has.
 
 If D:
 
-- Queue artifact at `~/.agent-session-distillery/promote-queue.json`.
-- `asd promote` subcommand group: `review`, `approve`, `reject`,
+- Queue artifact at `~/.marrow/promote-queue.json`.
+- `marrow promote` subcommand group: `review`, `approve`, `reject`,
   `demote`, `list`.
 - Promoted instincts persist `scope: global`; the project-scoped
   copies remain (audit trail).

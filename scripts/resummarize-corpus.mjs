@@ -21,7 +21,7 @@ Options:
   --leaked-topic-only    Selector for harness/wrapper topic leaks (default)
   --limit <n>            Cap candidate sessions processed
   --max-per <n>          LLM budget cap (requires --llm-topic)
-  --root <path>          Override AGENT_SESSION_DISTILLERY_ROOT
+  --root <path>          Override MARROW_ROOT
   --help, -h             Show this help
 
 Write sweeps copy summaries/ to backups/summaries-pre-resummarize-<timestamp>/ first.
@@ -49,11 +49,10 @@ if (lowSignalOnly && args.includes("--leaked-topic-only")) {
 const env = { ...process.env };
 const rootOverride = parseOption("--root");
 if (rootOverride) {
-  env.AGENT_SESSION_DISTILLERY_ROOT = resolve(rootOverride);
+  env.MARROW_ROOT = resolve(rootOverride);
 }
 
-const runtimeRoot =
-  env.AGENT_SESSION_DISTILLERY_ROOT || join(process.env.HOME ?? "", ".agent-session-distillery");
+const runtimeRoot = env.MARROW_ROOT || join(process.env.HOME ?? "", ".marrow");
 
 await assertBuiltCli();
 

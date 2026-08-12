@@ -47,7 +47,7 @@ function globalInstinct(overrides = {}) {
   };
 }
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 function summary(sessionId, overrides = {}) {
   return {
@@ -85,7 +85,7 @@ function turn(sessionId, overrides = {}) {
 }
 
 async function writeRuntime(records) {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-mine-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-workflow-mine-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const indexDir = join(runtimeRoot, "index");
   await mkdir(indexDir, { recursive: true });

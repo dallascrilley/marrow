@@ -88,7 +88,7 @@ const emptyOperatorHealth = {
       source: "bundle-replay",
     },
   },
-  recommendation: { command: "asd stats", reason: "healthy" },
+  recommendation: { command: "marrow stats", reason: "healthy" },
   review: {
     freshness: "fresh",
     latest_apply: null,
@@ -99,7 +99,7 @@ const emptyOperatorHealth = {
     inventory: {
       artifacts: [],
       filters: { older_than_days: null, state: null },
-      runtime_root: "/tmp/asd",
+      runtime_root: "/tmp/marrow",
       total: { bytes: 0, count: 0 },
     },
     pressure: "normal",
@@ -221,7 +221,7 @@ test("operator health static copy and eager payload match the shared bounded mod
         source: "bundle-replay",
       },
     },
-    recommendation: { command: "asd quality review-learnings --if-new", reason: "review_stale" },
+    recommendation: { command: "marrow quality review-learnings --if-new", reason: "review_stale" },
     review: {
       freshness: "stale",
       latest_apply: {
@@ -241,7 +241,7 @@ test("operator health static copy and eager payload match the shared bounded mod
       inventory: {
         artifacts: [{ bytes: 6_000_000_000, reason: artifactMarker, retention: "reclaimable" }],
         filters: { older_than_days: null, state: null },
-        runtime_root: "/tmp/asd",
+        runtime_root: "/tmp/marrow",
         total: { bytes: 6_000_000_000, count: 1 },
       },
       pressure: "elevated",
@@ -279,7 +279,7 @@ function parseEagerPayload(html) {
 
 function parseLazyAggregate(html, kind) {
   const pattern = new RegExp(
-    `<script type="application/json" class="asd-aggregate" data-aggregate="${kind}">([^<]*)</script>`,
+    `<script type="application/json" class="marrow-aggregate" data-aggregate="${kind}">([^<]*)</script>`,
   );
   const match = html.match(pattern);
   assert.ok(match, `expected lazy aggregate block for ${kind}`);
@@ -339,11 +339,14 @@ test("heavy turn bodies are lazy-loaded, not inlined in the eager payload", () =
   );
 
   // It must appear inside a per-session lazy detail block.
-  assert.match(html, /<script type="application\/json" class="asd-detail" data-session-id="s1">/);
+  assert.match(
+    html,
+    /<script type="application\/json" class="marrow-detail" data-session-id="s1">/,
+  );
   assert.ok(html.includes(marker), "turn body missing from lazy detail blocks");
 
   // One detail block per session.
-  const blockCount = (html.match(/class="asd-detail"/g) ?? []).length;
+  const blockCount = (html.match(/class="marrow-detail"/g) ?? []).length;
   assert.equal(blockCount, 2);
 });
 

@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "asd": {
+    "marrow": {
       "type": "stdio",
       "command": "bash",
       "args": ["scripts/mcp-serve.sh"]

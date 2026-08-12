@@ -7,7 +7,7 @@ import test from "node:test";
 import { deriveClaudeCodeWorkspaceMapping } from "../dist/adapters/claude-code/workspace-map.js";
 
 test("decodes the leading-dash workspace slug back to an absolute path", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-ccwm-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-ccwm-"));
   try {
     const projectsRoot = join(dir, ".claude", "projects");
     const workspaceDir = join(projectsRoot, "-Users-example-Code-demo");
@@ -29,7 +29,7 @@ test("decodes the leading-dash workspace slug back to an absolute path", async (
 });
 
 test("handles deleted-workspace paths by returning the decoded value anyway", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-ccwm-deleted-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-ccwm-deleted-"));
   try {
     const projectsRoot = join(dir, ".claude", "projects");
     const workspaceDir = join(projectsRoot, "-tmp-no-longer-exists");
@@ -49,7 +49,7 @@ test("handles deleted-workspace paths by returning the decoded value anyway", as
 });
 
 test("throws when a transcript path is not nested under the projects root", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-ccwm-bad-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-ccwm-bad-"));
   try {
     const looseTranscriptPath = join(dir, "stray.jsonl");
     await writeFile(looseTranscriptPath, "", "utf8");

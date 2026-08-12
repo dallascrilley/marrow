@@ -19,7 +19,7 @@ function runCli(args) {
 }
 
 async function withConfig(initial, run) {
-  const dir = await mkdtemp(join(tmpdir(), "asd-mcp-install-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-mcp-install-"));
   const configPath = join(dir, ".claude.json");
   try {
     if (initial !== undefined) {
@@ -31,7 +31,7 @@ async function withConfig(initial, run) {
   }
 }
 
-test("mcp install registers asd as a stdio server, preserving other keys", async () => {
+test("mcp install registers marrow as a stdio server, preserving other keys", async () => {
   await withConfig(
     { numStartups: 7, mcpServers: { exa: { type: "http", url: "https://example" } } },
     async (configPath) => {
@@ -43,18 +43,18 @@ test("mcp install registers asd as a stdio server, preserving other keys", async
         "--node",
         "/usr/bin/node",
         "--cli",
-        "/opt/asd/dist/cli.js",
+        "/opt/marrow/dist/cli.js",
       ]);
       assert.equal(result.status, 0, result.stderr);
       const config = JSON.parse(await readFile(configPath, "utf8"));
       // Unrelated keys and pre-existing servers are preserved.
       assert.equal(config.numStartups, 7);
       assert.deepEqual(config.mcpServers.exa, { type: "http", url: "https://example" });
-      // asd entry is a stdio server invoking `mcp serve`.
-      assert.deepEqual(config.mcpServers.asd, {
+      // marrow entry is a stdio server invoking `mcp serve`.
+      assert.deepEqual(config.mcpServers.marrow, {
         type: "stdio",
         command: "/usr/bin/node",
-        args: ["/opt/asd/dist/cli.js", "mcp", "serve"],
+        args: ["/opt/marrow/dist/cli.js", "mcp", "serve"],
       });
     },
   );
@@ -70,7 +70,7 @@ test("mcp install is idempotent and leaves the file byte-identical on re-run", a
       "--node",
       "/usr/bin/node",
       "--cli",
-      "/opt/asd/dist/cli.js",
+      "/opt/marrow/dist/cli.js",
     ];
     const first = runCli(args);
     assert.equal(first.status, 0, first.stderr);
@@ -96,7 +96,7 @@ test("mcp install --dry-run reports the change without writing", async () => {
       "--node",
       "/usr/bin/node",
       "--cli",
-      "/opt/asd/dist/cli.js",
+      "/opt/marrow/dist/cli.js",
     ]);
     assert.equal(result.status, 0, result.stderr);
     const payload = JSON.parse(result.stdout);
@@ -118,10 +118,10 @@ test("mcp install creates ~/.claude.json when it does not exist", async () => {
       "--node",
       "/usr/bin/node",
       "--cli",
-      "/opt/asd/dist/cli.js",
+      "/opt/marrow/dist/cli.js",
     ]);
     assert.equal(result.status, 0, result.stderr);
     const config = JSON.parse(await readFile(configPath, "utf8"));
-    assert.equal(config.mcpServers.asd.type, "stdio");
+    assert.equal(config.mcpServers.marrow.type, "stdio");
   });
 });

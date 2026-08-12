@@ -1,7 +1,7 @@
 # Live Regression Corpus
 
 This fixture set is copied from real local Cursor transcript files that exposed
-quality gaps during the first live smoke of `agent-session-distillery`.
+quality gaps during the first live smoke of `marrow`.
 
 Purpose:
 - reproduce nested session-directory discovery behavior

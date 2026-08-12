@@ -3,23 +3,23 @@
 - Date: 2026-05-19
 - Status: accepted (2026-05-19)
 - Deciders: operator
-- Related: [td-3d5e2b](#), claude-self-reflect (reference)
+- Related: claude-self-reflect (reference)
 
 ## Context
 
-[td-3d5e2b] adds an MCP server exposing the distilled corpus to
+This project adds an MCP server exposing the distilled corpus to
 running Claude Code sessions. claude-self-reflect ships **12 MCP
 tools** (search, search_by_recency, search_by_file, search_insights,
 …). Each tool is one more thing the model has to decide between.
 
-asd is starting from zero. The question is how aggressively to ship
+marrow is starting from zero. The question is how aggressively to ship
 tool surface. The risk of "ship 12" is well-documented: more tools
 → more confusion → worse tool selection by the model. The risk of
 "ship 1" is forcing every query through a generic search when a
 specific shape would work better.
 
 The ECC v2 / lamarck approach implicitly answers this by *not*
-shipping MCP — they rely on file auto-load. asd has decided (via
+shipping MCP — they rely on file auto-load. marrow has decided (via
 the report) that MCP is the right runtime contract, so this ADR is
 about the *count*.
 
@@ -73,7 +73,7 @@ the surface area observed in the survey:
 - temporal (recency-anchored) → `recent_instincts`
 
 Add a 4th only when measurement justifies it. Self-reflect's 12-tool
-surface accumulated over time; asd has the chance to start lean.
+surface accumulated over time; marrow has the chance to start lean.
 
 A useful side rule: every new tool added later requires either a usage-log
 data point showing demand, or an ADR amending this one. No "while
@@ -109,7 +109,7 @@ If A:
 
 If B or D:
 
-- Wider scope on [td-3d5e2b]; reschedule.
+- Wider scope on the MCP server work; reschedule.
 
 If C:
 

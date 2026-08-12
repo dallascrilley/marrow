@@ -63,7 +63,7 @@ function health(overrides = {}) {
         source: "bundle-replay",
       },
     },
-    recommendation: { command: "asd stats", reason: "healthy" },
+    recommendation: { command: "marrow stats", reason: "healthy" },
     review: {
       freshness: "fresh",
       latest_apply: null,
@@ -78,7 +78,7 @@ function health(overrides = {}) {
       inventory: {
         artifacts: [],
         filters: { older_than_days: null, state: null },
-        runtime_root: "/tmp/asd",
+        runtime_root: "/tmp/marrow",
         total: { bytes: 1_024, count: 2 },
       },
       pressure: "normal",
@@ -98,8 +98,8 @@ test("health formatter answers the operator questions without probing the provid
   assert.match(output, /Review freshness: fresh/);
   assert.match(output, /LLM budget: 49 remaining of 50\/24h; USD: \$0.88 remaining of 1\/24h/);
   assert.match(output, /Storage pressure: normal \(1.0 KiB total; 128 B reclaimable\)/);
-  assert.match(output, /Provider: not checked \(optional; run `asd doctor provider`\)/);
-  assert.match(output, /Next: asd stats/);
+  assert.match(output, /Provider: not checked \(optional; run `marrow doctor provider`\)/);
+  assert.match(output, /Next: marrow stats/);
 });
 
 test("health exit codes distinguish healthy, degraded, and unverifiable states", () => {

@@ -15,10 +15,10 @@ import {
 import { hashToProjectId } from "../dist/v2/project/resolve.js";
 import { getProjectKnowledgeSessionPath } from "../dist/writers/knowledge-writer.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 test("apply-learning-review persists reconstructed triggers", async () => {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-apply-trigger-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-apply-trigger-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
@@ -27,12 +27,12 @@ test("apply-learning-review persists reconstructed triggers", async () => {
   try {
     const session = {
       ...sourceSessionFixture,
-      project_key: "agent-session-distillery",
+      project_key: "marrow",
       session_id: "apply-trigger-session",
       conversation_id: "apply-trigger-conversation",
       source_hash: "sha256:apply-trigger",
       source_path: "/tmp/apply-trigger.jsonl",
-      workspace_path: "/Users/example/Code/agent-session-distillery",
+      workspace_path: "/Users/example/Code/marrow",
     };
     upsertSourceSession(database, session);
 

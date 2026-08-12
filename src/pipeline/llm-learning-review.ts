@@ -657,8 +657,8 @@ export async function completeOpenRouterJson(input: {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/agent-session-distillery",
-        "X-Title": "agent-session-distillery",
+        "HTTP-Referer": "https://github.com/marrow",
+        "X-Title": "marrow",
       },
       method: "POST",
       signal: abortController.signal,

@@ -16,7 +16,7 @@ import { getProjectKnowledgeSessionPath } from "../dist/writers/knowledge-writer
 import { writeSessionManifest } from "../dist/writers/manifest-writer.js";
 import { writeSessionSummary } from "../dist/writers/summary-writer.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 test("isLowSignalTopic flags bare skill slugs and wrapper-only topics", () => {
   assert.equal(isLowSignalTopic("brainstorming"), true);
@@ -35,7 +35,7 @@ test("isHarnessTopicLine flags wrapper-header topic leaks", () => {
 test("summarizeSession skips skill-wrapper-only user prompts for topic", () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "agent-session-distillery",
+    project_key: "marrow",
     session_id: "skill-wrapper-skip",
   };
   const turns = [
@@ -73,7 +73,7 @@ test("summarizeSession skips skill-wrapper-only user prompts for topic", () => {
 });
 
 test("resummarizeSessions upgrades topic without touching manifest bytes", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-"));
   const runtimeRoot = join(sandbox, "runtime");
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
 
@@ -294,7 +294,7 @@ async function seedResummarizeFixture({
 }
 
 test("resummarizeSessions --low-signal-only skips high-signal topics", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-filter-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-filter-"));
   const runtimeRoot = join(sandbox, "runtime");
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
 
@@ -333,7 +333,7 @@ test("resummarizeSessions --low-signal-only skips high-signal topics", async () 
 });
 
 test("resummarizeSessions --leaked-topic-only targets harness wrapper topics", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-leaked-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-leaked-"));
   const runtimeRoot = join(sandbox, "runtime");
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
 
@@ -382,7 +382,7 @@ async function writeProjectKnowledge({ projectKey, sessionId, learningCount }) {
 }
 
 test("resummarizeSessions --over-extracted-only selects only sessions above the cap", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-over-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-over-"));
   const runtimeRoot = join(sandbox, "runtime");
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
   const previousCap = process.env.ASD_MAX_PROJECT_LEARNINGS;
@@ -441,7 +441,7 @@ test("resummarizeSessions --over-extracted-only selects only sessions above the 
 });
 
 test("resummarizeSessions --low-signal-only + llmTopic uses mocked generator", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-llm-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-llm-"));
   const runtimeRoot = join(sandbox, "runtime");
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
 
@@ -479,7 +479,7 @@ test("resummarizeSessions --low-signal-only + llmTopic uses mocked generator", a
 });
 
 test("resummarizeSessions threads onUsage and tags topic_generation telemetry", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-topic-telemetry-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-topic-telemetry-"));
   const runtimeRoot = join(sandbox, "runtime");
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
 
@@ -534,7 +534,7 @@ test("resummarizeSessions threads onUsage and tags topic_generation telemetry", 
 });
 
 test("resummarizeSessions skips sessions missing manifests without failing batch", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-orphan-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-orphan-"));
   const runtimeRoot = join(sandbox, "runtime");
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
 
@@ -565,7 +565,7 @@ test("resummarizeSessions skips sessions missing manifests without failing batch
 });
 
 test("resummarizeSessions --dry-run reports would_process_count without writes", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-dry-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-dry-"));
   const runtimeRoot = join(sandbox, "runtime");
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
 
@@ -598,7 +598,7 @@ test("resummarizeSessions --dry-run reports would_process_count without writes",
 });
 
 test("resummarizeSessions respects llm budget across multiple low-signal sessions", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-budget-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-budget-"));
   const runtimeRoot = join(sandbox, "runtime");
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
 
@@ -648,7 +648,7 @@ test("resummarizeSessions respects llm budget across multiple low-signal session
 });
 
 test("resummarizeSessions does not count budget skip when deterministic topic is high-signal", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-budget-high-det-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-budget-high-det-"));
   const runtimeRoot = join(sandbox, "runtime");
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
 
@@ -681,7 +681,7 @@ test("resummarizeSessions does not count budget skip when deterministic topic is
 });
 
 test("resummarizeSessions skips llm calls when budget is pre-exhausted", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-budget-exhausted-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-budget-exhausted-"));
   const runtimeRoot = join(sandbox, "runtime");
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
 
@@ -729,7 +729,7 @@ test("resummarizeSessions skips llm calls when budget is pre-exhausted", async (
 });
 
 test("resummarizeSessions does not charge budget when mocked llm generator throws", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-resummarize-budget-throw-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-resummarize-budget-throw-"));
   const runtimeRoot = join(sandbox, "runtime");
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
 

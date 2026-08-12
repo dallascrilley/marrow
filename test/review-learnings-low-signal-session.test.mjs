@@ -9,13 +9,13 @@ import { learningFixture, sourceSessionFixture, summaryFixture } from "../dist/m
 import { getProjectKnowledgeSessionPath } from "../dist/writers/knowledge-writer.js";
 import { getSessionSummaryJsonPath } from "../dist/writers/summary-writer.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 // A whole low-signal session (its summary topic is a chief-of-staff heartbeat)
 // must be skipped before any paid review: none of its learnings reach OpenRouter,
 // so the run spends nothing and reports them as `low_signal_session` skips.
 test("review-learnings skips a low-signal-topic session without any LLM call", async () => {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-review-low-signal-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-review-low-signal-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
   const previousKey = process.env.OPENROUTER_API_KEY;

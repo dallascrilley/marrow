@@ -8,13 +8,13 @@ import { fileURLToPath } from "node:url";
 
 import { hashToProjectId } from "../../dist/v2/project/resolve.js";
 
-const LEGACY_PROJECT_KEY = "agent-session-distillery";
+const LEGACY_PROJECT_KEY = "marrow";
 const RESOLVED_PROJECT_ID = hashToProjectId(LEGACY_PROJECT_KEY);
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(dirname(testDir));
 const cliPath = join(projectRoot, "dist", "cli.js");
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 const vaultRootEnvVar = "ASD_VAULT_ROOT";
 
 function runCli(args, env = {}) {
@@ -69,7 +69,7 @@ function makeRecord(suffix, overrides = {}) {
 }
 
 test("memory push-wiki writes one page per JSONL record into the scoped subtree", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-vp-int-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-vp-int-"));
   const runtimeRoot = join(sandbox, "runtime");
   const vaultRoot = join(sandbox, "vault");
   try {
@@ -86,7 +86,7 @@ test("memory push-wiki writes one page per JSONL record into the scoped subtree"
     assert.equal(payload.total_written, 2);
 
     const projectDir = join(vaultRoot, "wiki", "projects", LEGACY_PROJECT_KEY);
-    const subtree = join(projectDir, "asd-learnings");
+    const subtree = join(projectDir, "marrow-learnings");
     const manifest = JSON.parse(await readFile(join(projectDir, "_asd-manifest.json"), "utf8"));
     assert.equal(Object.keys(manifest.records).length, 2);
 
@@ -94,14 +94,14 @@ test("memory push-wiki writes one page per JSONL record into the scoped subtree"
     assert.match(page, /^# Decision 1$/m);
     assert.match(page, /^Body for record 1\.$/m);
     assert.match(page, /^- Evidence for record 1\.$/m);
-    assert.match(page, /^source: 'asd'$/m);
+    assert.match(page, /^source: 'marrow'$/m);
   } finally {
     await rm(sandbox, { force: true, recursive: true });
   }
 });
 
 test("memory push-wiki is idempotent — second run writes nothing", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-vp-int-idem-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-vp-int-idem-"));
   const runtimeRoot = join(sandbox, "runtime");
   const vaultRoot = join(sandbox, "vault");
   try {
@@ -126,7 +126,7 @@ test("memory push-wiki is idempotent — second run writes nothing", async () =>
 });
 
 test("memory push-wiki exits 0 with a notice when the vault root is missing", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-vp-int-no-vault-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-vp-int-no-vault-"));
   const runtimeRoot = join(sandbox, "runtime");
   try {
     await writeReviewedMemoryJsonl(runtimeRoot, [makeRecord("1")]);
@@ -143,7 +143,7 @@ test("memory push-wiki exits 0 with a notice when the vault root is missing", as
 });
 
 test("memory push-wiki exits 0 with a notice when no reviewed-memory file exists", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-vp-int-no-jsonl-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-vp-int-no-jsonl-"));
   const runtimeRoot = join(sandbox, "runtime");
   const vaultRoot = join(sandbox, "vault");
   try {
@@ -161,22 +161,22 @@ test("memory push-wiki exits 0 with a notice when no reviewed-memory file exists
 });
 
 test("memory push-wiki --refresh re-runs export-wiki against the runtime", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-vp-int-refresh-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-vp-int-refresh-"));
   const runtimeRoot = join(sandbox, "runtime");
   const vaultRoot = join(sandbox, "vault");
   try {
     await mkdir(vaultRoot, { recursive: true });
-    const knowledgeDir = join(runtimeRoot, "knowledge", "projects", "agent-session-distillery");
+    const knowledgeDir = join(runtimeRoot, "knowledge", "projects", "marrow");
     await mkdir(knowledgeDir, { recursive: true });
     await writeFile(
       join(knowledgeDir, "session-1.jsonl"),
       `${JSON.stringify({
         learning_id: "session-1:project:decision:event-1",
         scope: "project",
-        scope_key: "agent-session-distillery",
+        scope_key: "marrow",
         kind: "decision",
         title: "Refresh-driven page",
-        trigger: "When revisiting related design decisions in agent-session-distillery.",
+        trigger: "When revisiting related design decisions in marrow.",
         statement: "Refresh re-runs export-wiki before pushing.",
         evidence: ["The integration uses --refresh to re-export."],
         confidence: "medium",
@@ -212,7 +212,7 @@ test("memory push-wiki --refresh re-runs export-wiki against the runtime", async
 });
 
 test("memory push-wiki --no-overwrite preserves manual edits when the on-disk hash diverges", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-vp-int-no-overwrite-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-vp-int-no-overwrite-"));
   const runtimeRoot = join(sandbox, "runtime");
   const vaultRoot = join(sandbox, "vault");
   try {
@@ -228,8 +228,8 @@ test("memory push-wiki --no-overwrite preserves manual edits when the on-disk ha
       vaultRoot,
       "wiki",
       "projects",
-      "agent-session-distillery",
-      "asd-learnings",
+      "marrow",
+      "marrow-learnings",
       `${"0".repeat(63)}1.md`,
     );
     const before = await readFile(pagePath, "utf8");

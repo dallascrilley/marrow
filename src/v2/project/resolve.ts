@@ -21,12 +21,12 @@ export type ResolvedProjectId = {
 
 export type ResolveProjectIdInput = {
   workspacePath: string | null;
-  /** Directory used to locate `.asd-project-key` when workspace is unknown. */
+  /** Directory used to locate `.marrow-project-key` when workspace is unknown. */
   sessionRoot?: string | null;
 };
 
 /**
- * ADR-0002 resolution order: git remote hash → `.asd-project-key` override →
+ * ADR-0002 resolution order: git remote hash → `.marrow-project-key` override →
  * workspace path hash (or session-root hash when workspace is unknown).
  */
 export async function resolveProjectId(input: ResolveProjectIdInput): Promise<ResolvedProjectId> {
@@ -209,18 +209,30 @@ function gitProbeEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
+/**
+ * Project-key filenames in preference order. `.asd-project-key` is the
+ * pre-rename name, still honoured so repositories that already declare a key do
+ * not silently change project id when Marrow is upgraded.
+ */
+const projectKeyFilenames = [".marrow-project-key", ".asd-project-key"] as const;
+
 async function readDeclaredProjectKey(root: string | null | undefined): Promise<string | null> {
   if (!root || root.trim().length === 0) {
     return null;
   }
 
-  try {
-    const contents = await readFile(join(resolve(root), ".asd-project-key"), "utf8");
-    const trimmed = contents.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  } catch {
-    return null;
+  for (const filename of projectKeyFilenames) {
+    try {
+      const contents = await readFile(join(resolve(root), filename), "utf8");
+      const trimmed = contents.trim();
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
+    } catch {
+      // Try the next filename.
+    }
   }
+  return null;
 }
 
 function sanitiseDeclaredKey(key: string): string {

@@ -138,8 +138,8 @@ export async function handleMcpMessage(message: JsonRpcMessage): Promise<JsonRpc
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: { tools: { listChanged: false } },
         serverInfo: {
-          name: "agent-session-distillery",
-          title: "Agent Session Distillery",
+          name: "marrow",
+          title: "Marrow",
           version: "1.0.0",
         },
       },

@@ -143,7 +143,7 @@ test("findSkillEvidenceInSummary matches skill id in summary fields", () => {
 });
 
 test("resolveSkillPath checks extraRoots before home layout", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-skill-root-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-skill-root-"));
   const skillsRoot = join(sandbox, "skills");
   await mkdir(join(skillsRoot, "demo-skill"), { recursive: true });
   await writeFile(join(skillsRoot, "demo-skill", "SKILL.md"), "# demo-skill\n", "utf8");

@@ -17,7 +17,7 @@ test("state DB enrichment reads composer and workspace metadata from the frozen 
     conversationIds: ["conv-123", "conv-older"],
     matchedKeys: ["cursor.composer.active", "cursor.composer.recent", "cursor.workspace.roots"],
     workspaceIds: ["ws-001"],
-    workspacePaths: ["/Users/example/Code/distillery", "/Users/example/Code/shared"],
+    workspacePaths: ["/Users/example/Code/demo-app", "/Users/example/Code/shared"],
   });
 });
 
@@ -32,7 +32,7 @@ test("tracking DB enrichment is optional and non-fatal while still improving att
     requestIds: ["req-9"],
     sessionIds: ["session-42"],
     workspaceIds: ["ws-001"],
-    workspacePaths: ["/Users/example/Code/distillery"],
+    workspacePaths: ["/Users/example/Code/demo-app"],
     workspaceStorageIds: ["workspace-storage-777"],
   });
 });

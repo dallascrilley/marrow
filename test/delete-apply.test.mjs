@@ -18,10 +18,10 @@ import { sourceSessionFixture } from "../dist/models/canonical.js";
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
 const cliPath = join(projectRoot, "dist", "cli.js");
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntime(run) {
-  const root = await mkdtemp(join(tmpdir(), "asd-delete-apply-"));
+  const root = await mkdtemp(join(tmpdir(), "marrow-delete-apply-"));
   const prior = process.env[runtimeOverrideEnvVar];
   process.env[runtimeOverrideEnvVar] = root;
 

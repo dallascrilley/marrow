@@ -18,8 +18,8 @@ function learning(overrides = {}) {
     learning_id: `learning-${counter}`,
     promotion_basis: "fixture",
     scope: "project",
-    scope_key: "studio-tools",
-    trigger: "When revisiting related design decisions in studio-tools.",
+    scope_key: "service-tools",
+    trigger: "When revisiting related design decisions in service-tools.",
     source_refs: [
       {
         event_id: null,
@@ -75,7 +75,7 @@ test("batched review issues one call and demultiplexes verdicts by id", async ()
     fetchImpl,
     learnings,
     noCache: true,
-    projectKey: "studio-tools",
+    projectKey: "service-tools",
   });
 
   assert.equal(calls, 1, "three learnings share a single HTTP call");
@@ -125,7 +125,7 @@ test("partial-batch failure attributes full call cost to the returned members", 
     fetchImpl,
     learnings,
     noCache: true,
-    projectKey: "studio-tools",
+    projectKey: "service-tools",
   });
 
   assert.equal(outcome.reviewed.length, 2);
@@ -143,7 +143,7 @@ test("partial-batch failure attributes full call cost to the returned members", 
 });
 
 test("batched review serves cache hits without a second call", async () => {
-  const cacheDir = await mkdtemp(join(tmpdir(), "asd-batch-cache-"));
+  const cacheDir = await mkdtemp(join(tmpdir(), "marrow-batch-cache-"));
   try {
     const learnings = [learning(), learning()];
     let calls = 0;
@@ -167,7 +167,7 @@ test("batched review serves cache hits without a second call", async () => {
       cacheDir,
       fetchImpl,
       learnings,
-      projectKey: "studio-tools",
+      projectKey: "service-tools",
     });
     assert.equal(calls, 1);
     assert.equal(first.reviewed.length, 2);
@@ -178,7 +178,7 @@ test("batched review serves cache hits without a second call", async () => {
       cacheDir,
       fetchImpl,
       learnings,
-      projectKey: "studio-tools",
+      projectKey: "service-tools",
     });
     assert.equal(calls, 1, "cache hits bypass the batch entirely");
     assert.equal(second.reviewed.length, 2);

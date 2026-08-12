@@ -14,7 +14,7 @@ function learning(overrides = {}) {
     learning_id: `learning-${counter}`,
     promotion_basis: "fixture",
     scope: "project",
-    scope_key: "studio-tools",
+    scope_key: "service-tools",
     source_refs: [
       {
         event_id: null,

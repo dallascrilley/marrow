@@ -10,11 +10,11 @@ import { listInstinctIds, saveAllInstincts } from "../dist/v2/instinct/store.js"
 import { renderProjectMemoryToVault } from "../dist/v2/vault/render-memory.js";
 
 test("bundle replay → saveAllInstincts prune → vault MEMORY.md includes candidate rollup", async () => {
-  const previousRoot = process.env.AGENT_SESSION_DISTILLERY_ROOT;
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-v2-pipe-"));
+  const previousRoot = process.env.MARROW_ROOT;
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-v2-pipe-"));
   const runtimeRoot = join(sandbox, "runtime");
   const vaultRoot = join(sandbox, "vault");
-  process.env.AGENT_SESSION_DISTILLERY_ROOT = runtimeRoot;
+  process.env.MARROW_ROOT = runtimeRoot;
 
   try {
     const projectId = "pipeproj000001";
@@ -83,9 +83,9 @@ test("bundle replay → saveAllInstincts prune → vault MEMORY.md includes cand
     assert.match(memory, /candidate/);
   } finally {
     if (previousRoot === undefined) {
-      delete process.env.AGENT_SESSION_DISTILLERY_ROOT;
+      delete process.env.MARROW_ROOT;
     } else {
-      process.env.AGENT_SESSION_DISTILLERY_ROOT = previousRoot;
+      process.env.MARROW_ROOT = previousRoot;
     }
     await rm(sandbox, { recursive: true, force: true });
   }

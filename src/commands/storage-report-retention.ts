@@ -56,7 +56,7 @@ export async function executeStorageReportRetention(
         continue;
       }
 
-      const quarantinePath = `${current.path}.asd-cleanup-${randomUUID()}.quarantine`;
+      const quarantinePath = `${current.path}.marrow-cleanup-${randomUUID()}.quarantine`;
       try {
         await rename(current.path, quarantinePath);
       } catch (error) {

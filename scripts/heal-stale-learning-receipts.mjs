@@ -29,9 +29,7 @@ const apply = args.includes("--apply");
 const rootOverride = parseOption("--root");
 
 const runtimeRoot = resolve(
-  rootOverride ??
-    process.env.AGENT_SESSION_DISTILLERY_ROOT ??
-    join(process.env.HOME ?? "", ".agent-session-distillery"),
+  rootOverride ?? process.env.MARROW_ROOT ?? join(process.env.HOME ?? "", ".marrow"),
 );
 
 const knowledgeProjects = join(runtimeRoot, "knowledge", "projects");

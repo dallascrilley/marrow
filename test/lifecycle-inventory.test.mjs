@@ -20,7 +20,7 @@ import {
 
 async function withRuntimeRoot(run) {
   const previousRoot = process.env[runtimeRootOverrideEnvVar];
-  const runtimeRoot = await mkdtemp(join(tmpdir(), "asd-lifecycle-inventory-"));
+  const runtimeRoot = await mkdtemp(join(tmpdir(), "marrow-lifecycle-inventory-"));
   process.env[runtimeRootOverrideEnvVar] = runtimeRoot;
 
   try {

@@ -15,7 +15,7 @@ const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(dirname(testDir));
 const cliPath = join(projectRoot, "dist", "cli.js");
 const fixtureProjectsRoot = join(projectRoot, "test", "fixtures", "claude-code", "projects");
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 function runCli(args, env = {}) {
   return spawnSync(process.execPath, [cliPath, ...args], {
@@ -26,7 +26,7 @@ function runCli(args, env = {}) {
 }
 
 test("ingest backfill --source claude-code processes the smoke fixture end-to-end", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-cc-int-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-cc-int-"));
   const home = join(sandbox, "home");
   const runtimeRoot = join(sandbox, "runtime");
 

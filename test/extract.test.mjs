@@ -7,7 +7,7 @@ import { extractLearnings } from "../dist/pipeline/extract.js";
 test("verified completion events produce conservative project learnings", () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "studio-tools",
+    project_key: "service-tools",
     session_id: "extract-complete",
   };
   const turn = turnSchema.parse({

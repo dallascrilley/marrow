@@ -22,8 +22,8 @@ function learning(overrides = {}) {
     learning_id: "session:project:decision:1",
     promotion_basis: "fixture",
     scope: "project",
-    scope_key: "studio-tools",
-    trigger: "When revisiting related design decisions in studio-tools.",
+    scope_key: "service-tools",
+    trigger: "When revisiting related design decisions in service-tools.",
     source_refs: [
       {
         event_id: null,
@@ -106,7 +106,7 @@ test("OpenRouter learning review sends strict JSON memory-lint request", async (
     fetchImpl,
     learning: learning(),
     model: "openai/gpt-5-nano",
-    projectKey: "studio-tools",
+    projectKey: "service-tools",
   });
 
   assert.deepEqual(review, {
@@ -127,7 +127,7 @@ test("OpenRouter learning review sends strict JSON memory-lint request", async (
   assert.deepEqual(body.response_format, { type: "json_object" });
   assert.deepEqual(body.reasoning, { effort: "low" });
   const userPayload = JSON.parse(body.messages[1].content);
-  assert.equal(userPayload.trigger, "When revisiting related design decisions in studio-tools.");
+  assert.equal(userPayload.trigger, "When revisiting related design decisions in service-tools.");
   assert.match(body.messages[0].content, /strict memory-lint judge/);
   assert.match(body.messages[1].content, /keeping the rule/);
 });
@@ -222,7 +222,7 @@ test("learning review captures real OpenRouter usage + cost and requests it", as
     learning: learning(),
     model: "openai/gpt-5-nano",
     onUsage: (usage) => captured.push(usage),
-    projectKey: "studio-tools",
+    projectKey: "service-tools",
   });
 
   // We must explicitly ask OpenRouter to include cost accounting.
@@ -261,7 +261,7 @@ test("learning review uses upstream cost for BYOK keys (OpenRouter charge is 0)"
     learning: learning(),
     model: "openai/gpt-5-nano",
     onUsage: (usage) => captured.push(usage),
-    projectKey: "studio-tools",
+    projectKey: "service-tools",
   });
 
   const usage = captured[0];
@@ -282,7 +282,7 @@ test("learning review fails closed on usage when the provider omits it", async (
     learning: learning(),
     model: "openai/gpt-5-nano",
     onUsage: (usage) => captured.push(usage),
-    projectKey: "studio-tools",
+    projectKey: "service-tools",
   });
 
   assert.equal(captured.length, 1);
@@ -293,12 +293,12 @@ test("learning review fails closed on usage when the provider omits it", async (
 });
 
 test("learning review reports a cache hit as zero-cost usage without fetching", async () => {
-  const cacheDir = await mkdtemp(join(tmpdir(), "asd-llm-usage-cache-"));
+  const cacheDir = await mkdtemp(join(tmpdir(), "marrow-llm-usage-cache-"));
   const item = learning();
   const cacheKey = buildLearningReviewCacheKey({
     learning: item,
     model: "openai/gpt-5-nano",
-    projectKey: "studio-tools",
+    projectKey: "service-tools",
   });
   const captured = [];
   try {
@@ -325,7 +325,7 @@ test("learning review reports a cache hit as zero-cost usage without fetching", 
       learning: item,
       model: "openai/gpt-5-nano",
       onUsage: (usage) => captured.push(usage),
-      projectKey: "studio-tools",
+      projectKey: "service-tools",
     });
 
     assert.equal(captured.length, 1);
@@ -394,14 +394,14 @@ test("OpenRouter learning review rejects invalid JSON schema", async () => {
       apiKey: "test-key",
       fetchImpl,
       learning: learning(),
-      projectKey: "studio-tools",
+      projectKey: "service-tools",
     }),
     /invalid verdict/,
   );
 });
 
 test("OpenRouter learning review uses exact-input cache before fetching", async () => {
-  const cacheDir = await mkdtemp(join(tmpdir(), "asd-llm-review-cache-"));
+  const cacheDir = await mkdtemp(join(tmpdir(), "marrow-llm-review-cache-"));
   const cachedReview = {
     durability: "durable",
     keep: true,
@@ -414,7 +414,7 @@ test("OpenRouter learning review uses exact-input cache before fetching", async 
   const cacheKey = buildLearningReviewCacheKey({
     learning: item,
     model: "openai/gpt-5-nano",
-    projectKey: "studio-tools",
+    projectKey: "service-tools",
   });
 
   try {
@@ -433,7 +433,7 @@ test("OpenRouter learning review uses exact-input cache before fetching", async 
       fetchImpl,
       learning: item,
       model: "openai/gpt-5-nano",
-      projectKey: "studio-tools",
+      projectKey: "service-tools",
     });
 
     assert.deepEqual(review, cachedReview);
@@ -443,12 +443,12 @@ test("OpenRouter learning review uses exact-input cache before fetching", async 
 });
 
 test("OpenRouter learning review refresh bypasses cache and overwrites it", async () => {
-  const cacheDir = await mkdtemp(join(tmpdir(), "asd-llm-review-refresh-"));
+  const cacheDir = await mkdtemp(join(tmpdir(), "marrow-llm-review-refresh-"));
   const item = learning();
   const cacheKey = buildLearningReviewCacheKey({
     learning: item,
     model: "openai/gpt-5-nano",
-    projectKey: "studio-tools",
+    projectKey: "service-tools",
   });
   const cachePath = join(cacheDir, `${cacheKey}.json`);
   await writeFile(
@@ -500,7 +500,7 @@ test("OpenRouter learning review refresh bypasses cache and overwrites it", asyn
       fetchImpl,
       learning: item,
       model: "openai/gpt-5-nano",
-      projectKey: "studio-tools",
+      projectKey: "service-tools",
       refreshLlm: true,
     });
 
