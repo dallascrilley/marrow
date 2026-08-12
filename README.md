@@ -75,6 +75,20 @@ deletion candidate once its durable artifacts exist on disk. In the run above,
 six of nine sessions stayed blocked because Marrow could not find anything worth
 keeping in them, which is the intended answer.
 
+## Provenance
+
+Marrow is original work in this repository: transcript adapters, ingest ledger,
+extraction and archive pipelines, index/report/recall paths, and the capped MCP
+surface. It is not a fork of Cursor, Claude Code, Codex, or any vendor memory
+product. Those tools remain separate programs whose local transcripts Marrow
+reads.
+
+**What CI proves:** `script/cibuild` (install, lint, test, build) on a fixed
+Node version, including a daily scheduled run for calendar-sensitive behavior.
+**What is self-reported / machine-local:** value depends on your own transcript
+corpora under `~/.cursor`, `~/.claude`, and similar paths; CI uses fixtures, not
+your home directory.
+
 ## Requirements
 
 - Node 22 or newer (see `engines` in [package.json](package.json)). On Node 22
@@ -175,6 +189,14 @@ staging directory on a different filesystem. Both accept an absolute path.
 | `MARROW_STAGING_ROOT` | Staging root, for keeping intermediates on another volume. |
 | `OPENROUTER_API_KEY` | Only for the opt-in LLM commands. Source it from your own secret manager; never commit it. |
 
+**Legacy env names.** The project was previously `agent-session-distillery` / `asd`.
+Prefer `MARROW_*` names. Where both are set, `MARROW_*` wins. Compatibility still
+honors selected `ASD_*` spellings (for example `ASD_VAULT_ROOT`,
+`ASD_MAX_PROJECT_LEARNINGS`, `ASD_LLM_MAX_PER`, `ASD_LLM_MAX_USD`) and the old
+`AGENT_SESSION_DISTILLERY_ROOT` / `AGENT_SESSION_DISTILLERY_STAGING_ROOT` pair when
+the new variables are unset. See [CHANGELOG.md](CHANGELOG.md) for the full
+rebrand map, including `.asd-project-key` → `.marrow-project-key`.
+
 A repository can pin its own project identity by writing a
 `.marrow-project-key` file at its root. Otherwise the project id comes from the
 git origin remote, falling back to a hash of the workspace path
@@ -214,6 +236,8 @@ See [ADR-0010](docs/decisions/0010-recall-read-back.md) for the contract and
 
 ## Non-goals
 
+- **Not published to npm.** `package.json` is `"private": true` (source install
+  only). Clone and build; there is no `npm install -g marrow` from a registry.
 - **Not a hosted service.** There is no server, no account and no sync. One
   machine, one user, files on disk.
 - **Not a chat UI.** The interfaces are a CLI, a static HTML report and an MCP
