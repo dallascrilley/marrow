@@ -52,6 +52,10 @@ Each extracted lesson carries the evidence that produced it:
 }
 ```
 
+The strings inside `evidence` are excerpts from the source transcript — the
+"92 tests" and the timing belong to the session being mined, not to Marrow.
+Marrow's own suite lives under `test/`.
+
 `marrow report --html` writes a static dashboard over the same runtime:
 
 ![Marrow dashboard, corpus overview](docs/media/dashboard-overview.png)
