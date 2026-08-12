@@ -10,10 +10,10 @@ import { saveInstinct } from "../dist/v2/instinct/store.js";
 
 import { hashToProjectId } from "../dist/v2/project/resolve.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntime(run) {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-read-knowledge-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-read-knowledge-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
 
@@ -63,7 +63,7 @@ test("listKnowledgeSnapshot returns merged project learnings and project instinc
         scope_key: "demo",
         kind: "workflow",
         title: "Reuse shared read surfaces",
-        trigger: "When adding a dashboard view in ASD.",
+        trigger: "When adding a dashboard view in Marrow.",
         statement: "Reuse shared typed readers instead of adding a dashboard-only query path.",
         evidence: ["The report exporter already consumed shared read modules."],
         confidence: "high",

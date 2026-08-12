@@ -110,7 +110,7 @@ export function renderFrontmatter(record: WikiMemoryRecord): string {
   const lines = [
     "---",
     `id: ${yamlString(record.id)}`,
-    `source: 'asd'`,
+    `source: 'marrow'`,
     `schema_version: ${yamlString(record.schema_version)}`,
     `project: ${yamlString(record.project.key)}`,
     `learning_id: ${yamlString(record.evidence.learning_id)}`,
@@ -119,8 +119,8 @@ export function renderFrontmatter(record: WikiMemoryRecord): string {
     `review_source: ${yamlString(record.review.source)}`,
     `created_at: ${yamlString(record.created_at)}`,
     "tags:",
-    "  - 'asd'",
-    `  - ${yamlString(`asd/${record.project.key}`)}`,
+    "  - 'marrow'",
+    `  - ${yamlString(`marrow/${record.project.key}`)}`,
     "source_refs:",
   ];
 
@@ -189,7 +189,7 @@ const manifestEntrySchema = z.object({
 
 const manifestSchema = z.object({
   schema_version: z.literal(vaultPushManifestSchemaVersion),
-  written_by: z.literal("asd"),
+  written_by: z.literal("marrow"),
   last_push_at: z.string(),
   records: z.record(z.string(), manifestEntrySchema),
 });
@@ -197,7 +197,7 @@ const manifestSchema = z.object({
 function emptyManifest(now: string): VaultPushManifest {
   return {
     schema_version: vaultPushManifestSchemaVersion,
-    written_by: "asd",
+    written_by: "marrow",
     last_push_at: now,
     records: {},
   };
@@ -261,7 +261,7 @@ export type PushRecordOptions = {
 export async function pushRecord(options: PushRecordOptions): Promise<PushRecordResult> {
   const { manifest, noOverwrite, now, record, vaultRoot } = options;
   const basename = `${pageBasenameFromId(record.id)}.md`;
-  const pageRelativePath = join("asd-learnings", basename);
+  const pageRelativePath = join("marrow-learnings", basename);
   const pagePath = vaultProjectPath(vaultRoot, record.project.key, pageRelativePath);
   const frontmatter = renderFrontmatter(record);
   const body = renderBody(record);
@@ -419,7 +419,7 @@ function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {
 }
 
 /**
- * Walk an `asd-learnings/` directory and return the page filenames present on
+ * Walk an `marrow-learnings/` directory and return the page filenames present on
  * disk (excluding the manifest). Useful for tests and for the phase-2
  * deletion-reconciliation skill.
  */

@@ -31,10 +31,10 @@ import {
 } from "../../dist/writers/report-writer.js";
 import { writeSessionSummary } from "../../dist/writers/summary-writer.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntimeRoot(run) {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-artifacts-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-artifacts-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
 
@@ -57,7 +57,7 @@ function buildSourceSession() {
   return {
     ...sourceSessionFixture,
     conversation_id: "conversation-task7",
-    project_key: "agent-session-distillery",
+    project_key: "marrow",
     session_id: "session-task7",
     source_hash: "sha256:task7",
     source_path: "/tmp/source/session-task7.jsonl",
@@ -316,8 +316,7 @@ test("retention blocks deletion until summary, learnings, manifest, and receipt 
       assert.ok(projectKnowledgeLines.every((entry) => entry.confidence !== "low"));
       assert.ok(
         projectKnowledgeLines.some(
-          (entry) =>
-            entry.statement === "Run npm test when verifying changes in agent-session-distillery.",
+          (entry) => entry.statement === "Run npm test when verifying changes in marrow.",
         ),
       );
 

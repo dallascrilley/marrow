@@ -8,9 +8,9 @@ import { replayBundles, saveSessionBundle } from "../dist/v2/instinct/bundle.js"
 import { sessionBundleSchema } from "../dist/v2/instinct/schema.js";
 
 test("replayBundles folds create deltas into instinct map", async () => {
-  const previousRoot = process.env.AGENT_SESSION_DISTILLERY_ROOT;
-  const runtimeRoot = await mkdtemp(join(tmpdir(), "asd-v2-bundle-"));
-  process.env.AGENT_SESSION_DISTILLERY_ROOT = runtimeRoot;
+  const previousRoot = process.env.MARROW_ROOT;
+  const runtimeRoot = await mkdtemp(join(tmpdir(), "marrow-v2-bundle-"));
+  process.env.MARROW_ROOT = runtimeRoot;
 
   try {
     const projectId = "abc123def456";
@@ -48,9 +48,9 @@ test("replayBundles folds create deltas into instinct map", async () => {
     assert.ok(instinct.confidence >= 0.3);
   } finally {
     if (previousRoot === undefined) {
-      delete process.env.AGENT_SESSION_DISTILLERY_ROOT;
+      delete process.env.MARROW_ROOT;
     } else {
-      process.env.AGENT_SESSION_DISTILLERY_ROOT = previousRoot;
+      process.env.MARROW_ROOT = previousRoot;
     }
     await rm(runtimeRoot, { recursive: true, force: true });
   }

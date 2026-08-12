@@ -10,7 +10,7 @@ import { buildOperatorHealthModel } from "../dist/read/operator-health.js";
 
 async function withRuntimeRoot(run) {
   const previousRoot = process.env[runtimeRootOverrideEnvVar];
-  const runtimeRoot = await mkdtemp(join(tmpdir(), "asd-operator-health-"));
+  const runtimeRoot = await mkdtemp(join(tmpdir(), "marrow-operator-health-"));
   process.env[runtimeRootOverrideEnvVar] = runtimeRoot;
 
   try {
@@ -89,7 +89,7 @@ function makeDependencies(overrides = {}) {
     listRuntimeLifecycleInventory: async () => ({
       artifacts: [],
       filters: { older_than_days: null, state: null },
-      runtime_root: "/tmp/asd",
+      runtime_root: "/tmp/marrow",
       total: { bytes: 1024, count: 2 },
     }),
     readApplyLedger: async () => [
@@ -133,7 +133,7 @@ test("operator health composes a healthy snapshot without duplicate readers", as
       assert.equal(health.review.freshness, "fresh");
       assert.equal(health.recall.failed_fires, 0);
       assert.equal(health.storage.pressure, "normal");
-      assert.equal(health.recommendation.command, "asd stats");
+      assert.equal(health.recommendation.command, "marrow stats");
     } finally {
       database.close();
     }
@@ -156,7 +156,7 @@ test("operator health prioritizes deterministic remediation for degraded states"
           source: "bundle-replay",
         }),
       },
-      expectedCommand: "asd recall --cwd .",
+      expectedCommand: "marrow recall --cwd .",
       expectedReason: "no_reachable_memory",
     },
     {
@@ -168,7 +168,7 @@ test("operator health prioritizes deterministic remediation for degraded states"
           last_reviewed_at: "2026-06-01T11:00:00.000Z",
         }),
       },
-      expectedCommand: "asd quality review-learnings --if-new",
+      expectedCommand: "marrow quality review-learnings --if-new",
       expectedReason: "review_stale",
     },
     {
@@ -179,7 +179,7 @@ test("operator health prioritizes deterministic remediation for degraded states"
           llm_review: { pending_learnings: 2, pending_sessions: 1 },
         }),
       },
-      expectedCommand: "asd quality review-learnings --if-new",
+      expectedCommand: "marrow quality review-learnings --if-new",
       expectedReason: "pending_review",
     },
     {
@@ -198,7 +198,7 @@ test("operator health prioritizes deterministic remediation for degraded states"
           },
         }),
       },
-      expectedCommand: "asd quality cost-report",
+      expectedCommand: "marrow quality cost-report",
       expectedReason: "llm_budget_exhausted",
     },
     {
@@ -211,7 +211,7 @@ test("operator health prioritizes deterministic remediation for degraded states"
           total_fires: 2,
         }),
       },
-      expectedCommand: "asd recall --cwd .",
+      expectedCommand: "marrow recall --cwd .",
       expectedReason: "recall_failures",
     },
     {
@@ -231,11 +231,11 @@ test("operator health prioritizes deterministic remediation for degraded states"
             },
           ],
           filters: { older_than_days: null, state: null },
-          runtime_root: "/tmp/asd",
+          runtime_root: "/tmp/marrow",
           total: { bytes: 9 * 1024 * 1024 * 1024, count: 4 },
         }),
       },
-      expectedCommand: "asd storage inventory --older-than-days 30",
+      expectedCommand: "marrow storage inventory --older-than-days 30",
       expectedReason: "storage_pressure",
     },
   ];

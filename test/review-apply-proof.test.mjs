@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 test("exactly-once proof runner records duplicate, skip, and retry evidence", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-proof-runner-test-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-proof-runner-test-"));
   const reportPath = join(sandbox, "proof.json");
   try {
     const result = spawnSync(

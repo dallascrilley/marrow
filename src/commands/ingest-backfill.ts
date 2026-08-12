@@ -148,7 +148,7 @@ export async function processDiscoveredSessions(
       if (archived.parsedIntermediateCleanupError !== null) {
         const error = `parsed intermediate cleanup failed: ${archived.parsedIntermediateCleanupError}`;
         failures.push({ error, session_id: sourceSession.session_id });
-        console.warn(`[asd] ingest cleanup pending ${sourceSession.session_id}: ${error}`);
+        console.warn(`[marrow] ingest cleanup pending ${sourceSession.session_id}: ${error}`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -156,7 +156,7 @@ export async function processDiscoveredSessions(
         session_id: sourceSession.session_id,
         error: message,
       });
-      console.warn(`[asd] ingest skipped ${sourceSession.session_id}: ${message}`);
+      console.warn(`[marrow] ingest skipped ${sourceSession.session_id}: ${message}`);
 
       const detailsJson = JSON.stringify({
         error: message,

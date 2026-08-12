@@ -168,7 +168,7 @@ const REVIEW_ITEMS_SHOWN = 12;
 
 function renderLazyAggregateBlock(kind: string, value: unknown): string {
   return (
-    '<script type="application/json" class="asd-aggregate" data-aggregate="' +
+    '<script type="application/json" class="marrow-aggregate" data-aggregate="' +
     escapeHtmlAttr(kind) +
     '">' +
     escapeScriptJson(value) +
@@ -245,7 +245,7 @@ export function renderDashboardHtml(data: DashboardData): string {
   const detailBlocks = data.sessions
     .map(
       (session) =>
-        '<script type="application/json" class="asd-detail" data-session-id="' +
+        '<script type="application/json" class="marrow-detail" data-session-id="' +
         escapeHtmlAttr(session.detail.index.asd_session_id) +
         '">' +
         escapeScriptJson({
@@ -275,7 +275,7 @@ export function renderDashboardHtml(data: DashboardData): string {
     "  <head>",
     '    <meta charset="UTF-8" />',
     '    <meta name="viewport" content="width=device-width, initial-scale=1.0" />',
-    "    <title>ASD Dashboard</title>",
+    "    <title>Marrow Dashboard</title>",
     "    <style>",
     "      :root { color-scheme: dark; --bg: #0b1020; --panel: #121a2b; --panel-alt: #182238; --border: #26324a; --text: #e6edf7; --muted: #94a3b8; --accent: #60a5fa; --chip: #1e293b; }",
     "      * { box-sizing: border-box; }",
@@ -321,7 +321,7 @@ export function renderDashboardHtml(data: DashboardData): string {
     '    <div class="layout">',
     '      <aside class="sidebar">',
     '        <div class="panel">',
-    "          <h1>ASD Dashboard</h1>",
+    "          <h1>Marrow Dashboard</h1>",
     '          <p class="muted">Static offline report for ingested sessions.</p>',
     '          <div class="stats">',
     '            <div class="stat"><span class="muted">Sessions</span><strong id="stat-total"></strong></div>',
@@ -370,7 +370,7 @@ export function renderDashboardHtml(data: DashboardData): string {
     "    <script>",
     `      const data = ${payload};`,
     "      const detailNodes = new Map();",
-    "      for (const node of document.querySelectorAll('script.asd-detail')) { detailNodes.set(node.getAttribute('data-session-id'), node); }",
+    "      for (const node of document.querySelectorAll('script.marrow-detail')) { detailNodes.set(node.getAttribute('data-session-id'), node); }",
     "      const detailCache = new Map();",
     "      function getDetail(id) {",
     "        if (id === null || id === undefined) return { summary: null, reduced_turns: [] };",
@@ -383,7 +383,7 @@ export function renderDashboardHtml(data: DashboardData): string {
     "        return parsed;",
     "      }",
     "      const aggregateNodes = new Map();",
-    "      for (const node of document.querySelectorAll('script.asd-aggregate')) { aggregateNodes.set(node.getAttribute('data-aggregate'), node); }",
+    "      for (const node of document.querySelectorAll('script.marrow-aggregate')) { aggregateNodes.set(node.getAttribute('data-aggregate'), node); }",
     "      const aggregateCache = new Map();",
     "      function getAggregate(kind) {",
     "        if (aggregateCache.has(kind)) return aggregateCache.get(kind);",
@@ -648,7 +648,7 @@ export function renderDashboardHtml(data: DashboardData): string {
     "      }",
     "      function renderReviewQueueCard(items) {",
     '        if (!items || items.length === 0) return \'<section class="panel"><h3>Queued sessions</h3><p class="empty">No review queue entries.</p></section>\';',
-    "        return '<section class=\"panel\"><h3>Queued sessions</h3><div class=\"stack\"><ul class=\"knowledge-list\">' + items.map((item) => '<li class=\"knowledge-item\"><strong>' + escapeHtml(item.session_id) + '</strong><div class=\"chips\">' + [item.review_kind, item.queue_state, item.current_lifecycle_state, item.project_key].map((chip) => '<span class=\"chip\">' + escapeHtml(chip) + '</span>').join('') + '</div><p>' + escapeHtml(item.reason) + '</p>' + renderInlineLinks(['Enqueued: ' + item.enqueued_at, 'Updated: ' + item.updated_at, 'CLI: asd review show ' + item.session_id]) + '</li>').join('') + '</ul></div></section>';",
+    "        return '<section class=\"panel\"><h3>Queued sessions</h3><div class=\"stack\"><ul class=\"knowledge-list\">' + items.map((item) => '<li class=\"knowledge-item\"><strong>' + escapeHtml(item.session_id) + '</strong><div class=\"chips\">' + [item.review_kind, item.queue_state, item.current_lifecycle_state, item.project_key].map((chip) => '<span class=\"chip\">' + escapeHtml(chip) + '</span>').join('') + '</div><p>' + escapeHtml(item.reason) + '</p>' + renderInlineLinks(['Enqueued: ' + item.enqueued_at, 'Updated: ' + item.updated_at, 'CLI: marrow review show ' + item.session_id]) + '</li>').join('') + '</ul></div></section>';",
     "      }",
     "      function renderInlineLinks(values) {",
     "        if (!values || values.length === 0) return '<p class=\"empty\">No back-links.</p>';",

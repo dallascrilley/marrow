@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -38,13 +38,13 @@ test("normaliseGitRemote strips scheme and .git suffix", () => {
 });
 
 test("resolveProjectId prefers git remote over path and declared key", async () => {
-  const workspace = await mkdtemp(join(tmpdir(), "asd-v2-proj-"));
+  const workspace = await mkdtemp(join(tmpdir(), "marrow-v2-proj-"));
   await execFileAsync("git", ["init"], { cwd: workspace, env: GIT_ENV });
   await execFileAsync("git", ["remote", "add", "origin", "git@github.com:acme/demo.git"], {
     cwd: workspace,
     env: GIT_ENV,
   });
-  await writeFile(join(workspace, ".asd-project-key"), "manual-key", "utf8");
+  await writeFile(join(workspace, ".marrow-project-key"), "manual-key", "utf8");
 
   const resolved = await resolveProjectId({
     workspacePath: workspace,
@@ -57,8 +57,8 @@ test("resolveProjectId prefers git remote over path and declared key", async () 
 });
 
 test("resolveProjectId uses declared key when workspace missing", async () => {
-  const root = await mkdtemp(join(tmpdir(), "asd-v2-declared-"));
-  await writeFile(join(root, ".asd-project-key"), "my-stable-key", "utf8");
+  const root = await mkdtemp(join(tmpdir(), "marrow-v2-declared-"));
+  await writeFile(join(root, ".marrow-project-key"), "my-stable-key", "utf8");
 
   const resolved = await resolveProjectId({
     workspacePath: null,
@@ -70,7 +70,7 @@ test("resolveProjectId uses declared key when workspace missing", async () => {
 });
 
 test("resolveProjectId path-hash when no git remote", async () => {
-  const workspace = await mkdtemp(join(tmpdir(), "asd-v2-path-"));
+  const workspace = await mkdtemp(join(tmpdir(), "marrow-v2-path-"));
   const resolved = await resolveProjectId({
     workspacePath: workspace,
     sessionRoot: workspace,
@@ -81,8 +81,8 @@ test("resolveProjectId path-hash when no git remote", async () => {
 });
 
 test("resolveProjectId uses declared key over path hash when no git remote", async () => {
-  const workspace = await mkdtemp(join(tmpdir(), "asd-v2-declared-ws-"));
-  await writeFile(join(workspace, ".asd-project-key"), "my-stable-key", "utf8");
+  const workspace = await mkdtemp(join(tmpdir(), "marrow-v2-declared-ws-"));
+  await writeFile(join(workspace, ".marrow-project-key"), "my-stable-key", "utf8");
 
   const resolved = await resolveProjectId({
     workspacePath: workspace,
@@ -94,7 +94,7 @@ test("resolveProjectId uses declared key over path hash when no git remote", asy
 });
 
 test("resolveProjectId memoizes the git-remote probe per workspace path", async () => {
-  const workspace = await mkdtemp(join(tmpdir(), "asd-v2-memo-ws-"));
+  const workspace = await mkdtemp(join(tmpdir(), "marrow-v2-memo-ws-"));
   await execFileAsync("git", ["init"], { cwd: workspace, env: GIT_ENV });
   await execFileAsync("git", ["remote", "add", "origin", "git@github.com:acme/first.git"], {
     cwd: workspace,
@@ -146,4 +146,36 @@ test("isDefinitiveGitMiss distinguishes a git 'no' from an environmental failure
   );
   assert.equal(isDefinitiveGitMiss({}), false, "a shapeless rejection is not definitive");
   assert.equal(isDefinitiveGitMiss(new Error("boom")), false, "a bare Error is not definitive");
+});
+
+test("the pre-rename project-key filename is still honoured", async () => {
+  // Marrow was called agent-session-distillery and read `.asd-project-key`.
+  // A repo that already declares a key must keep the same project id.
+  const root = await mkdtemp(join(tmpdir(), "marrow-legacy-project-key-"));
+  try {
+    const workspace = join(root, "workspace");
+    await mkdir(workspace, { recursive: true });
+    await writeFile(join(workspace, ".asd-project-key"), "legacy-key", "utf8");
+
+    const resolved = await resolveProjectId({ workspacePath: workspace });
+    assert.equal(resolved.source, "declared-key");
+    assert.equal(resolved.id, hashToProjectId("legacy-key"));
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("the current project-key filename wins over the pre-rename one", async () => {
+  const root = await mkdtemp(join(tmpdir(), "marrow-project-key-precedence-"));
+  try {
+    const workspace = join(root, "workspace");
+    await mkdir(workspace, { recursive: true });
+    await writeFile(join(workspace, ".asd-project-key"), "legacy-key", "utf8");
+    await writeFile(join(workspace, ".marrow-project-key"), "current-key", "utf8");
+
+    const resolved = await resolveProjectId({ workspacePath: workspace });
+    assert.equal(resolved.id, hashToProjectId("current-key"));
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
 });

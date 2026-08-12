@@ -1,16 +1,16 @@
-# ADR-0003: Primary render — curated MEMORY.md vs asd-learnings/ directory
+# ADR-0003: Primary render — curated MEMORY.md vs marrow-learnings/ directory
 
 - Date: 2026-05-19
 - Status: accepted (2026-05-19)
 - Deciders: operator
-- Related: [ADR-0001](0001-storage-unit.md), [ADR-0004](0004-carve-out-boundary.md), [td-170dc8](#)
+- Related: [ADR-0001](0001-storage-unit.md), [ADR-0004](0004-carve-out-boundary.md)
 
 ## Context
 
-asd today writes one markdown file per reviewed session to
-`~/vault/wiki/projects/<key>/asd-learnings/<session-id>.md`. There is
+marrow today writes one markdown file per reviewed session to
+`~/vault/wiki/projects/<key>/marrow-learnings/<session-id>.md`. There is
 no curated rollup. Anyone (or any agent) reading the vault has to open
-N files to learn what asd has distilled about a project.
+N files to learn what marrow has distilled about a project.
 
 Lamarck takes the opposite shape: a curated ~200-line `MEMORY.md` per
 project is the primary artifact, with topic files (workflow.md,
@@ -28,7 +28,7 @@ the system; this ADR decides what's canonical for the reader.
 
 `MEMORY.md` per project: ~200 lines, regenerated on every ingest.
 Contains the highest-confidence instincts grouped by domain with
-links into topic files. The `asd-learnings/` directory survives as
+links into topic files. The `marrow-learnings/` directory survives as
 an audit log (one file per session, immutable once approved).
 
 ### Option B — Status quo: directory is primary
@@ -66,7 +66,7 @@ files (`workflow.md`, `tooling.md`, `preferences.md`, `pitfalls.md`,
 `debugging.md`); link from `MEMORY.md` into the topic files for
 drill-down.
 
-The `asd-learnings/` directory survives as an append-only audit
+The `marrow-learnings/` directory survives as an append-only audit
 log — one approved learning per session, retained per existing
 retention policy. Deletion receipts still apply.
 
@@ -78,7 +78,7 @@ become audit trail.**
 The whole point of distillation is to produce something usable, not
 just archived. A curated rollup at `~/vault/wiki/projects/<id>/MEMORY.md`
 is the form Claude Code consumes (per the lamarck and ECC-v2
-patterns). The `asd-learnings/` directory survives as an append-only
+patterns). The `marrow-learnings/` directory survives as an append-only
 audit log retained per existing retention policy.
 
 Curation logic v1: include all `proven` instincts; include
@@ -103,6 +103,6 @@ If A:
 
 If B or C:
 
-- Skip [td-170dc8] or rescope to the cheap concatenation option.
+- Skip the curated-rollup work or rescope to the cheap concatenation option.
 - The "curated rollup" UX win is lost; competitors (lamarck,
   self-reflect) keep their edge.

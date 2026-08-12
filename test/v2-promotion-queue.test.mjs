@@ -22,7 +22,7 @@ import {
 } from "../dist/v2/promotion/queue.js";
 import { getProjectKnowledgeSessionPath } from "../dist/writers/knowledge-writer.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 const fixedNow = "2026-06-25T00:00:00.000Z";
 const oldCreatedAt = "2026-06-01T00:00:00.000Z";
 const matureObservations = [
@@ -62,7 +62,7 @@ function makeInstinct(projectId, overrides = {}) {
 }
 
 async function withRuntime(run) {
-  const root = await mkdtemp(join(tmpdir(), "asd-promote-"));
+  const root = await mkdtemp(join(tmpdir(), "marrow-promote-"));
   const prior = process.env[runtimeOverrideEnvVar];
   process.env[runtimeOverrideEnvVar] = root;
   try {

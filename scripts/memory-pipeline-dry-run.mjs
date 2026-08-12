@@ -16,11 +16,10 @@ const options = {
 
 const env = { ...process.env };
 if (options.root) {
-  env.AGENT_SESSION_DISTILLERY_ROOT = resolve(options.root);
+  env.MARROW_ROOT = resolve(options.root);
 }
 
-const runtimeRoot =
-  env.AGENT_SESSION_DISTILLERY_ROOT || join(process.env.HOME ?? "", ".agent-session-distillery");
+const runtimeRoot = env.MARROW_ROOT || join(process.env.HOME ?? "", ".marrow");
 const reviewBatch = options.reviewBatch ? resolve(options.reviewBatch) : undefined;
 
 await assertBuiltCli();

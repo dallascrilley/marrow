@@ -7,7 +7,7 @@ import test from "node:test";
 import { deriveCursorWorkspaceMapping } from "../dist/adapters/cursor/workspace-map.js";
 
 async function withSyntheticProjects(run) {
-  const sandboxRoot = await mkdtemp(join(tmpdir(), "asd-cursor-map-"));
+  const sandboxRoot = await mkdtemp(join(tmpdir(), "marrow-cursor-map-"));
 
   try {
     await run(sandboxRoot);
@@ -19,7 +19,7 @@ async function withSyntheticProjects(run) {
 test("derives project_key from local workspace hints before falling back to slug text", async () => {
   await withSyntheticProjects(async (sandboxRoot) => {
     const cursorProjectsRoot = join(sandboxRoot, ".cursor", "projects");
-    const workspacePath = join(sandboxRoot, "Code", "distillery");
+    const workspacePath = join(sandboxRoot, "Code", "marrow");
     const workspaceSlug = encodeURIComponent(workspacePath);
     const transcriptPath = join(
       cursorProjectsRoot,
@@ -41,7 +41,7 @@ test("derives project_key from local workspace hints before falling back to slug
 
     assert.deepEqual(mapping, {
       cursorProjectPath: join(cursorProjectsRoot, workspaceSlug),
-      projectKey: "distillery",
+      projectKey: "marrow",
       workspacePath,
       workspaceSlug,
     });

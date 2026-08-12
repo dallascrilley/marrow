@@ -120,7 +120,7 @@ export async function appendMcpUsageLog(
     await mkdir(dirname(path), { recursive: true });
     await appendFile(path, `${JSON.stringify(record)}\n`, "utf8");
   } catch (error) {
-    console.warn(`[asd] mcp usage log write failed (non-fatal): ${String(error)}`);
+    console.warn(`[marrow] mcp usage log write failed (non-fatal): ${String(error)}`);
   }
 }
 

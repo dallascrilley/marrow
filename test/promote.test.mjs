@@ -12,7 +12,7 @@ import { refreshPromotionQueue } from "../dist/v2/promotion/queue.js";
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
 const cliPath = join(projectRoot, "dist", "cli.js");
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 const fixedNow = "2026-06-25T00:00:00.000Z";
 const matureObservations = [
   { session: "sess-1", reinforcing: true, at: "2026-05-20T00:00:00.000Z" },
@@ -45,7 +45,7 @@ function makeInstinct(projectId, confidence) {
 }
 
 async function withRuntime(run) {
-  const root = await mkdtemp(join(tmpdir(), "asd-promote-cli-"));
+  const root = await mkdtemp(join(tmpdir(), "marrow-promote-cli-"));
   const prior = process.env[runtimeOverrideEnvVar];
   process.env[runtimeOverrideEnvVar] = root;
   try {

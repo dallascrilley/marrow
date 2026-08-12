@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { executeArchiveRun } from "./commands/archive-run.js";
@@ -75,7 +76,7 @@ type CommandDefinition = {
 
 const commandTree: Record<string, CommandDefinition> = {
   ingest: {
-    description: "Ingest source sessions into the local distillery runtime.",
+    description: "Ingest source sessions into the local marrow runtime.",
     subcommands: {
       backfill: {
         description:
@@ -212,7 +213,7 @@ const commandTree: Record<string, CommandDefinition> = {
     execute: async (context) => executeHealth(context),
   },
   stats: {
-    description: "Report high-level distillery runtime statistics.",
+    description: "Report high-level marrow runtime statistics.",
     execute: async (context) => withLedger(context, executeStats),
   },
   storage: {
@@ -259,11 +260,11 @@ const commandTree: Record<string, CommandDefinition> = {
     },
   },
   hooks: {
-    description: "Install harness hooks that trigger asd ingest on session lifecycle events.",
+    description: "Install harness hooks that trigger marrow ingest on session lifecycle events.",
     subcommands: {
       install: {
         description:
-          "Install Claude Code SessionEnd hook → asd ingest sync --source claude-code (project .claude/ by default; pass --global for ~/.claude/settings.json).",
+          "Install Claude Code SessionEnd hook → marrow ingest sync --source claude-code (project .claude/ by default; pass --global for ~/.claude/settings.json).",
         execute: async (context) => executeHooksInstall(context),
       },
     },
@@ -369,7 +370,7 @@ const commandTree: Record<string, CommandDefinition> = {
   },
   mcp: {
     description:
-      "Query distilled instincts through the capped ADR-0005 MCP surface. Subcommands: search_instincts, instincts_for_file, recent_instincts, serve, install (register asd in ~/.claude.json; --dry-run to preview).",
+      "Query distilled instincts through the capped ADR-0005 MCP surface. Subcommands: search_instincts, instincts_for_file, recent_instincts, serve, install (register marrow in ~/.claude.json; --dry-run to preview).",
     execute: async (context) => executeMcp(context),
   },
   readback: {
@@ -439,7 +440,7 @@ function formatHelp(): string {
   }, 0);
 
   return [
-    "Usage: asd <command> [subcommand] [options]",
+    "Usage: marrow <command> [subcommand] [options]",
     "",
     `Runtime root: ${getRuntimeRoot()}`,
     "",
@@ -541,9 +542,29 @@ export async function main(
   }
 }
 
-function isDirectEntryPoint(currentImportMetaUrl: string): boolean {
+/**
+ * True when this module is the process entry point.
+ *
+ * `process.argv[1]` is whatever path the shell invoked, which for an installed
+ * binary is a symlink (`npm link` and `npm install -g` both put a link on PATH),
+ * while `import.meta.url` always resolves to the real file. Comparing the two
+ * directly makes the guard false for every installed invocation, so the CLI
+ * would exit 0 and print nothing. Resolve both sides before comparing.
+ */
+export function isDirectEntryPoint(currentImportMetaUrl: string): boolean {
   const entryPath = process.argv[1];
-  return typeof entryPath === "string" && fileURLToPath(currentImportMetaUrl) === entryPath;
+  if (typeof entryPath !== "string" || entryPath.length === 0) {
+    return false;
+  }
+  return realPathOrSelf(fileURLToPath(currentImportMetaUrl)) === realPathOrSelf(entryPath);
+}
+
+function realPathOrSelf(target: string): string {
+  try {
+    return realpathSync(target);
+  } catch {
+    return target;
+  }
 }
 
 if (isDirectEntryPoint(import.meta.url)) {

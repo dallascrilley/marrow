@@ -6,18 +6,18 @@ or docs automatically.
 ## Command
 
 ```bash
-npm run asd -- workflow mine --days 7 --json
-npm run asd -- workflow mine --days 30 --source cursor --limit 20
-npm run asd -- workflow mine --days 30 --cluster validation --recommendation adopt --json
-npm run asd -- workflow review --days 30 --limit 10
-npm run asd -- workflow show wf_cd61247b3c --days 30
-npm run asd -- workflow apply wf_cd61247b3c --target rule --dry-run --days 30
-npm run asd -- workflow judge --limit 5 --max-per 5/24h --max-usd 1/24h
+npm run marrow -- workflow mine --days 7 --json
+npm run marrow -- workflow mine --days 30 --source cursor --limit 20
+npm run marrow -- workflow mine --days 30 --cluster validation --recommendation adopt --json
+npm run marrow -- workflow review --days 30 --limit 10
+npm run marrow -- workflow show wf_cd61247b3c --days 30
+npm run marrow -- workflow apply wf_cd61247b3c --target rule --dry-run --days 30
+npm run marrow -- workflow judge --limit 5 --max-per 5/24h --max-usd 1/24h
 ```
 
-Use `npm run asd -- ...` from a source checkout: it rebuilds the gitignored
+Use `npm run marrow -- ...` from a source checkout: it rebuilds the gitignored
 `dist/` tree before invoking the CLI, so newly merged workflow subcommands and
-flags are available immediately. Installed `asd` binaries still run the built
+flags are available immediately. Installed `marrow` binaries still run the built
 `dist/cli.js` that was present at install time.
 
 `workflow mine` reads the session index, summaries, and reduced-session artifacts.
@@ -60,8 +60,8 @@ candidates are refused.
 
 ## Weekly consumer cadence
 
-The Codex automation `asd-weekly-workflow-triage` runs every Monday at 9:10 AM
-local time in an app-managed worktree. It builds ASD with Node 22, runs the
+The Codex automation `marrow-weekly-workflow-triage` runs every Monday at 9:10 AM
+local time in an app-managed worktree. It builds Marrow with Node 22, runs the
 90-day `workflow mine` and `workflow review` commands, and consumes undecided
 candidates with this fail-closed policy:
 
@@ -69,7 +69,7 @@ candidates with this fail-closed policy:
   against current Hub contracts and installed skills;
 - already-covered guidance is adopted with a note naming the covering section;
 - uncovered strong guidance is written to the canonical global evolve intake
-  before the ASD decision records the evolve receipt;
+  before the Marrow decision records the evolve receipt;
 - weak candidates are dismissed, medium candidates are deferred, and
   contradicted or ambiguous candidates are deferred for operator review.
 
@@ -78,16 +78,12 @@ so decisions resolve the same candidate set produced by the scheduled mine and
 review commands.
 
 The automation never runs `workflow judge`, `workflow apply`, OpenRouter, Emulo
-mining, or direct skill/contract writes. New authoring signals use:
-
-```bash
-python ~/.hub/artifacts/skills/evolve/source/scripts/intake.py \
-  --scope global \
-  --type pattern \
-  --confidence high \
-  --source "asd:<candidate-id>" \
-  --body "<sanitized candidate summary and proposed target>"
-```
+mining, or direct skill/contract writes. Uncovered strong guidance is instead
+recorded as a new authoring signal (scope, type, confidence, the originating
+candidate id, and a sanitized summary of the candidate and its proposed
+target) for whatever skill/rule authoring intake process your own agent
+harness provides. This project does not ship that intake tool; wire this step
+to your harness's own convention.
 
 Each run reports command exits, sessions scanned, candidate decisions and notes,
 evolve receipts, and any remaining undecided candidates. A run with no candidates
@@ -95,5 +91,5 @@ is a successful no-op.
 
 ## Privacy boundary
 
-The report cites ASD session IDs and topics. It does not include local transcript
+The report cites Marrow session IDs and topics. It does not include local transcript
 paths or raw private transcript bodies.

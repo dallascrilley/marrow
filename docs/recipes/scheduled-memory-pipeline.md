@@ -77,9 +77,9 @@ topic budget is exhausted.
 
 | Variable | Purpose |
 | --- | --- |
-| `AGENT_SESSION_DISTILLERY_ROOT` | Runtime dir (default `~/.agent-session-distillery`) |
+| `MARROW_ROOT` | Runtime dir (default `~/.marrow`) |
 | `ASD_VAULT_ROOT` | Vault root for `memory push-wiki` (default `~/vault`) |
-| `OPENROUTER_API_KEY` | Required only when running `quality review-learnings`; source from 1Password **OpenRouter API Credentials - agent-session-distillery** |
+| `OPENROUTER_API_KEY` | Required only when running `quality review-learnings`; source from your own secret manager or environment |
 | `ASD_LLM_MAX_PER` | Sliding-window LLM count budget shared by review-learnings and corpus resummarize (default `50/24h`; use smaller `--max-per` values for deliberate trials) |
 | `ASD_LLM_MAX_USD` | USD ceiling for LLM review spend (default `1/24h`; the real financial guard) |
 | `OPENROUTER_MODEL` | Model for `quality review-learnings` (launcher default: `google/gemini-3-flash-preview`) |
@@ -90,7 +90,7 @@ topic budget is exhausted.
 Build the CLI once after checkout updates:
 
 ```bash
-cd /path/to/agent-session-distillery
+cd /path/to/marrow
 npm install
 npm run build
 ```
@@ -99,12 +99,12 @@ npm run build
 
 ```cron
 # Every 6 hours — cursor ingest + audit + apply + wiki push
-0 */6 * * * /path/to/agent-session-distillery/scripts/scheduled-memory-pipeline.sh >> /tmp/asd-pipeline.log 2>&1
+0 */6 * * * /path/to/marrow/scripts/scheduled-memory-pipeline.sh >> /tmp/marrow-pipeline.log 2>&1
 ```
 
 ## launchd (macOS)
 
-Save as `~/Library/LaunchAgents/com.dallascrilley.asd-memory-pipeline.plist`:
+Save as `~/Library/LaunchAgents/com.example.marrow-memory-pipeline.plist`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -112,22 +112,22 @@ Save as `~/Library/LaunchAgents/com.dallascrilley.asd-memory-pipeline.plist`:
 <plist version="1.0">
   <dict>
     <key>Label</key>
-    <string>com.dallascrilley.asd-memory-pipeline</string>
+    <string>com.example.marrow-memory-pipeline</string>
     <key>ProgramArguments</key>
     <array>
       <string>/bin/bash</string>
-      <string>/path/to/agent-session-distillery/scripts/scheduled-memory-pipeline.sh</string>
+      <string>/path/to/marrow/scripts/scheduled-memory-pipeline.sh</string>
     </array>
     <key>StartInterval</key>
     <integer>21600</integer>
     <key>StandardOutPath</key>
-    <string>/tmp/asd-pipeline.log</string>
+    <string>/tmp/marrow-pipeline.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/asd-pipeline.err.log</string>
+    <string>/tmp/marrow-pipeline.err.log</string>
     <key>EnvironmentVariables</key>
     <dict>
-      <key>AGENT_SESSION_DISTILLERY_ROOT</key>
-      <string>/Users/you/.agent-session-distillery</string>
+      <key>MARROW_ROOT</key>
+      <string>/Users/you/.marrow</string>
       <key>ASD_VAULT_ROOT</key>
       <string>/Users/you/vault</string>
     </dict>
@@ -138,7 +138,7 @@ Save as `~/Library/LaunchAgents/com.dallascrilley.asd-memory-pipeline.plist`:
 Load:
 
 ```bash
-launchctl load ~/Library/LaunchAgents/com.dallascrilley.asd-memory-pipeline.plist
+launchctl load ~/Library/LaunchAgents/com.example.marrow-memory-pipeline.plist
 ```
 
 ## Wrapper script
@@ -169,8 +169,8 @@ The deployed macOS setup adds one layer the plist example above doesn't show
 operator-local launcher, **not** at the repo script directly:
 
 ```text
-launchd (6h) → ~/.agent-session-distillery/run-pipeline.sh   # operator-local, outside the repo
-                 → sources ~/.agent-session-distillery/secrets.env  (600; OPENROUTER_API_KEY)
+launchd (6h) → ~/.marrow/run-pipeline.sh   # operator-local, outside the repo
+                 → sources ~/.marrow/secrets.env  (600; OPENROUTER_API_KEY)
                  → exports OPENROUTER_MODEL (default google/gemini-3-flash-preview)
                  → exports ASD_LLM_MAX_USD (default 0.50/24h)
                  → exec scripts/scheduled-memory-pipeline.sh          # this repo, primary checkout dist/
@@ -191,7 +191,7 @@ Consequences:
 
 ## Failure handling
 
-- **Integrity check fails:** `check` exits non-zero on duplicate/orphan findings; the scheduled wrapper stops before audit/LLM steps. Inspect with `asd check` (human output) or `asd check --json`. `pipeline gate` also surfaces `session_integrity` and sets `recommendations.run_check` when violations exist.
+- **Integrity check fails:** `check` exits non-zero on duplicate/orphan findings; the scheduled wrapper stops before audit/LLM steps. Inspect with `marrow check` (human output) or `marrow check --json`. `pipeline gate` also surfaces `session_integrity` and sets `recommendations.run_check` when violations exist.
 - **Ingest fails:** later steps still see stale data; check adapter paths and `ingest sync` logs.
 - **review-learnings skipped or budget-blocked:** no batch is generated, so the scheduled wrapper skips apply and continues with the existing reviewed-memory export.
 - **review batch absent:** report compaction is skipped, but safe parsed staging retention has already run.
@@ -228,6 +228,3 @@ one fixture learning with a `1/24h` count cap and `$0.05/24h` spend cap.
 ```bash
 OPENROUTER_API_KEY=<secret> node scripts/proof-review-apply-exactly-once.mjs --live
 ```
-
-The latest checked-in receipt is
-[`docs/ops/proofs/2026-07-09-review-apply-exactly-once.md`](../ops/proofs/2026-07-09-review-apply-exactly-once.md).

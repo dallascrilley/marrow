@@ -215,7 +215,7 @@ function applyProjectLearningCap(
   const cap = getProjectLearningCap();
   if (candidates.length <= cap) return candidates.slice();
   console.warn(
-    `[asd] project learning cap reached: ${candidates.length} candidates truncated to ${cap} (set ASD_MAX_PROJECT_LEARNINGS to override)`,
+    `[marrow] project learning cap reached: ${candidates.length} candidates truncated to ${cap} (set ASD_MAX_PROJECT_LEARNINGS to override)`,
   );
   return candidates.slice(0, cap);
 }

@@ -31,7 +31,7 @@ test("storage migrate-staging options are explicit and dry-run by default", () =
 });
 
 async function withMigrationSandbox(run) {
-  const sandbox = await mkdtemp(join(await realpath(tmpdir()), "asd-staging-migration-"));
+  const sandbox = await mkdtemp(join(await realpath(tmpdir()), "marrow-staging-migration-"));
   const runtimeRoot = join(sandbox, "runtime");
   const sourceRoot = join(runtimeRoot, "staging");
   const destinationRoot = join(sandbox, "destination");
@@ -78,7 +78,7 @@ test("staging migration dry run is non-mutating and apply is verified and idempo
       await readFile(join(destinationRoot, "session-a", "parsed-records.json"), "utf8"),
       "[1,2,3]\n",
     );
-    await access(join(destinationRoot, ".asd-staging-root.json"));
+    await access(join(destinationRoot, ".marrow-staging-root.json"));
     await access(join(sourceRoot, "session-a", "parsed-records.json"));
 
     const rerun = await runStagingMigration({ apply: true, to: destinationRoot });

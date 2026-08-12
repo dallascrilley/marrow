@@ -19,11 +19,11 @@ import { getReducedArtifactPath } from "../dist/pipeline/reduce.js";
 import { runSummarizePhase } from "../dist/pipeline/summarize-phase.js";
 import { getSessionSummaryJsonPath } from "../dist/writers/summary-writer.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
-const stagingOverrideEnvVar = "AGENT_SESSION_DISTILLERY_STAGING_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
+const stagingOverrideEnvVar = "MARROW_STAGING_ROOT";
 
 async function withRuntimeRoot(run) {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-rereduce-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-rereduce-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
   const previousStagingOverride = process.env[stagingOverrideEnvVar];
@@ -91,7 +91,7 @@ const failureTurnRecords = [
   makeRecord({
     kind: "tool_result_stub",
     lineNumber: 2,
-    messageText: "asd ingest sync failed: checkpoint mismatch",
+    messageText: "marrow ingest sync failed: checkpoint mismatch",
     toolUse: { callId: "tool-9", inputText: null, name: "run_terminal_command", status: "failed" },
   }),
   makeRecord({

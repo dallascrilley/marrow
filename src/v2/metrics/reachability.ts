@@ -5,7 +5,7 @@ import { replayBundles } from "../instinct/bundle.js";
 import { loadGlobalInstincts, shouldIncludeInRollup } from "../vault/render-memory.js";
 
 /**
- * The headline asd metric: not how many instincts were produced, but how many a
+ * The headline marrow metric: not how many instincts were produced, but how many a
  * future agent can actually reach. "Reachable" mirrors the render selection
  * predicate (`shouldIncludeInRollup`) over the same bundle-replay source render
  * uses, so the count is exactly what would land in a curated `MEMORY.md`.

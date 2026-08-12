@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { writeWorkflowDraft } from "../dist/workflow/draft.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 function candidate(overrides = {}) {
   return {
@@ -38,7 +38,7 @@ function candidate(overrides = {}) {
 }
 
 test("writeWorkflowDraft writes markdown and apply report", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-draft-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-workflow-draft-"));
   try {
     process.env[runtimeOverrideEnvVar] = sandbox;
     const result = await writeWorkflowDraft(candidate(), "rule");
@@ -64,7 +64,7 @@ test("writeWorkflowDraft writes markdown and apply report", async () => {
 });
 
 test("writeWorkflowDraft sanitizes trigger and evidence markdown", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-draft-sanitize-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-workflow-draft-sanitize-"));
   try {
     process.env[runtimeOverrideEnvVar] = sandbox;
     const result = await writeWorkflowDraft(
@@ -91,7 +91,7 @@ test("writeWorkflowDraft sanitizes trigger and evidence markdown", async () => {
 });
 
 test("writeWorkflowDraft refuses quality-failing guidance", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-draft-invalid-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-workflow-draft-invalid-"));
   try {
     process.env[runtimeOverrideEnvVar] = sandbox;
     await assert.rejects(

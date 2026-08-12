@@ -576,7 +576,7 @@ function parseReceipt(contents: string, path: string): ParsedCleanupReceipt {
 
 function getLegacyQuarantineOriginalPath(quarantinePath: string): string | undefined {
   const match =
-    /^(.*)\.asd-cleanup-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.quarantine$/i.exec(
+    /^(.*)\.marrow-cleanup-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.quarantine$/i.exec(
       quarantinePath,
     );
   return match?.[1];
@@ -698,7 +698,7 @@ async function markReceiptRetried(
 }
 
 function isCleanupOwnedQuarantine(originalPath: string, quarantinePath: string): boolean {
-  const prefix = `${originalPath}.asd-cleanup-`;
+  const prefix = `${originalPath}.marrow-cleanup-`;
   const ending = ".quarantine";
   if (!quarantinePath.startsWith(prefix) || !quarantinePath.endsWith(ending)) {
     return false;

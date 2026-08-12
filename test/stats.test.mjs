@@ -65,13 +65,13 @@ function reachableBundle(projectId) {
 }
 
 test("stats reports reachable instincts distinct from produced", async () => {
-  const previousRoot = process.env.AGENT_SESSION_DISTILLERY_ROOT;
-  const runtimeRoot = await mkdtemp(join(tmpdir(), "asd-stats-root-"));
-  process.env.AGENT_SESSION_DISTILLERY_ROOT = runtimeRoot;
+  const previousRoot = process.env.MARROW_ROOT;
+  const runtimeRoot = await mkdtemp(join(tmpdir(), "marrow-stats-root-"));
+  process.env.MARROW_ROOT = runtimeRoot;
   try {
     await saveSessionBundle(reachableBundle("proj1234abcd"));
 
-    const result = runCli(["stats"], { AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot });
+    const result = runCli(["stats"], { MARROW_ROOT: runtimeRoot });
     assert.equal(result.status, 0, result.stderr);
     const parsed = JSON.parse(result.stdout);
 
@@ -81,16 +81,16 @@ test("stats reports reachable instincts distinct from produced", async () => {
     assert.equal(parsed.reachability.reachable_ratio, 0.5);
   } finally {
     if (previousRoot === undefined) {
-      delete process.env.AGENT_SESSION_DISTILLERY_ROOT;
+      delete process.env.MARROW_ROOT;
     } else {
-      process.env.AGENT_SESSION_DISTILLERY_ROOT = previousRoot;
+      process.env.MARROW_ROOT = previousRoot;
     }
     await rm(runtimeRoot, { recursive: true, force: true });
   }
 });
 
 const MEMORY_BODY = `---
-tags: [asd, memory, curated]
+tags: [marrow, memory, curated]
 generated_at: 2026-06-29T07:40:12.416Z
 ---
 
@@ -100,19 +100,19 @@ generated_at: 2026-06-29T07:40:12.416Z
 `;
 
 test("recall fires are logged and summarized by stats", async () => {
-  const previousRoot = process.env.AGENT_SESSION_DISTILLERY_ROOT;
-  const runtimeRoot = await mkdtemp(join(tmpdir(), "asd-stats-recall-"));
-  const work = await mkdtemp(join(tmpdir(), "asd-stats-work-"));
-  const empty = await mkdtemp(join(tmpdir(), "asd-stats-empty-"));
-  const vault = await mkdtemp(join(tmpdir(), "asd-stats-vault-"));
-  process.env.AGENT_SESSION_DISTILLERY_ROOT = runtimeRoot;
+  const previousRoot = process.env.MARROW_ROOT;
+  const runtimeRoot = await mkdtemp(join(tmpdir(), "marrow-stats-recall-"));
+  const work = await mkdtemp(join(tmpdir(), "marrow-stats-work-"));
+  const empty = await mkdtemp(join(tmpdir(), "marrow-stats-empty-"));
+  const vault = await mkdtemp(join(tmpdir(), "marrow-stats-vault-"));
+  process.env.MARROW_ROOT = runtimeRoot;
   try {
     const projectId = hashToProjectId(work);
     const dir = join(vault, "wiki", "projects", projectId);
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, "MEMORY.md"), MEMORY_BODY, "utf8");
 
-    const env = { AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot };
+    const env = { MARROW_ROOT: runtimeRoot };
     // One delivered fire (seeded vault) and one empty fire (no memory).
     const delivered = runCli(["recall", "--cwd", work, "--vault-root", vault], env);
     assert.equal(delivered.status, 0, delivered.stderr);
@@ -129,9 +129,9 @@ test("recall fires are logged and summarized by stats", async () => {
     assert.ok(typeof parsed.recall.last_fire_at === "string");
   } finally {
     if (previousRoot === undefined) {
-      delete process.env.AGENT_SESSION_DISTILLERY_ROOT;
+      delete process.env.MARROW_ROOT;
     } else {
-      process.env.AGENT_SESSION_DISTILLERY_ROOT = previousRoot;
+      process.env.MARROW_ROOT = previousRoot;
     }
     await rm(runtimeRoot, { recursive: true, force: true });
     await rm(work, { recursive: true, force: true });

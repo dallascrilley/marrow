@@ -11,10 +11,10 @@ import {
   readSessionIndexFile,
 } from "../dist/read/session-index.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntime(run) {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-read-index-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-read-index-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
 

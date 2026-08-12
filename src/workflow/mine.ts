@@ -28,6 +28,12 @@ export type MineWorkflowOptions = {
   database?: DatabaseSync;
   cluster?: WorkflowCluster | null;
   days?: number;
+  /**
+   * Clock used to anchor the `days` recency window. Defaults to the wall clock.
+   * Callers with fixed-date inputs (tests, replays) pass an explicit anchor so
+   * the window stays stable no matter when the code runs.
+   */
+  now?: Date;
   recommendation?: WorkflowRecommendation | null;
   includeDecided?: boolean;
   limit?: number;
@@ -189,7 +195,8 @@ export async function mineWorkflowCandidates(
     ? { database: options.database, fallbackToBuild: true }
     : { fallbackToBuild: true };
   const records = await loadSessionIndexRecords(loadOptions);
-  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const now = options.now ?? new Date();
+  const cutoff = now.getTime() - days * 24 * 60 * 60 * 1000;
   const filteredRecords = records.filter((record) => {
     const updatedAt = Date.parse(record.updated_at);
     return (

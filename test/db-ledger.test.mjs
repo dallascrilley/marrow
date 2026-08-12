@@ -15,10 +15,10 @@ import {
 import { getLedgerDatabasePath, getLedgerDirectoryPath } from "../dist/db/migrations.js";
 import { sourceSessionFixture } from "../dist/models/canonical.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntimeRoot(run) {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-ledger-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-ledger-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
 

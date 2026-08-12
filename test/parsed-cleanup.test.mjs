@@ -63,7 +63,7 @@ const parsedCleanupHelper = join(projectRoot, "scripts", "parsed-cleanup-fs.py")
 async function withRuntimeRoot(run) {
   const previousRoot = process.env[runtimeRootOverrideEnvVar];
   const previousStagingRoot = process.env[stagingRootOverrideEnvVar];
-  const runtimeRoot = await mkdtemp(join(tmpdir(), "asd-parsed-cleanup-"));
+  const runtimeRoot = await mkdtemp(join(tmpdir(), "marrow-parsed-cleanup-"));
   process.env[runtimeRootOverrideEnvVar] = runtimeRoot;
 
   try {
@@ -1011,7 +1011,7 @@ test("applying receipt persists the planned quarantine before a crash and restar
     `;
     const child = spawn(process.execPath, ["--input-type=module", "-e", workerSource], {
       cwd: dirname(new URL(import.meta.url).pathname),
-      env: { ...process.env, AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot },
+      env: { ...process.env, MARROW_ROOT: runtimeRoot },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let childError = "";
@@ -1214,7 +1214,7 @@ test("pending recovery refuses a symlinked session ancestor without touching out
       assert.ok(candidate);
       const sessionDirectory = dirname(original);
       const outsideDirectory = join(runtimeRoot, "outside-pending-symlink");
-      const quarantinePath = `${original}.asd-cleanup-123e4567-e89b-42d3-a456-426614174000.quarantine`;
+      const quarantinePath = `${original}.marrow-cleanup-123e4567-e89b-42d3-a456-426614174000.quarantine`;
       await rm(sessionDirectory, { force: true, recursive: true });
       await mkdir(outsideDirectory, { recursive: true });
       await writeFile(
@@ -1421,7 +1421,7 @@ test("legacy sibling quarantine receipts migrate into the trusted central bounda
         olderThanDays: 0,
       });
       assert.ok(candidate);
-      const legacyPath = `${original}.asd-cleanup-123e4567-e89b-42d3-a456-426614174000.quarantine`;
+      const legacyPath = `${original}.marrow-cleanup-123e4567-e89b-42d3-a456-426614174000.quarantine`;
       await rename(original, legacyPath);
       const receiptPath = join(
         runtimeRoot,
@@ -1620,7 +1620,7 @@ test("missing descriptor helper fails before moving the parsed candidate", async
     const previousPython = process.env.ASD_PYTHON;
     try {
       const original = await makeSafeCandidate(database, "missing-helper", "source", oldDate);
-      process.env.ASD_PYTHON = "/nonexistent/asd-python";
+      process.env.ASD_PYTHON = "/nonexistent/marrow-python";
       await assert.rejects(runCleanup(database, ["--apply"]), /ENOENT|spawn/);
       assert.equal(await readFile(original, "utf8"), "source");
     } finally {

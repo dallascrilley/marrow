@@ -12,7 +12,7 @@ export type LlmTelemetryOperation =
 
 /**
  * One OpenRouter call's telemetry, shaped for OpenTelemetry GenAI semantic
- * conventions (the `gen_ai.*` keys) with asd-local context under `asd.*`.
+ * conventions (the `gen_ai.*` keys) with marrow-local context under `asd.*`.
  * This is the raw receipt — derived rollups (cost per session, etc.) are
  * computed on demand by the cost-report command, never persisted twice.
  */
@@ -87,6 +87,6 @@ export async function appendLlmTelemetry(
     await mkdir(dirname(path), { recursive: true });
     await appendFile(path, `${JSON.stringify(record)}\n`, "utf8");
   } catch (error) {
-    console.warn(`[asd] llm telemetry write failed (non-fatal): ${String(error)}`);
+    console.warn(`[marrow] llm telemetry write failed (non-fatal): ${String(error)}`);
   }
 }

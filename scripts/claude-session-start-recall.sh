@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code SessionStart hook — inject the current project's curated asd memory.
+# Claude Code SessionStart hook — inject the current project's curated marrow memory.
 # Fail open: never block session start on recall errors; print nothing on failure.
 set -euo pipefail
 
@@ -11,8 +11,8 @@ fi
 project_dir="${CLAUDE_PROJECT_DIR:-$PWD}"
 
 emit_recall() {
-  if command -v asd >/dev/null 2>&1; then
-    asd recall --cwd "$project_dir" 2>/dev/null || true
+  if command -v marrow >/dev/null 2>&1; then
+    marrow recall --cwd "$project_dir" 2>/dev/null || true
     return 0
   fi
 

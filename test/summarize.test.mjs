@@ -13,7 +13,7 @@ import {
 test("summary synthesis skips prompt noise, prefers the latest next step, and filters weak commands", () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "agent-session-distillery",
+    project_key: "marrow",
     session_id: "summary-quality",
   };
   const turns = [
@@ -96,7 +96,7 @@ test("summary synthesis skips prompt noise, prefers the latest next step, and fi
 test("summary synthesis drops process chatter while keeping durable outcomes", () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "agent-session-distillery",
+    project_key: "marrow",
     session_id: "summary-process-chatter",
   };
   const turns = [
@@ -161,7 +161,7 @@ test("summary synthesis drops process chatter while keeping durable outcomes", (
 test("summary synthesis turns final completion evidence into operator-ready outcomes", () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "studio-tools",
+    project_key: "service-tools",
     session_id: "summary-complete",
   };
   const turns = [
@@ -170,8 +170,8 @@ test("summary synthesis turns final completion evidence into operator-ready outc
       commands_seen: [],
       ended_at: "2026-05-16T12:05:00Z",
       files_touched: [
-        "/Users/operator/.codex/worktrees/83a1/studio-tools",
-        "/Users/operator/Code/studio-tools",
+        "/Users/example/.codex/worktrees/83a1/service-tools",
+        "/Users/example/Code/service-tools",
       ],
       index: 0,
       session_id: sourceSession.session_id,
@@ -453,7 +453,7 @@ test("summary topic skips wrapper markdown headings like User Input and promotes
       turn_id: `${sourceSession.session_id}:turn-0000`,
       user_prompt: [
         "## User Input",
-        "/reviewer https://github.com/dallascrilley/example-studio/pull/487",
+        "/reviewer https://github.com/example-org/media-studio/pull/487",
       ].join("\n"),
       verification_seen: false,
     }),
@@ -465,10 +465,7 @@ test("summary topic skips wrapper markdown headings like User Input and promotes
     turns,
   });
 
-  assert.equal(
-    summary.topic,
-    "/reviewer https://github.com/dallascrilley/example-studio/pull/487",
-  );
+  assert.equal(summary.topic, "/reviewer https://github.com/example-org/media-studio/pull/487");
 });
 
 test("summary topic falls back to assistant summary when prompt is a bare control command", () => {
@@ -624,7 +621,7 @@ test("low-signal topic heuristic rejects embedded foreign system prompts", () =>
 test("summarizeSession skips skill-wrapper-only prompts for topic selection", () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "agent-session-distillery",
+    project_key: "marrow",
     session_id: "skill-wrapper-topic",
   };
   const turns = [
@@ -664,7 +661,7 @@ test("summarizeSession skips skill-wrapper-only prompts for topic selection", ()
 test("optional LLM topic stays off by default even for weak deterministic topics", async () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "agent-session-distillery",
+    project_key: "marrow",
     session_id: "llm-topic-off",
   };
   const turns = [
@@ -705,7 +702,7 @@ test("optional LLM topic stays off by default even for weak deterministic topics
 test("optional LLM topic calls mocked generator only for weak deterministic topics", async () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "agent-session-distillery",
+    project_key: "marrow",
     session_id: "llm-topic-on",
   };
   const turns = [
@@ -748,7 +745,7 @@ test("optional LLM topic calls mocked generator only for weak deterministic topi
 test("optional LLM topic threads onUsage with session id to the generator", async () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "agent-session-distillery",
+    project_key: "marrow",
     session_id: "llm-topic-usage",
   };
   const turns = [
@@ -803,7 +800,7 @@ test("optional LLM topic threads onUsage with session id to the generator", asyn
 test("optional LLM topic falls back to the deterministic topic when generation fails", async () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "agent-session-distillery",
+    project_key: "marrow",
     session_id: "llm-topic-fallback",
   };
   const turns = [
@@ -858,7 +855,7 @@ test("low-signal topic heuristic catches wrapper and context-dump topics", () =>
   assert.equal(isLowSignalTopic("fix whatever is causinf tools to hng:"), true);
   assert.equal(isLowSignalTopic("/commit"), true);
   assert.equal(
-    isLowSignalTopic("/reviewer https://github.com/dallascrilley/example-studio/pull/487"),
+    isLowSignalTopic("/reviewer https://github.com/example-org/media-studio/pull/487"),
     false,
   );
   assert.equal(
@@ -869,13 +866,10 @@ test("low-signal topic heuristic catches wrapper and context-dump topics", () =>
   );
   assert.equal(isLowSignalTopic("/audit-meta @campaigns/shows/dallas-mar-2026/ad-copy.md"), false);
   assert.equal(isLowSignalTopic('"globalShortcut": "Cmd+/",'), true);
-  assert.equal(
-    isLowSignalTopic('"resource": "/Users/operator/Code/example-studio/justfile",'),
-    true,
-  );
+  assert.equal(isLowSignalTopic('"resource": "/Users/example/Code/media-studio/justfile",'), true);
   assert.equal(
     isLowSignalTopic(
-      'line 47, in raise SystemExit(main)) ^n^ File "/Users/operator/Code/studio-tools/shared/query.py", line 28, in main',
+      'line 47, in raise SystemExit(main)) ^n^ File "/Users/example/Code/service-tools/shared/query.py", line 28, in main',
     ),
     true,
   );
@@ -886,7 +880,7 @@ test("low-signal topic heuristic catches wrapper and context-dump topics", () =>
 test("optional LLM topic is called for weak deterministic topics like resolve these", async () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "agent-session-distillery",
+    project_key: "marrow",
     session_id: "llm-topic-resolve-these",
   };
   const turns = [
@@ -925,7 +919,7 @@ test("optional LLM topic is called for weak deterministic topics like resolve th
 test("optional LLM topic is not called for high-signal deterministic topics", async () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "agent-session-distillery",
+    project_key: "marrow",
     session_id: "llm-topic-high-signal",
   };
   const turns = [
@@ -964,7 +958,7 @@ test("optional LLM topic is not called for high-signal deterministic topics", as
 test("summary includes fallback workflow learning in what_worked when no fix events exist", () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "studio-tools",
+    project_key: "service-tools",
     session_id: "fallback-workflow-summary",
   };
   const turns = [
@@ -993,9 +987,9 @@ test("summary includes fallback workflow learning in what_worked when no fix eve
         learning_id: `${sourceSession.session_id}:project:turn-fallback:0`,
         promotion_basis: "Derived from project-specific command usage.",
         scope: "project",
-        scope_key: "studio-tools",
+        scope_key: "service-tools",
         source_refs: [],
-        statement: "Use `./.cursor/setup-worktree-unix.sh` for worktree setup in studio-tools.",
+        statement: "Use `./.cursor/setup-worktree-unix.sh` for worktree setup in service-tools.",
         title: "Workflow: Use `./.cursor/setup-worktree-unix.sh` for worktree setup...",
       },
     ],
@@ -1004,14 +998,14 @@ test("summary includes fallback workflow learning in what_worked when no fix eve
   });
 
   assert.deepEqual(summary.what_worked, [
-    "Use `./.cursor/setup-worktree-unix.sh` for worktree setup in studio-tools.",
+    "Use `./.cursor/setup-worktree-unix.sh` for worktree setup in service-tools.",
   ]);
 });
 
 test("deriveTopic skips an HTML-comment header to reach the real title line", () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "agent-session-distillery",
+    project_key: "marrow",
     session_id: "html-comment-topic",
   };
   const turns = [
@@ -1065,7 +1059,7 @@ test("isHarnessTopicLine flags corpus-validated structural wrapper headers", () 
 test("deriveTopic skips the '# Instructions (read first)' prompt-wrapper header", () => {
   const sourceSession = {
     ...sourceSessionFixture,
-    project_key: "agent-session-distillery",
+    project_key: "marrow",
     session_id: "instructions-wrapper-topic",
   };
   const turns = [
@@ -1106,7 +1100,7 @@ test("deriveTopic skips corpus-validated structural wrapper headers", () => {
   for (const { header, body } of cases) {
     const sourceSession = {
       ...sourceSessionFixture,
-      project_key: "agent-session-distillery",
+      project_key: "marrow",
       session_id: `wrapper-${header.replace(/\W+/g, "-").toLowerCase()}`,
     };
     const turns = [

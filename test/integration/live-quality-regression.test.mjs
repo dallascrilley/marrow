@@ -11,81 +11,85 @@ import {
   getDeletionCandidateBySessionId,
   getSourceSessionBySessionId,
 } from "../../dist/db/ledger.js";
+import { hashToProjectId } from "../../dist/v2/project/resolve.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(dirname(testDir));
 const cliPath = join(projectRoot, "dist", "cli.js");
 const liveRegressionRoot = join(projectRoot, "test", "fixtures", "cursor", "live-regression");
 
+const SUBAGENT_SLUG = "Users-example-Code-worktrees-media-studio-trigger-real-video-validation";
+const TOOLS_SLUG = "Users-example-Code-service-tools";
+
 const fixtureSessions = [
   {
     fixtureName: "6edabde1-32b9-47cb-b4e8-0e5884f98a14.jsonl",
     sessionId: "6edabde1-32b9-47cb-b4e8-0e5884f98a14",
-    slug: "Users-dallascrilley-codex-worktrees-83a1-studio-tools",
+    slug: "Users-example-codex-worktrees-83a1-service-tools",
     relativeTarget:
       "6edabde1-32b9-47cb-b4e8-0e5884f98a14/6edabde1-32b9-47cb-b4e8-0e5884f98a14.jsonl",
   },
   {
     fixtureName: "0fc0a884-3413-44fa-bdd4-77984f40e413.jsonl",
     sessionId: "0fc0a884-3413-44fa-bdd4-77984f40e413",
-    slug: "Users-dallascrilley-codex-worktrees-83a1-studio-tools",
+    slug: "Users-example-codex-worktrees-83a1-service-tools",
     relativeTarget:
       "0fc0a884-3413-44fa-bdd4-77984f40e413/0fc0a884-3413-44fa-bdd4-77984f40e413.jsonl",
   },
   {
     fixtureName: "6e8197bb-269e-43a8-bc58-e965468c3f82.jsonl",
     sessionId: "6e8197bb-269e-43a8-bc58-e965468c3f82",
-    slug: "Users-dallascrilley-codex-worktrees-83a1-studio-tools",
+    slug: "Users-example-codex-worktrees-83a1-service-tools",
     relativeTarget:
       "6e8197bb-269e-43a8-bc58-e965468c3f82/6e8197bb-269e-43a8-bc58-e965468c3f82.jsonl",
   },
   {
     fixtureName: "17070617-45b1-4a0d-ab57-e218f45e6fc9.jsonl",
     sessionId: "17070617-45b1-4a0d-ab57-e218f45e6fc9",
-    slug: "Users-dallascrilley-Code-vmix-to-premiere-xml",
+    slug: "Users-example-Code-video-export-tool",
     relativeTarget:
       "17070617-45b1-4a0d-ab57-e218f45e6fc9/17070617-45b1-4a0d-ab57-e218f45e6fc9.jsonl",
   },
   {
     fixtureName: "2477b32c-27f6-4c56-b81c-75ab3e6938d8.jsonl",
     sessionId: "2477b32c-27f6-4c56-b81c-75ab3e6938d8",
-    slug: "Users-dallascrilley-Code-studio-tools",
+    slug: TOOLS_SLUG,
     relativeTarget:
       "2477b32c-27f6-4c56-b81c-75ab3e6938d8/2477b32c-27f6-4c56-b81c-75ab3e6938d8.jsonl",
   },
   {
     fixtureName: "2dc7df27-6993-4113-9ad0-d27d5e2c2143.jsonl",
     sessionId: "2dc7df27-6993-4113-9ad0-d27d5e2c2143",
-    slug: "Users-dallascrilley-Code-studio-tools",
+    slug: TOOLS_SLUG,
     relativeTarget:
       "2dc7df27-6993-4113-9ad0-d27d5e2c2143/2dc7df27-6993-4113-9ad0-d27d5e2c2143.jsonl",
   },
   {
     fixtureName: "58d2e1f7-50af-4cd5-921c-962c1b061d9d.jsonl",
     sessionId: "58d2e1f7-50af-4cd5-921c-962c1b061d9d",
-    slug: "Users-dallascrilley-Code-studio-tools",
+    slug: TOOLS_SLUG,
     relativeTarget:
       "58d2e1f7-50af-4cd5-921c-962c1b061d9d/58d2e1f7-50af-4cd5-921c-962c1b061d9d.jsonl",
   },
   {
     fixtureName: "9c6686c3-7663-495b-bd35-8e31b5a231df.jsonl",
     sessionId: "9c6686c3-7663-495b-bd35-8e31b5a231df",
-    slug: "Users-dallascrilley-Code-studio-tools",
+    slug: TOOLS_SLUG,
     relativeTarget:
       "9c6686c3-7663-495b-bd35-8e31b5a231df/9c6686c3-7663-495b-bd35-8e31b5a231df.jsonl",
   },
   {
     fixtureName: "d2d8b0e7-3fae-4506-927b-8f80a301ccb0.jsonl",
     sessionId: "d2d8b0e7-3fae-4506-927b-8f80a301ccb0",
-    slug: "Users-dallascrilley-Code-studio-tools",
+    slug: TOOLS_SLUG,
     relativeTarget:
       "d2d8b0e7-3fae-4506-927b-8f80a301ccb0/d2d8b0e7-3fae-4506-927b-8f80a301ccb0.jsonl",
   },
   {
     fixtureName: "faa99040-0737-4728-837e-9b017393476a-subagent.jsonl",
     sessionId: "faa99040-0737-4728-837e-9b017393476a-subagent",
-    slug: "Users-dallascrilley-Code-worktrees-example-studio-trigger-real-video-validation",
+    slug: SUBAGENT_SLUG,
     relativeTarget:
       "f6d87e78-5a74-48d2-bc79-5d2ee93f37db/subagents/faa99040-0737-4728-837e-9b017393476a-subagent.jsonl",
   },
@@ -103,7 +107,7 @@ function runCli(args, env) {
 }
 
 test("live regression corpus exercises real Cursor ingestion and preserves ready vs blocked quality states", async () => {
-  const sandboxRoot = await mkdtemp(join(tmpdir(), "asd-live-regression-"));
+  const sandboxRoot = await mkdtemp(join(tmpdir(), "marrow-live-regression-"));
   const runtimeRoot = join(sandboxRoot, "runtime");
   const homeDir = join(sandboxRoot, "home");
   const previousHome = process.env.HOME;
@@ -147,7 +151,7 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
     );
     assert.ok(richSession);
     assert.ok(richSession.turns >= 3);
-    // td-6600c2: the verified-fix arrives as a multi-paragraph **Done:**/**Changed:**
+    // The verified-fix arrives as a multi-paragraph **Done:**/**Changed:**
     // markdown dump, which the atomicity raw-dump guard rejects, so no durable
     // project learning is promoted and the session stays blocked for deletion.
     assert.equal(richSession.archived.safeToDelete, false);
@@ -213,7 +217,7 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
         assert.equal(learnedCandidate.safe_to_delete, 1, sessionId);
       }
 
-      // td-6600c2: these sessions only emit multi-paragraph **Done:**-style
+      // These sessions only emit multi-paragraph **Done:**-style
       // markdown dumps, which the atomicity raw-dump guard rejects, leaving no
       // durable learning and blocking deletion.
       for (const sessionId of [
@@ -245,7 +249,7 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
           runtimeRoot,
           "knowledge",
           "projects",
-          "e77ccdcea839",
+          hashToProjectId(SUBAGENT_SLUG),
           "faa99040-0737-4728-837e-9b017393476a-subagent.jsonl",
         ),
       );
@@ -258,7 +262,7 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
           runtimeRoot,
           "knowledge",
           "projects",
-          "53e19974b576",
+          hashToProjectId(TOOLS_SLUG),
           "9c6686c3-7663-495b-bd35-8e31b5a231df.jsonl",
         ),
       );
@@ -272,7 +276,7 @@ test("live regression corpus exercises real Cursor ingestion and preserves ready
           runtimeRoot,
           "knowledge",
           "projects",
-          "53e19974b576",
+          hashToProjectId(TOOLS_SLUG),
           "d2d8b0e7-3fae-4506-927b-8f80a301ccb0.jsonl",
         ),
       );

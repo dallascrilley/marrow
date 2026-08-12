@@ -3,18 +3,18 @@
 - Date: 2026-05-19
 - Status: accepted (2026-05-19)
 - Deciders: operator
-- Related: [ADR-0003](0003-primary-render.md), [td-0b76e8](#), `~/.claude/CLAUDE.md` Personal Hub Vault section
+- Related: [ADR-0003](0003-primary-render.md), `~/.claude/CLAUDE.md` Personal Hub Vault section
 
 ## Context
 
 The current vault carve-out (per `~/.claude/CLAUDE.md` and this
 project's `CLAUDE.md`) is:
 
-> `~/vault/wiki/projects/<project-key>/asd-learnings/` (pages) and
+> `~/vault/wiki/projects/<project-key>/marrow-learnings/` (pages) and
 > the sibling `_asd-manifest.json` file.
 
-The carve-out is named for asd specifically and is *strictly scoped*:
-asd must not touch any other vault path, and "new artifacts that
+The carve-out is named for marrow specifically and is *strictly scoped*:
+marrow must not touch any other vault path, and "new artifacts that
 don't fit either pattern require re-opening the design discussion,
 not silent expansion."
 
@@ -32,13 +32,13 @@ This ADR proposes the boundary renegotiation.
 
 New carve-out:
 
-> asd may write to:
-> 1. `~/vault/wiki/projects/<id>/asd-learnings/**` (audit trail)
+> marrow may write to:
+> 1. `~/vault/wiki/projects/<id>/marrow-learnings/**` (audit trail)
 > 2. `~/vault/wiki/projects/<id>/MEMORY.md` (curated rollup)
 > 3. `~/vault/wiki/projects/<id>/{workflow,tooling,preferences,pitfalls,debugging}.md` (topic files)
 > 4. `~/vault/wiki/projects/<id>/_asd-manifest.json` (manifest)
 >
-> asd must not write any other path under `~/vault/`. New artifacts
+> marrow must not write any other path under `~/vault/`. New artifacts
 > require re-opening this discussion.
 
 Five named additions to the existing carve-out. Scope is still
@@ -46,18 +46,18 @@ named-and-bounded.
 
 ### Option B — Expand to "any file matching `_asd-*` or `MEMORY.md`"
 
-Pattern-based instead of file-based. Allows future asd renderers
+Pattern-based instead of file-based. Allows future marrow renderers
 without re-opening the ADR.
 
 ### Option C — Subdirectory carve-out
 
-Move *everything* asd writes (including the curated rollup) under
-`~/vault/wiki/projects/<id>/asd/`. Curated rollup becomes
-`asd/MEMORY.md`. Carve-out stays one path.
+Move *everything* marrow writes (including the curated rollup) under
+`~/vault/wiki/projects/<id>/marrow/`. Curated rollup becomes
+`marrow/MEMORY.md`. Carve-out stays one path.
 
 ### Option D — Keep current carve-out, ship rollup elsewhere
 
-Put `MEMORY.md` at `~/vault/wiki/projects/<id>/asd-learnings/MEMORY.md`.
+Put `MEMORY.md` at `~/vault/wiki/projects/<id>/marrow-learnings/MEMORY.md`.
 Inside current carve-out. Loses the "project-root rollup that Claude
 Code auto-loads" property unless project `CLAUDE.md` imports the
 nested path explicitly (which it can).
@@ -69,16 +69,16 @@ nested path explicitly (which it can).
 | Stays scoped (no creeping expansion) | Yes | Weakest | Yes | Yes |
 | Matches lamarck/Claude convention of project-root MEMORY.md | Yes | Yes | No | No |
 | Project `CLAUDE.md` import simplicity | Best | Best | OK | OK (with explicit path) |
-| Future asd renderers (slack/email digest) | Need new ADR | OK | Need new ADR | Need new ADR |
-| Risk of asd writing to unintended sibling | Lowest | Medium | Zero | Zero |
+| Future marrow renderers (slack/email digest) | Need new ADR | OK | Need new ADR | Need new ADR |
+| Risk of marrow writing to unintended sibling | Lowest | Medium | Zero | Zero |
 | Vault map readability for human | Best | Best | Worse | Same |
 
-The strongest argument against A is "what if asd grows a 7th file
+The strongest argument against A is "what if marrow grows a 7th file
 type next quarter?" — and the answer is "open another ADR." Naming
 the files keeps the boundary auditable.
 
 The strongest argument for C is purity: one path, end of story. Cost
-is that `MEMORY.md` lives at `projects/<id>/asd/MEMORY.md` instead
+is that `MEMORY.md` lives at `projects/<id>/marrow/MEMORY.md` instead
 of `projects/<id>/MEMORY.md`, which is the path Claude Code expects
 to find ambient context at.
 
@@ -93,9 +93,9 @@ and the operator can re-open this ADR if the file list grows.
 **Accepted: Option A — named seven-pattern expansion of the carve-out.**
 
 The expansion is named and bounded, not pattern-based. Carve-out
-grows from one pattern (`asd-learnings/`) to seven named patterns:
+grows from one pattern (`marrow-learnings/`) to seven named patterns:
 
-1. `asd-learnings/**`
+1. `marrow-learnings/**`
 2. `_asd-manifest.json`
 3. `MEMORY.md`
 4. `workflow.md`
@@ -123,7 +123,7 @@ If A:
 - Amend `~/.claude/CLAUDE.md` "Personal Hub Vault" section, named
   exception block.
 - Amend project `CLAUDE.md` "Vault write surface" section.
-- Add unit test to asd that asserts vault writes stay within the
+- Add unit test to marrow that asserts vault writes stay within the
   five named patterns (path allowlist enforced in code, not only in
   docs).
 - ADR-0003 unblocked.
@@ -131,12 +131,12 @@ If A:
 If C:
 
 - ADR-0003 stays as written but `MEMORY.md` path becomes
-  `~/vault/wiki/projects/<id>/asd/MEMORY.md`. Per-project
+  `~/vault/wiki/projects/<id>/marrow/MEMORY.md`. Per-project
   `CLAUDE.md` imports the nested path.
 - Carve-out stays one line.
 
 If D:
 
 - Curated rollup ships nested. Loses ambient-context auto-load
-  unless project `CLAUDE.md` imports `asd-learnings/MEMORY.md`
+  unless project `CLAUDE.md` imports `marrow-learnings/MEMORY.md`
   explicitly. Acceptable but worse UX.

@@ -181,7 +181,7 @@ export async function resummarizeSessions(
         error: error instanceof Error ? error.message : String(error),
       });
       console.warn(
-        `[asd] resummarize skipped ${sourceSession.session_id}: ${failures[failures.length - 1]?.error}`,
+        `[marrow] resummarize skipped ${sourceSession.session_id}: ${failures[failures.length - 1]?.error}`,
       );
     }
   }

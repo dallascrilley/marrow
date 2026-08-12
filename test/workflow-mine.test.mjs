@@ -7,6 +7,18 @@ import { saveGlobalInstinct } from "../dist/v2/instinct/global-store.js";
 import { appendWorkflowDecision } from "../dist/workflow/decisions.js";
 import { mineWorkflowCandidates } from "../dist/workflow/mine.js";
 
+/**
+ * Every session fixture below is pinned to a fixed date, so the `days` recency
+ * window has to be anchored to a fixed clock too. Without this the suite would
+ * pass on the day it was written and silently start failing once the fixtures
+ * aged past the window.
+ */
+const FIXED_NOW = new Date("2026-07-09T00:00:00.000Z");
+
+function mine(options = {}) {
+  return mineWorkflowCandidates({ now: FIXED_NOW, ...options });
+}
+
 function globalInstinct(overrides = {}) {
   return {
     schema_version: 1,
@@ -35,7 +47,7 @@ function globalInstinct(overrides = {}) {
   };
 }
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 function summary(sessionId, overrides = {}) {
   return {
@@ -73,7 +85,7 @@ function turn(sessionId, overrides = {}) {
 }
 
 async function writeRuntime(records) {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-workflow-mine-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-workflow-mine-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const indexDir = join(runtimeRoot, "index");
   await mkdir(indexDir, { recursive: true });
@@ -131,7 +143,7 @@ test("mineWorkflowCandidates promotes explicit user validation preferences", asy
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
 
     assert.ok(validation);
@@ -161,7 +173,7 @@ test("mineWorkflowCandidates keys candidate ids on stable rule ids", async () =>
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const firstResult = await mineWorkflowCandidates({ days: 30 });
+    const firstResult = await mine({ days: 30 });
     const firstCandidate = firstResult.candidates.find(
       (candidate) => candidate.rule_id === "validation-explicit-verify",
     );
@@ -188,7 +200,7 @@ test("mineWorkflowCandidates dismisses weak single-session agent patterns", asyn
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const shipping = result.candidates.find((candidate) => candidate.cluster === "shipping");
 
     assert.ok(shipping);
@@ -214,7 +226,7 @@ test("mineWorkflowCandidates asks on contradicted validation guidance", async ()
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
 
     assert.ok(validation);
@@ -240,7 +252,7 @@ test("mineWorkflowCandidates signs negated verification as contradiction", async
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
 
     assert.ok(validation);
@@ -272,7 +284,7 @@ test("mineWorkflowCandidates uses contradiction ratio for confidence", async () 
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
 
     assert.ok(validation);
@@ -300,7 +312,7 @@ test("mineWorkflowCandidates counts a session with contradiction as contradictin
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const validation = result.candidates.find(
       (candidate) => candidate.rule_id === "validation-explicit-verify",
     );
@@ -329,7 +341,7 @@ test("mineWorkflowCandidates keeps excerpts for cross-part matches", async () =>
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const validation = result.candidates.find(
       (candidate) => candidate.rule_id === "validation-explicit-verify",
     );
@@ -356,7 +368,7 @@ test("mineWorkflowCandidates redacts local paths from marker matching and eviden
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const serialized = JSON.stringify(result);
 
     assert.doesNotMatch(serialized, /\/Users\/example\/private/);
@@ -381,7 +393,7 @@ test("mineWorkflowCandidates includes sanitized evidence excerpts", async () => 
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
 
     assert.ok(validation);
@@ -416,7 +428,7 @@ test("mineWorkflowCandidates suppresses already encoded global instincts", async
         trigger: "Before claiming completion merge readiness or CI status",
       }),
     );
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
 
     assert.ok(validation);
@@ -450,7 +462,7 @@ test("mineWorkflowCandidates does not suppress unrelated global instincts", asyn
         finding: "Prefer small pull requests with focused commits",
       }),
     );
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
 
     assert.ok(validation);
@@ -476,7 +488,7 @@ test("mineWorkflowCandidates caps evidence sessions and preserves evidence count
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const validation = result.candidates.find((candidate) => candidate.cluster === "validation");
 
     assert.ok(validation);
@@ -504,7 +516,7 @@ test("mineWorkflowCandidates excludes malformed timestamps from day window", asy
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
 
     assert.equal(result.sessions_scanned, 0);
     assert.deepEqual(result.candidates, []);
@@ -534,7 +546,7 @@ test("mineWorkflowCandidates marks repeated accepted patterns as medium", async 
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const shipping = result.candidates.find((candidate) => candidate.cluster === "shipping");
 
     assert.ok(shipping);
@@ -567,7 +579,7 @@ test("mineWorkflowCandidates emits instinct-tier candidates from global instinct
       }),
     );
 
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const instinct = result.candidates.find((candidate) => candidate.source_tier === "instinct");
 
     assert.ok(instinct);
@@ -603,7 +615,7 @@ test("mineWorkflowCandidates keeps ledger decisions for instinct-tier candidates
       }),
     );
 
-    const first = await mineWorkflowCandidates({ days: 30 });
+    const first = await mine({ days: 30 });
     const candidate = first.candidates.find((item) => item.source_tier === "instinct");
     assert.ok(candidate);
     assert.equal(candidate.confidence, "medium");
@@ -614,13 +626,13 @@ test("mineWorkflowCandidates keeps ledger decisions for instinct-tier candidates
       rule_id: candidate.rule_id,
     });
 
-    const hidden = await mineWorkflowCandidates({ days: 30 });
+    const hidden = await mine({ days: 30 });
     assert.equal(
       hidden.candidates.some((item) => item.candidate_id === candidate.candidate_id),
       false,
     );
 
-    const included = await mineWorkflowCandidates({ days: 30, includeDecided: true });
+    const included = await mine({ days: 30, includeDecided: true });
     const decided = included.candidates.find(
       (item) => item.candidate_id === candidate.candidate_id,
     );
@@ -646,7 +658,7 @@ test("mineWorkflowCandidates omits generic policy excerpts but preserves evidenc
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const result = await mineWorkflowCandidates({ days: 30 });
+    const result = await mine({ days: 30 });
     const candidate = result.candidates.find(
       (item) => item.rule_id === "validation-scope-correction",
     );
@@ -683,7 +695,7 @@ test("mineWorkflowCandidates applies source and day filters", async () => {
 
   try {
     process.env[runtimeOverrideEnvVar] = runtimeRoot;
-    const result = await mineWorkflowCandidates({ days: 30, source: "cursor" });
+    const result = await mine({ days: 30, source: "cursor" });
 
     assert.equal(result.sessions_scanned, 1);
     assert.equal(result.source, "cursor");
@@ -691,6 +703,43 @@ test("mineWorkflowCandidates applies source and day filters", async () => {
       result.candidates[0].evidence_sessions.map((item) => item.asd_session_id),
       ["wf-cursor-1"],
     );
+  } finally {
+    delete process.env[runtimeOverrideEnvVar];
+    await rm(sandbox, { force: true, recursive: true });
+  }
+});
+
+test("mineWorkflowCandidates anchors the recency window to the injected clock", async () => {
+  const { runtimeRoot, sandbox } = await writeRuntime([
+    {
+      sessionId: "wf-clock-anchored",
+      sourceTool: "cursor",
+      updatedAt: "2026-07-08T00:00:00.000Z",
+      summary: summary("wf-clock-anchored", {
+        what_was_decided: ["Always run verification before final summary."],
+      }),
+      turns: [turn("wf-clock-anchored")],
+    },
+  ]);
+
+  try {
+    process.env[runtimeOverrideEnvVar] = runtimeRoot;
+
+    // Inside the window relative to the injected clock.
+    const inWindow = await mineWorkflowCandidates({
+      days: 30,
+      now: new Date("2026-07-09T00:00:00.000Z"),
+    });
+    assert.equal(inWindow.sessions_scanned, 1);
+
+    // The same fixture, a decade later on the injected clock: outside the
+    // window. Whether a fixture is in or out is decided by the clock the caller
+    // passes, never by the wall clock, so this suite cannot rot with age.
+    const aged = await mineWorkflowCandidates({
+      days: 30,
+      now: new Date("2036-07-09T00:00:00.000Z"),
+    });
+    assert.equal(aged.sessions_scanned, 0);
   } finally {
     delete process.env[runtimeOverrideEnvVar];
     await rm(sandbox, { force: true, recursive: true });

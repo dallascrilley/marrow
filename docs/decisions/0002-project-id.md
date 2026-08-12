@@ -3,19 +3,19 @@
 - Date: 2026-05-19
 - Status: accepted (2026-05-19)
 - Deciders: operator
-- Related: [ADR-0001](0001-storage-unit.md), [td-5aeb65](#)
+- Related: [ADR-0001](0001-storage-unit.md)
 
 ## Context
 
-asd today identifies projects by filesystem path (e.g.,
-`-Users-dallas-Code-agent-session-distillery`). Path keys are
+marrow today identifies projects by filesystem path (e.g.,
+`-Users-dallas-Code-marrow`). Path keys are
 machine-local: the same project on the operator's laptop and desktop
-gets two different IDs. Cross-project promotion ([td-5aeb65]) requires
+gets two different IDs. Cross-project promotion requires
 a portable ID so the operator's two machines agree the instinct
 "prefer pnpm" came from the same project.
 
 ECC continuous-learning-v2 uses **git remote URL hashed** to a stable
-ID. Portable across machines and worktrees, machine-agnostic. But asd
+ID. Portable across machines and worktrees, machine-agnostic. But marrow
 ingests from sources that are not always git-backed: ad-hoc Cursor
 workspaces, Codex CLI runs on scratch directories, Pi transcripts
 tied to a chat session not a repo.
@@ -29,11 +29,11 @@ git remote URL hash       (when repo has a remote)
   ↓ fallback
 workspace path hash       (machine-local, but stable on this machine)
   ↓ fallback
-user-declared key         (from `.asd-project-key` file at session root)
+user-declared key         (from `.marrow-project-key` file at session root)
 ```
 
 Each session resolves to exactly one ID via the chain. Operator can
-override by dropping `.asd-project-key` containing a string.
+override by dropping `.marrow-project-key` containing a string.
 
 ### Option B — git remote hash only
 
@@ -47,7 +47,7 @@ one machine at a time.
 
 ### Option D — Operator declares ID per session
 
-A `--project-id` flag on `asd ingest sync`. No automatic resolution.
+A `--project-id` flag on `marrow ingest sync`. No automatic resolution.
 
 ## Tradeoffs
 
@@ -64,7 +64,7 @@ A `--project-id` flag on `asd ingest sync`. No automatic resolution.
 
 **Option A.** The fallback chain handles the long tail (no-remote
 workspaces) while giving the common case (real repos) the portable ID
-needed for promotion. Manual override via `.asd-project-key` is the
+needed for promotion. Manual override via `.marrow-project-key` is the
 escape hatch for projects with multiple remotes or repos that have
 been re-homed.
 
@@ -77,11 +77,11 @@ hex chars. Same for path fallback.
 **Accepted: Option A — git remote hash with fallback chain.**
 
 Resolution order: normalized git remote URL hash → workspace path
-hash → user-declared `.asd-project-key` file at session root. SHA-256
+hash → user-declared `.marrow-project-key` file at session root. SHA-256
 truncated to 12 hex chars. The chain handles the common case (real
 repos with remotes) portably across machines while still working
 for ad-hoc Cursor workspaces and Codex scratch dirs. The
-`.asd-project-key` override is the escape hatch for projects with
+`.marrow-project-key` override is the escape hatch for projects with
 multiple remotes, re-homed repos, or operator-imposed grouping.
 
 Migration writes a `_project-id-migration.json` mapping for audit so
@@ -91,10 +91,10 @@ the rename from path-keyed to hash-keyed storage is reversible.
 
 If A:
 
-- One-time migration: walk existing `asd-learnings/<path-key>/`
+- One-time migration: walk existing `marrow-learnings/<path-key>/`
   directories, resolve each to a new ID via the chain, and produce a
   `_project-id-migration.json` mapping for audit.
 - `manifest.json` gains a `project_id` field.
-- Vault path also moves: `~/vault/wiki/projects/<new-id>/asd-learnings/`.
+- Vault path also moves: `~/vault/wiki/projects/<new-id>/marrow-learnings/`.
   ADR-0004 (carve-out) covers the renaming permission.
-- Operator can write `.asd-project-key` in any repo to override.
+- Operator can write `.marrow-project-key` in any repo to override.

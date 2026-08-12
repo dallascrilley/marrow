@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# script/proof-first-time — exercise ASD's offline core workflow in an isolated runtime.
+# script/proof-first-time — exercise Marrow's offline core workflow in an isolated runtime.
 set -euo pipefail
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"

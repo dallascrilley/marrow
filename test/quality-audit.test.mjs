@@ -16,10 +16,10 @@ import { auditTopicDistribution } from "../dist/pipeline/topic-distribution.js";
 import { writeKnowledgeArtifacts } from "../dist/writers/knowledge-writer.js";
 import { writeSessionSummary } from "../dist/writers/summary-writer.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntimeRoot(run) {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-quality-audit-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-quality-audit-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
 
@@ -45,19 +45,19 @@ test("quality audit ranks summary defects and deletion readiness", async () => {
     try {
       const goodSession = upsertSourceSession(database, {
         ...sourceSessionFixture,
-        project_key: "agent-session-distillery",
+        project_key: "marrow",
         session_id: "good-session",
         source_hash: "sha256:good",
       }).sourceSession;
       const noisySession = upsertSourceSession(database, {
         ...sourceSessionFixture,
-        project_key: "agent-session-distillery",
+        project_key: "marrow",
         session_id: "noisy-session",
         source_hash: "sha256:noisy",
       }).sourceSession;
       const manualReviewSession = upsertSourceSession(database, {
         ...sourceSessionFixture,
-        project_key: "agent-session-distillery",
+        project_key: "marrow",
         session_id: "manual-review-session",
         source_hash: "sha256:manual-review",
       }).sourceSession;
@@ -211,13 +211,13 @@ test("quality audit distinguishes pure process chatter from durable signal with 
     try {
       const pureChatterSession = upsertSourceSession(database, {
         ...sourceSessionFixture,
-        project_key: "agent-session-distillery",
+        project_key: "marrow",
         session_id: "pure-chatter-session",
         source_hash: "sha256:pure-chatter",
       }).sourceSession;
       const durableSignalSession = upsertSourceSession(database, {
         ...sourceSessionFixture,
-        project_key: "agent-session-distillery",
+        project_key: "marrow",
         session_id: "durable-signal-session",
         source_hash: "sha256:durable-signal",
       }).sourceSession;
@@ -364,13 +364,13 @@ test("quality audit distinguishes pure process chatter from durable signal with 
     try {
       const pureChatterSession = upsertSourceSession(database, {
         ...sourceSessionFixture,
-        project_key: "agent-session-distillery",
+        project_key: "marrow",
         session_id: "pure-chatter-session",
         source_hash: "sha256:pure-chatter",
       }).sourceSession;
       const durableSignalSession = upsertSourceSession(database, {
         ...sourceSessionFixture,
-        project_key: "agent-session-distillery",
+        project_key: "marrow",
         session_id: "durable-signal-session",
         source_hash: "sha256:durable-signal",
       }).sourceSession;
@@ -439,7 +439,7 @@ test("quality audit reports project-learning distribution statistics", async () 
         const sessionId = `distribution-session-${index}`;
         const sourceSession = upsertSourceSession(database, {
           ...sourceSessionFixture,
-          project_key: "agent-session-distillery",
+          project_key: "marrow",
           session_id: sessionId,
           source_hash: `sha256:distribution-${index}`,
         }).sourceSession;
@@ -514,13 +514,13 @@ test("topic distribution aggregates low-signal, wrapper leaks, and llm rescue co
     try {
       const goodSession = upsertSourceSession(database, {
         ...sourceSessionFixture,
-        project_key: "agent-session-distillery",
+        project_key: "marrow",
         session_id: "topic-good-session",
         source_hash: "sha256:topic-good",
       }).sourceSession;
       const noisySession = upsertSourceSession(database, {
         ...sourceSessionFixture,
-        project_key: "agent-session-distillery",
+        project_key: "marrow",
         session_id: "topic-noisy-session",
         source_hash: "sha256:topic-noisy",
       }).sourceSession;
@@ -570,9 +570,7 @@ test("topic distribution aggregates low-signal, wrapper leaks, and llm rescue co
       ]);
       assert.equal(report.remediation.resummarize_candidate_count, 1);
 
-      const mainProject = report.by_project.find(
-        (project) => project.project_key === "agent-session-distillery",
-      );
+      const mainProject = report.by_project.find((project) => project.project_key === "marrow");
       assert.ok(mainProject);
       assert.equal(mainProject.sessions, 2);
       assert.equal(mainProject.low_signal_topics, 1);
@@ -590,7 +588,7 @@ test("topic distribution aggregates low-signal, wrapper leaks, and llm rescue co
       assert.equal(otherProject.llm_rescued_topics, 1);
       assert.equal(
         report.by_project[0].project_key,
-        "agent-session-distillery",
+        "marrow",
         "projects sort by highest low-signal rate first",
       );
     } finally {
@@ -607,7 +605,7 @@ test("quality audit does not flag discovered sessions as summary_missing", async
       upsertSourceSession(database, {
         ...sourceSessionFixture,
         ingest_status: "discovered",
-        project_key: "agent-session-distillery",
+        project_key: "marrow",
         retention_status: "kept",
         session_id: "discovered-session",
         source_hash: "sha256:discovered",
@@ -635,13 +633,13 @@ test("topic_process_chatter and process_chatter are distinct audit dimensions", 
     try {
       upsertSourceSession(database, {
         ...sourceSessionFixture,
-        project_key: "agent-session-distillery",
+        project_key: "marrow",
         session_id: "topic-chatter",
         source_hash: "sha256:topic-chatter",
       });
       upsertSourceSession(database, {
         ...sourceSessionFixture,
-        project_key: "agent-session-distillery",
+        project_key: "marrow",
         session_id: "body-chatter",
         source_hash: "sha256:body-chatter",
       });
@@ -689,13 +687,13 @@ test("topic_wrapper_heading flags ambiguous markdown headings without dropping l
     try {
       upsertSourceSession(database, {
         ...sourceSessionFixture,
-        project_key: "agent-session-distillery",
+        project_key: "marrow",
         session_id: "ambiguous-wrapper-topic",
         source_hash: "sha256:ambiguous-wrapper-topic",
       });
       upsertSourceSession(database, {
         ...sourceSessionFixture,
-        project_key: "agent-session-distillery",
+        project_key: "marrow",
         session_id: "legit-markdown-topic",
         source_hash: "sha256:legit-markdown-topic",
       });

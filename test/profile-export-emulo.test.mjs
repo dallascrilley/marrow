@@ -46,7 +46,7 @@ function turn(sessionId, index, prompt, startedAt) {
 }
 
 async function withFixture(run) {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-emulo-export-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-emulo-export-"));
   const runtimeRoot = join(sandbox, "runtime");
   process.env[runtimeRootOverrideEnvVar] = runtimeRoot;
   const database = await createLedger();
@@ -98,7 +98,7 @@ async function readExportedRecords(generationRoot) {
   return records;
 }
 
-test("buildEmuloCorpusExport writes only canonical user prompts with ASD provenance", async () => {
+test("buildEmuloCorpusExport writes only canonical user prompts with Marrow provenance", async () => {
   await withFixture(async ({ database, runtimeRoot }) => {
     const codex = sourceSession("codex-session", "codex-cli", "2026-07-16T10:00:00.000Z");
     const claude = sourceSession("claude-session", "claude-code", "2026-07-17T11:00:00.000Z");

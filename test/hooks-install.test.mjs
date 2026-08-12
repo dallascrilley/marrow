@@ -36,31 +36,31 @@ test("parseHooksInstallOptions accepts --dry-run and --global", () => {
 test("mergeSessionEndHook appends SessionEnd command when missing", () => {
   const merged = mergeSessionEndHook(
     {},
-    `"$CLAUDE_PROJECT_DIR/.claude/hooks/asd-session-end-ingest.sh"`,
+    `"$CLAUDE_PROJECT_DIR/.claude/hooks/marrow-session-end-ingest.sh"`,
   );
   const sessionEnd = merged.hooks?.SessionEnd;
   assert.ok(Array.isArray(sessionEnd));
   assert.equal(sessionEnd.length, 1);
   assert.equal(
     sessionEnd[0]?.hooks?.[0]?.command,
-    `"$CLAUDE_PROJECT_DIR/.claude/hooks/asd-session-end-ingest.sh"`,
+    `"$CLAUDE_PROJECT_DIR/.claude/hooks/marrow-session-end-ingest.sh"`,
   );
 });
 
-test("mergeSessionEndHook is idempotent for existing asd hook", () => {
+test("mergeSessionEndHook is idempotent for existing marrow hook", () => {
   const before = mergeSessionEndHook(
     {},
-    `"$CLAUDE_PROJECT_DIR/.claude/hooks/asd-session-end-ingest.sh"`,
+    `"$CLAUDE_PROJECT_DIR/.claude/hooks/marrow-session-end-ingest.sh"`,
   );
   const after = mergeSessionEndHook(
     before,
-    `"$CLAUDE_PROJECT_DIR/.claude/hooks/asd-session-end-ingest.sh"`,
+    `"$CLAUDE_PROJECT_DIR/.claude/hooks/marrow-session-end-ingest.sh"`,
   );
   assert.deepEqual(after, before);
 });
 
 test("hooks install --events start registers SessionStart recall hook", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-hooks-start-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-hooks-start-"));
   const { spawnSync } = await import("node:child_process");
   const { dirname } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
@@ -79,7 +79,7 @@ test("hooks install --events start registers SessionStart recall hook", async ()
     const result = run();
     assert.equal(result.status, 0, result.stderr);
 
-    const hookPath = join(sandbox, ".claude", "hooks", "asd-session-start-recall.sh");
+    const hookPath = join(sandbox, ".claude", "hooks", "marrow-session-start-recall.sh");
     await access(hookPath);
 
     const settingsPath = resolveSettingsPath(sandbox, false);
@@ -100,7 +100,7 @@ test("hooks install --events start registers SessionStart recall hook", async ()
 });
 
 test("hooks install writes project hook script and settings", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-hooks-install-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-hooks-install-"));
   const { spawnSync } = await import("node:child_process");
   const { dirname } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
@@ -117,7 +117,7 @@ test("hooks install writes project hook script and settings", async () => {
 
     assert.equal(result.status, 0, result.stderr);
 
-    const hookPath = join(sandbox, ".claude", "hooks", "asd-session-end-ingest.sh");
+    const hookPath = join(sandbox, ".claude", "hooks", "marrow-session-end-ingest.sh");
     const settingsPath = resolveSettingsPath(sandbox, false);
     await access(hookPath);
     const settings = JSON.parse(await readFile(settingsPath, "utf8"));

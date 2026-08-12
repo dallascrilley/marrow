@@ -7,10 +7,10 @@ import test from "node:test";
 import { assessReadbackSetup } from "../dist/commands/readback-check.js";
 
 test("read-back setup distinguishes missing, installed, drifted, and unverifiable surfaces", async () => {
-  const root = await mkdtemp(join(tmpdir(), "asd-readback-check-"));
+  const root = await mkdtemp(join(tmpdir(), "marrow-readback-check-"));
   try {
     const settingsPath = join(root, "project", ".claude", "settings.json");
-    const hookPath = join(root, "project", ".claude", "hooks", "asd-session-start-recall.sh");
+    const hookPath = join(root, "project", ".claude", "hooks", "marrow-session-start-recall.sh");
     const mcpConfigPath = join(root, "claude.json");
     const missingVault = join(root, "missing-vault");
 
@@ -32,7 +32,7 @@ test("read-back setup distinguishes missing, installed, drifted, and unverifiabl
       settingsPath,
       JSON.stringify({
         hooks: {
-          SessionStart: [{ hooks: [{ type: "command", command: "asd-session-start-recall" }] }],
+          SessionStart: [{ hooks: [{ type: "command", command: "marrow-session-start-recall" }] }],
         },
       }),
       "utf8",
@@ -40,7 +40,9 @@ test("read-back setup distinguishes missing, installed, drifted, and unverifiabl
     await writeFile(
       mcpConfigPath,
       JSON.stringify({
-        mcpServers: { asd: { type: "stdio", command: "node", args: ["cli.js", "mcp", "serve"] } },
+        mcpServers: {
+          marrow: { type: "stdio", command: "node", args: ["cli.js", "mcp", "serve"] },
+        },
       }),
       "utf8",
     );
@@ -61,7 +63,7 @@ test("read-back setup distinguishes missing, installed, drifted, and unverifiabl
     await rm(hookPath);
     await writeFile(
       mcpConfigPath,
-      JSON.stringify({ mcpServers: { asd: { type: "http" } } }),
+      JSON.stringify({ mcpServers: { marrow: { type: "http" } } }),
       "utf8",
     );
     const drifted = await assessReadbackSetup({ hookPath, mcpConfigPath, settingsPath, vaultRoot });

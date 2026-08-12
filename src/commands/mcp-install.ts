@@ -5,11 +5,11 @@ import { fileURLToPath } from "node:url";
 
 import type { CommandContext } from "../cli.js";
 
-const DEFAULT_SERVER_NAME = "asd";
+const DEFAULT_SERVER_NAME = "marrow";
 
 /**
- * One Claude Code MCP server registration. asd serves over stdio via
- * `asd mcp serve`, matching the `type: "stdio"` shape Claude Code writes for
+ * One Claude Code MCP server registration. marrow serves over stdio via
+ * `marrow mcp serve`, matching the `type: "stdio"` shape Claude Code writes for
  * locally-spawned servers in `~/.claude.json`.
  */
 export type McpServerEntry = {
@@ -32,7 +32,7 @@ export type McpInstallOptions = {
 };
 
 /**
- * Register asd's capped (ADR-0005) MCP query server in the user's
+ * Register marrow's capped (ADR-0005) MCP query server in the user's
  * `~/.claude.json` so agents can query distilled instincts on demand.
  *
  * Idempotent: if the named server already resolves to the desired entry, the
@@ -177,7 +177,7 @@ async function readClaudeJson(path: string): Promise<ClaudeJson> {
 
 async function atomicWriteJson(targetPath: string, value: unknown): Promise<void> {
   await mkdir(dirname(targetPath), { recursive: true });
-  const tempPath = join(dirname(targetPath), `.${basename(targetPath)}.asd.tmp`);
+  const tempPath = join(dirname(targetPath), `.${basename(targetPath)}.marrow.tmp`);
   await writeFile(tempPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
   await rename(tempPath, targetPath);
 }

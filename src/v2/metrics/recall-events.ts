@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { getRuntimePath } from "../../config/paths.js";
 
-/** One line is appended per `asd recall` invocation. */
+/** One line is appended per `marrow recall` invocation. */
 export type RecallEvent = {
   /** ISO-8601 fire time. */
   ts: string;

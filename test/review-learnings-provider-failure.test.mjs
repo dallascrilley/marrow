@@ -8,10 +8,10 @@ import { createLedger, upsertSourceSession } from "../dist/db/ledger.js";
 import { learningFixture, sourceSessionFixture } from "../dist/models/canonical.js";
 import { getProjectKnowledgeSessionPath } from "../dist/writers/knowledge-writer.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntimeRoot(run) {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-review-provider-fail-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-review-provider-fail-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
   const previousKey = process.env.OPENROUTER_API_KEY;

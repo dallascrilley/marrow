@@ -7,10 +7,10 @@ import test from "node:test";
 import { getSessionDetail, getSessionDetailForRecord } from "../dist/read/session-detail.js";
 import { getSessionManifestPathForRevision } from "../dist/writers/manifest-writer.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntime(run) {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-read-detail-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-read-detail-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
 

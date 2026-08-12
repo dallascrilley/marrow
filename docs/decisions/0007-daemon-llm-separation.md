@@ -7,7 +7,7 @@
 
 The scheduled memory pipeline runs ingest, audit, optional LLM learning review,
 apply, and vault export. Prior art (claude-heartbeat) separates a cheap
-file-scan / manifest-diff watcher from LLM-gated distillation passes. asd
+file-scan / manifest-diff watcher from LLM-gated distillation passes. marrow
 already uses cheap deterministic ingest (`ingest sync --resume` with
 `onlyNewOrChanged`) but `quality review-learnings` could still invoke
 OpenRouter on every cron tick even when no new learnings exist.
@@ -27,7 +27,7 @@ Parse filesystem mtime and sidecar presence in bash. No new CLI surface.
 - **Pros:** Zero TypeScript churn.
 - **Cons:** Duplicates ingest/discover logic; brittle; hard to test.
 
-### Option B — `asd pipeline gate` + flags on LLM commands (chosen)
+### Option B — `marrow pipeline gate` + flags on LLM commands (chosen)
 
 Add a JSON gate command that reuses discover + filesystem checks, plus
 `--if-new` and `--max-per` on `quality review-learnings`. Wire the
@@ -48,7 +48,7 @@ Separate OS service watching transcript dirs continuously.
 
 Ship **Option B**:
 
-- `asd pipeline gate` reports pending ingest sessions (per adapter),
+- `marrow pipeline gate` reports pending ingest sessions (per adapter),
   unreviewed project learnings, and LLM budget headroom.
 - `quality review-learnings` accepts `--if-new` and `--max-per N/Tu`
   (default from `ASD_LLM_MAX_PER`, fallback `50/24h`; current as of 2026-07-13).

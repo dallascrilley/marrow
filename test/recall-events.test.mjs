@@ -6,10 +6,10 @@ import test from "node:test";
 
 import { appendRecallEvent, summarizeRecallEvents } from "../dist/v2/metrics/recall-events.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 test("recall summary keeps the newest successful delivery separate from later empty recalls", async () => {
-  const runtimeRoot = await mkdtemp(join(tmpdir(), "asd-recall-events-"));
+  const runtimeRoot = await mkdtemp(join(tmpdir(), "marrow-recall-events-"));
   const previousRoot = process.env[runtimeOverrideEnvVar];
   process.env[runtimeOverrideEnvVar] = runtimeRoot;
 

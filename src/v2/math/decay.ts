@@ -3,7 +3,7 @@
 // Decision driver: lamarck's 90-day half-life with 4× harmful multiplier.
 //
 // Pure functions. No I/O. Unit-testable in isolation. Re-export point
-// for the v2 implementation once td-839bd1 lands.
+// for the v2 implementation.
 
 import {
   CONFIDENCE_MAX,

@@ -580,10 +580,10 @@ test("drops td task ids and bare usage-only CLIs from extracted commands", () =>
     makeRecord({
       kind: "tool_use_stub",
       lineNumber: 2,
-      commandStrings: ["td-2a8b94", "td-2a8b94-ros-command-apply", "gh", "git", "go"],
+      commandStrings: ["td-1a2b3c", "td-1a2b3c-ros-command-apply", "gh", "git", "go"],
       toolUse: {
         callId: "tool-noise",
-        inputText: "td-2a8b94",
+        inputText: "td-1a2b3c",
         name: "run_terminal_command",
         status: "started",
       },
@@ -594,7 +594,7 @@ test("drops td task ids and bare usage-only CLIs from extracted commands", () =>
       commandStrings: [
         "gh pr checks 148",
         "td create track-follow-up",
-        "td show td-2a8b94",
+        "td show td-1a2b3c",
         "qa",
         "just",
         "make",
@@ -619,7 +619,7 @@ test("drops td task ids and bare usage-only CLIs from extracted commands", () =>
   assert.deepEqual(commandResult.allCommands, [
     "gh pr checks 148",
     "td create track-follow-up",
-    "td show td-2a8b94",
+    "td show td-1a2b3c",
     "qa",
     "just",
     "make",

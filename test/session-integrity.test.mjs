@@ -16,10 +16,10 @@ import {
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
 const cliPath = join(projectRoot, "dist", "cli.js");
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntimeRoot(run) {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-integrity-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-integrity-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
 
@@ -134,7 +134,7 @@ test("assessSessionIntegrity flags orphan manifests and duplicate asd_session_id
   await withRuntimeRoot(async (runtimeRoot) => {
     const database = await createLedger();
     try {
-      const sharedAsdId = "shared-asd-id";
+      const sharedAsdId = "shared-session-id";
       const firstPath = join(runtimeRoot, "fixtures", "first.jsonl");
       const secondPath = join(runtimeRoot, "fixtures", "second.jsonl");
       const orphanPath = join(runtimeRoot, "fixtures", "orphan.jsonl");
@@ -262,13 +262,13 @@ test("assessSessionIntegrity treats duplicates as warnings (ok=true, exit 0) whe
 
       await writeManifest(runtimeRoot, {
         sessionId: "ledger-one",
-        asdSessionId: "shared-asd-id",
+        asdSessionId: "shared-session-id",
         sourcePath: firstPath,
         sourceTool: "cursor",
       });
       await writeManifest(runtimeRoot, {
         sessionId: "ledger-two",
-        asdSessionId: "shared-asd-id",
+        asdSessionId: "shared-session-id",
         sourcePath: secondPath,
         sourceTool: "cursor",
       });
@@ -288,7 +288,7 @@ test("assessSessionIntegrity treats duplicates as warnings (ok=true, exit 0) whe
   });
 });
 
-test("asd check exits non-zero when integrity violations exist", async () => {
+test("marrow check exits non-zero when integrity violations exist", async () => {
   await withRuntimeRoot(async (runtimeRoot) => {
     const orphanPath = join(runtimeRoot, "fixtures", "orphan-only.jsonl");
     await mkdir(join(runtimeRoot, "fixtures"), { recursive: true });
@@ -314,7 +314,7 @@ test("asd check exits non-zero when integrity violations exist", async () => {
   });
 });
 
-test("asd check exits zero on clean runtime", async () => {
+test("marrow check exits zero on clean runtime", async () => {
   await withRuntimeRoot(async (runtimeRoot) => {
     const database = await createLedger();
     try {

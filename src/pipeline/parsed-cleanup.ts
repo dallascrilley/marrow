@@ -907,7 +907,7 @@ function getQuarantineRootForPath(quarantinePath: string): string | undefined {
 }
 
 function isLegacyCleanupOwnedQuarantine(originalPath: string, quarantinePath: string): boolean {
-  const prefix = `${originalPath}.asd-cleanup-`;
+  const prefix = `${originalPath}.marrow-cleanup-`;
   const ending = ".quarantine";
   if (!quarantinePath.startsWith(prefix) || !quarantinePath.endsWith(ending)) {
     return false;

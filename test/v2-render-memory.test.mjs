@@ -68,7 +68,7 @@ test("renderMemoryMarkdown omits generated_at for an empty selection (no epoch)"
   assert.doesNotMatch(rendered.memory, /generated_at:/);
   assert.doesNotMatch(rendered.memory, /1970-01-01/);
   // Frontmatter is still well-formed and the curated header still renders.
-  assert.match(rendered.memory, /^---\ntags: \[asd, memory, curated\]\n---/);
+  assert.match(rendered.memory, /^---\ntags: \[marrow, memory, curated\]\n---/);
   assert.match(rendered.memory, /# Project memory \(curated\)/);
 });
 

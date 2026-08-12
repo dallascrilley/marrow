@@ -1,4 +1,4 @@
-# ASD Session Index Export Contract
+# Marrow Session Index Export Contract
 
 Status: current v1 contract
 Schema version: `asd.session_index.v1`
@@ -34,7 +34,7 @@ Required top-level fields:
 - `source_uuid`: source-native session id derived from the source path.
 - `source_tool`: source tool id, currently `claude-code`, `codex-cli`, `cursor`,
   or `pi`.
-- `asd_session_id`: asd's internal summarized session id.
+- `asd_session_id`: marrow's internal summarized session id.
 - `topic`: title text from `summary.json`.
 - `topic_source`: topic derivation path from `summary.json`; either
   `deterministic` or `llm`. Older summaries without this field are normalized
@@ -58,7 +58,7 @@ topic provenance can safely ignore it, and old summary artifacts parse as
 
 Consumers that join against live session files must use `source_path`, not
 `source_uuid`, as the primary key. `source_path` is intentionally preserved
-exactly as asd read it from disk; the exporter validates that it is absolute but
+exactly as marrow read it from disk; the exporter validates that it is absolute but
 does not normalize or rewrite it.
 
 ## Example Record
@@ -73,7 +73,7 @@ does not normalize or rewrite it.
   "topic": "Read the handoff and complete tasks.",
   "topic_source": "deterministic",
   "next_step": "No open next step recorded.",
-  "summary_json_path": "/Users/example/.agent-session-distillery/summaries/by-session/rollout-2026-05-22T15-45-14-019e516f-5f85-7550-a1b9-adcbab812b33/summary.json",
+  "summary_json_path": "/Users/example/.marrow/summaries/by-session/rollout-2026-05-22T15-45-14-019e516f-5f85-7550-a1b9-adcbab812b33/summary.json",
   "updated_at": "2026-05-22T20:00:00.000Z"
 }
 ```

@@ -16,7 +16,7 @@ const projectRoot = dirname(dirname(testDir));
 const cliPath = join(projectRoot, "dist", "cli.js");
 const fixtureSessionsRoot = join(projectRoot, "test", "fixtures", "kimi", "sessions");
 const fixtureKimiJson = join(projectRoot, "test", "fixtures", "kimi", "kimi.json");
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 function runCli(args, env = {}) {
   return spawnSync(process.execPath, [cliPath, ...args], {
@@ -27,7 +27,7 @@ function runCli(args, env = {}) {
 }
 
 test("ingest backfill --source kimi processes the smoke fixture end-to-end", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-kimi-int-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-kimi-int-"));
   const home = join(sandbox, "home");
   const runtimeRoot = join(sandbox, "runtime");
 

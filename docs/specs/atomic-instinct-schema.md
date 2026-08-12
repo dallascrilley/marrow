@@ -2,15 +2,16 @@
 
 - Date: 2026-05-19
 - Status: accepted (ADR-0001, 2026-05-19)
-- Related: [ADR-0001](../decisions/0001-storage-unit.md), [td-839bd1](#)
+- Related: [ADR-0001](../decisions/0001-storage-unit.md)
 
 This is the concrete schema proposal for v2's atomic storage unit.
 Field shapes, validation rules, and migration story. No
-implementation; the implementation lands in [td-839bd1].
+implementation here; implementation lands separately in the v2
+instinct store.
 
 ## File layout
 
-Per-project storage at `~/.agent-session-distillery/instincts/<project-id>/`:
+Per-project storage at `~/.marrow/instincts/<project-id>/`:
 
 ```
 <project-id>/
@@ -27,18 +28,18 @@ Per-project storage at `~/.agent-session-distillery/instincts/<project-id>/`:
 Global tier (after promotion):
 
 ```
-~/.agent-session-distillery/instincts-global/
+~/.marrow/instincts-global/
 └── <instinct-id>.yaml
 ```
 
-The vault renderers (curated MEMORY.md, asd-learnings/) write to
+The vault renderers (curated MEMORY.md, marrow-learnings/) write to
 `~/vault/` and are pure functions of the instinct store. Audit trail
 preserved by the immutable session bundle files.
 
 ## Instinct record
 
 ```yaml
-# ~/.agent-session-distillery/instincts/<project-id>/<instinct-id>.yaml
+# ~/.marrow/instincts/<project-id>/<instinct-id>.yaml
 schema_version: 1
 id: trust-pnpm-over-npm-in-this-project
 trigger: |
@@ -95,7 +96,7 @@ last_promoted_at: null
 | `project_id` | yes | string | Per ADR-0002 chain. Empty string when `scope: global` and promoted. |
 | `source.first_session` | yes | string | First session that produced this instinct. |
 | `source.first_observed_at` | yes | ISO 8601 | Source of truth for age. |
-| `source.source_refs[]` | yes | list | File / function / command refs. Existing asd shape. |
+| `source.source_refs[]` | yes | list | File / function / command refs. Existing marrow shape. |
 | `source.observations[]` | yes | list | Append-only event log. Drives decay/confidence math. |
 | `related[]` | no | list of ids | Soft links between instincts. |
 | `created_at` | yes | ISO 8601 | Record creation. |
@@ -116,7 +117,7 @@ duplicates" (same slug, different hash) and prompt for merge.
 ## Session bundle
 
 ```yaml
-# ~/.agent-session-distillery/instincts/<project-id>/sessions/<session-id>.yaml
+# ~/.marrow/instincts/<project-id>/sessions/<session-id>.yaml
 schema_version: 1
 session_id: ses_2026-05-19-d8f1
 project_id: a3f9c1b2d4e5
@@ -195,9 +196,9 @@ cached value; the observation log is canonical.
 
 ## Migration from session-learning blobs
 
-One-shot migration script `asd migrate v1-to-v2`:
+One-shot migration script `marrow migrate v1-to-v2`:
 
-1. Walk `~/vault/wiki/projects/<old-key>/asd-learnings/*.md`.
+1. Walk `~/vault/wiki/projects/<old-key>/marrow-learnings/*.md`.
 2. For each markdown file, parse frontmatter + body.
 3. Use the LLM review path (Haiku) to decompose each blob into
    atomic instinct candidates. Output as a bundle file with all
@@ -232,7 +233,7 @@ via a `_migrated_from_blob_id` field stored on each instinct.
 
 ## Test surface
 
-Schema v1 acceptance tests required for [td-839bd1] to merge:
+Schema v1 acceptance tests required before the v2 instinct store merges:
 
 1. Round-trip: emit YAML, parse YAML, compare.
 2. Validation rule coverage (one negative test per rule above).

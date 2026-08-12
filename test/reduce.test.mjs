@@ -123,7 +123,7 @@ test("does not duplicate the focus message in the head remainder", () => {
       makeRecord({
         kind: "tool_result_stub",
         lineNumber: 2,
-        messageText: "asd ingest sync failed: checkpoint mismatch",
+        messageText: "marrow ingest sync failed: checkpoint mismatch",
         toolUse: {
           callId: "tool-9",
           inputText: null,

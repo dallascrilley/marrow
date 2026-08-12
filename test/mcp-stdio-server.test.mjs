@@ -49,7 +49,7 @@ test("handleMcpMessage initialize reports protocol version and server info", asy
 
   assert.equal(response.id, 1);
   assert.equal(response.result.protocolVersion, MCP_PROTOCOL_VERSION);
-  assert.equal(response.result.serverInfo.name, "agent-session-distillery");
+  assert.equal(response.result.serverInfo.name, "marrow");
   assert.deepEqual(response.result.capabilities, { tools: { listChanged: false } });
 });
 

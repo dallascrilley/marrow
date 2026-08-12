@@ -26,9 +26,9 @@ function sampleRecord(overrides = {}) {
     schema_version: "asd.wiki_memory.v1",
     id: sampleId,
     kind: "project_learning",
-    project: { key: "agent-session-distillery", root: null },
+    project: { key: "marrow", root: null },
     title: "Keep the wiki import boundary narrow",
-    body: "Use a versioned JSONL export contract between distillery and the wiki importer.",
+    body: "Use a versioned JSONL export contract between marrow and the wiki importer.",
     evidence: {
       learning_id: "session-1:project:decision:event-1",
       promotion_basis: "Explicit implementation decision.",
@@ -82,10 +82,10 @@ test("renderFrontmatter emits stable YAML with single-quoted scalars and ordered
   assert.ok(yaml.startsWith("---\n"));
   assert.ok(yaml.endsWith("---\n"));
   assert.match(yaml, /^id: 'sha256:0+1'$/m);
-  assert.match(yaml, /^source: 'asd'$/m);
-  assert.match(yaml, /^project: 'agent-session-distillery'$/m);
+  assert.match(yaml, /^source: 'marrow'$/m);
+  assert.match(yaml, /^project: 'marrow'$/m);
   assert.match(yaml, /^review_source: 'reviewed-export'$/m);
-  assert.match(yaml, /^tags:\n {2}- 'asd'\n {2}- 'asd\/agent-session-distillery'$/m);
+  assert.match(yaml, /^tags:\n {2}- 'marrow'\n {2}- 'marrow\/marrow'$/m);
   assert.match(yaml, /^ {4}line: 42$/m);
   assert.match(yaml, /^ {2}- source_path: '\/tmp\/session-1\.jsonl'$/m);
 });
@@ -132,7 +132,7 @@ test("renderFrontmatter emits 'null' (not 'null'-string) for nullable source_ref
 });
 
 test("readWikiMemoryJsonl accepts source_refs entries with null turn_id/event_id/line", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-vp-nullable-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-vp-nullable-"));
   try {
     const path = join(dir, "nullable.jsonl");
     const record = sampleRecord({
@@ -182,7 +182,7 @@ test("renderBody renders title H1, body paragraph, and evidence bullets", () => 
     body,
     "# Keep the wiki import boundary narrow\n" +
       "\n" +
-      "Use a versioned JSONL export contract between distillery and the wiki importer.\n" +
+      "Use a versioned JSONL export contract between marrow and the wiki importer.\n" +
       "\n" +
       "## Source evidence\n" +
       "\n" +
@@ -229,7 +229,7 @@ test("contentHashOf is deterministic and prefix-correct", () => {
 });
 
 test("atomicWriteFile writes via temp file and renames", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-vp-atomic-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-vp-atomic-"));
   try {
     const target = join(dir, "page.md");
     await atomicWriteFile(target, "hello\n");
@@ -242,12 +242,12 @@ test("atomicWriteFile writes via temp file and renames", async () => {
 });
 
 test("loadManifest returns empty skeleton when file is missing", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-vp-manifest-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-vp-manifest-"));
   try {
     const manifestPath = join(dir, "_asd-manifest.json");
     const manifest = await loadManifest(manifestPath, "2026-05-18T00:00:00.000Z");
     assert.equal(manifest.schema_version, "asd.vault_push_manifest.v1");
-    assert.equal(manifest.written_by, "asd");
+    assert.equal(manifest.written_by, "marrow");
     assert.deepEqual(manifest.records, {});
   } finally {
     await rm(dir, { force: true, recursive: true });
@@ -255,7 +255,7 @@ test("loadManifest returns empty skeleton when file is missing", async () => {
 });
 
 test("loadManifest throws on malformed JSON instead of silently resetting", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-vp-manifest-bad-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-vp-manifest-bad-"));
   try {
     const manifestPath = join(dir, "_asd-manifest.json");
     await writeFile(manifestPath, "{not json", "utf8");
@@ -268,17 +268,17 @@ test("loadManifest throws on malformed JSON instead of silently resetting", asyn
 test("serialiseManifest sorts records by id and pretty-prints", () => {
   const manifest = {
     schema_version: "asd.vault_push_manifest.v1",
-    written_by: "asd",
+    written_by: "marrow",
     last_push_at: "2026-05-18T00:00:00.000Z",
     records: {
       "sha256:b": {
-        page: "asd-learnings/b.md",
+        page: "marrow-learnings/b.md",
         content_hash: "sha256:bb",
         written_at: "2026-05-18T00:00:00.000Z",
         schema_version: "asd.wiki_memory.v1",
       },
       "sha256:a": {
-        page: "asd-learnings/a.md",
+        page: "marrow-learnings/a.md",
         content_hash: "sha256:aa",
         written_at: "2026-05-18T00:00:00.000Z",
         schema_version: "asd.wiki_memory.v1",
@@ -293,7 +293,7 @@ test("serialiseManifest sorts records by id and pretty-prints", () => {
 });
 
 test("readWikiMemoryJsonl returns empty array for missing file", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-vp-readjsonl-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-vp-readjsonl-"));
   try {
     const records = await readWikiMemoryJsonl(join(dir, "nope.jsonl"));
     assert.deepEqual(records, []);
@@ -303,7 +303,7 @@ test("readWikiMemoryJsonl returns empty array for missing file", async () => {
 });
 
 test("readWikiMemoryJsonl rejects records that don't match the schema", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-vp-readjsonl-bad-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-vp-readjsonl-bad-"));
   try {
     const path = join(dir, "bad.jsonl");
     await writeFile(path, `${JSON.stringify({ id: "not-sha256" })}\n`, "utf8");
@@ -314,15 +314,12 @@ test("readWikiMemoryJsonl rejects records that don't match the schema", async ()
 });
 
 test("vaultProjectDir places project root under wiki/projects/<sanitised>/", () => {
-  assert.equal(
-    vaultProjectDir("/vault", "agent-session-distillery"),
-    "/vault/wiki/projects/agent-session-distillery",
-  );
+  assert.equal(vaultProjectDir("/vault", "marrow"), "/vault/wiki/projects/marrow");
   assert.equal(vaultProjectDir("/vault", "../escape"), "/vault/wiki/projects/escape");
 });
 
 test("pushAll writes pages, populates the manifest, and is idempotent on re-run", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-vp-pushall-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-vp-pushall-"));
   try {
     const vaultRoot = join(dir, "vault");
     const now = "2026-05-18T00:00:00.000Z";
@@ -346,13 +343,13 @@ test("pushAll writes pages, populates the manifest, and is idempotent on re-run"
     assert.equal(second.total_written, 0, "unchanged record must be a no-op on re-run");
     assert.equal(second.total_skipped_unchanged, 1);
 
-    const projectDir = join(vaultRoot, "wiki", "projects", "agent-session-distillery");
+    const projectDir = join(vaultRoot, "wiki", "projects", "marrow");
     const manifest = await loadManifest(join(projectDir, "_asd-manifest.json"), now);
     assert.equal(Object.keys(manifest.records).length, 1);
     assert.ok(manifest.records[sampleId]);
     assert.equal(
       manifest.records[sampleId].page,
-      `asd-learnings/${pageBasenameFromId(sampleId)}.md`,
+      `marrow-learnings/${pageBasenameFromId(sampleId)}.md`,
       "manifest page path must be relative to the project root",
     );
     assert.equal(
@@ -366,7 +363,7 @@ test("pushAll writes pages, populates the manifest, and is idempotent on re-run"
 });
 
 test("pushAll rewrites when the rendered body changes (new evidence)", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-vp-pushall-rewrite-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-vp-pushall-rewrite-"));
   try {
     const vaultRoot = join(dir, "vault");
     const now = "2026-05-18T00:00:00.000Z";
@@ -378,7 +375,7 @@ test("pushAll rewrites when the rendered body changes (new evidence)", async () 
     });
 
     const updated = sampleRecord({
-      body: "Use a versioned JSONL export contract between distillery and the wiki importer. (Updated.)",
+      body: "Use a versioned JSONL export contract between marrow and the wiki importer. (Updated.)",
     });
     const result = await pushAll({
       noOverwrite: false,
@@ -395,7 +392,7 @@ test("pushAll rewrites when the rendered body changes (new evidence)", async () 
 });
 
 test("pushAll with --no-overwrite skips when the on-disk page hash diverges from the manifest", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-vp-pushall-protect-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-vp-pushall-protect-"));
   try {
     const vaultRoot = join(dir, "vault");
     const now = "2026-05-18T00:00:00.000Z";
@@ -410,8 +407,8 @@ test("pushAll with --no-overwrite skips when the on-disk page hash diverges from
       vaultRoot,
       "wiki",
       "projects",
-      "agent-session-distillery",
-      "asd-learnings",
+      "marrow",
+      "marrow-learnings",
       `${pageBasenameFromId(sampleId)}.md`,
     );
     const original = await readFile(pagePath, "utf8");

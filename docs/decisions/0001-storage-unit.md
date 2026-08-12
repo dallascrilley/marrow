@@ -3,13 +3,12 @@
 - Date: 2026-05-19
 - Status: accepted (2026-05-19)
 - Deciders: operator
-- Related: [td-839bd1](#), [agent-learning-systems-landscape-report](../research/agent-learning-systems-landscape-report.md)
 
 ## Context
 
-asd today stores one "learning" per reviewed session. The output of the
+marrow today stores one "learning" per reviewed session. The output of the
 ingest+review pipeline is a markdown blob per session, filed to the
-vault under `asd-learnings/`. Manifests track session IDs; review state
+vault under `marrow-learnings/`. Manifests track session IDs; review state
 is binary (pending/approved).
 
 The landscape survey (ECC continuous-learning-v2, lamarck) converges
@@ -24,7 +23,8 @@ clustering, and a meaningful confidence model. Session blobs do not.
 
 This choice is foundational: it touches the schema, manifests, review
 flow, vault push, the MCP server's primary query target, and the
-cross-project promotion feature. It must be settled before [td-839bd1].
+cross-project promotion feature. It must be settled before the
+atomic-instinct schema work (see `docs/specs/atomic-instinct-schema.md`).
 
 ## Options
 
@@ -112,9 +112,9 @@ the type sketches at `src/v2/instinct/schema.ts`.
 
 If A:
 
-- Schema work in [td-839bd1] designs the atomic record.
+- The atomic-instinct schema work designs the atomic record.
 - Migration: write a one-shot pass that parses existing
-  asd-learnings markdown into atomic records. Acceptable to leave
+  marrow-learnings markdown into atomic records. Acceptable to leave
   pre-v2 sessions as blob-only with no atomic decomposition.
 - Review pass output format becomes diary + deltas (ADR-adjacent
   decision; not blocking but related).

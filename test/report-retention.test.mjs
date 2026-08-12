@@ -18,7 +18,7 @@ const oldDate = new Date("2026-05-01T12:00:00.000Z");
 
 async function withRuntimeRoot(run) {
   const previousRoot = process.env[runtimeRootOverrideEnvVar];
-  const runtimeRoot = await mkdtemp(join(tmpdir(), "asd-report-retention-"));
+  const runtimeRoot = await mkdtemp(join(tmpdir(), "marrow-report-retention-"));
   process.env[runtimeRootOverrideEnvVar] = runtimeRoot;
   try {
     await run(runtimeRoot);

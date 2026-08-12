@@ -23,13 +23,13 @@ type RollupHeading = { title: string; intro: string };
 const PROJECT_HEADING: RollupHeading = {
   title: "Project memory (curated)",
   intro:
-    "Regenerated from atomic instincts. Session-level audit pages live under `asd-learnings/`.",
+    "Regenerated from atomic instincts. Session-level audit pages live under `marrow-learnings/`.",
 };
 
 const GLOBAL_HEADING: RollupHeading = {
   title: "Global memory (curated)",
   intro:
-    "Cross-project instincts promoted to global scope. Surfaced in every session via `asd recall`.",
+    "Cross-project instincts promoted to global scope. Surfaced in every session via `marrow recall`.",
 };
 
 /** Sentinel the `updated_at` reduce seeds with; never emit it as a real time. */
@@ -108,7 +108,7 @@ export function renderMemoryMarkdown(
   // Never stamp the epoch seed: an empty selection (or one with no real
   // `updated_at`) and no explicit clock omits `generated_at` rather than
   // emitting 1970-01-01, which would silently corrupt recency-decay math.
-  const frontmatter = ["---", "tags: [asd, memory, curated]"];
+  const frontmatter = ["---", "tags: [marrow, memory, curated]"];
   if (generated !== EPOCH_SEED) {
     frontmatter.push(`generated_at: ${generated}`);
   }
@@ -178,7 +178,7 @@ export async function renderProjectMemoryToVault(input: {
 }): Promise<RenderMemoryResult> {
   // Project files carry project-scope instincts only. Global-scope instincts
   // render once to the `_global` rollup (renderGlobalMemoryToVault) and reach
-  // every session through `asd recall`, rather than being duplicated into each
+  // every session through `marrow recall`, rather than being duplicated into each
   // per-project MEMORY.md (R4: roll up globally, not 259 silos).
   const projectInstincts = [...(await replayBundles(input.projectId)).values()];
   const selected = selectInstinctsForRollup(projectInstincts, []);
@@ -195,7 +195,7 @@ export async function renderProjectMemoryToVault(input: {
  * Render the cross-project global rollup (`scope: global` instincts) to
  * `wiki/projects/_global/MEMORY.md`. Called once per pipeline run, independent
  * of any single project. Honors the same inclusion/sort/spill rules as project
- * rollups; the read-back path (`asd recall`) prepends it to every session.
+ * rollups; the read-back path (`marrow recall`) prepends it to every session.
  */
 export async function renderGlobalMemoryToVault(input: {
   vaultRoot: string;

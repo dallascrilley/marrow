@@ -45,7 +45,7 @@ console.log(JSON.stringify(report, null, 2));
 process.exitCode = report.success ? 0 : 1;
 
 async function runDeterministicProof() {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-review-apply-proof-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-review-apply-proof-"));
   const runtimeRoot = join(sandbox, "runtime");
   const home = join(sandbox, "home");
 
@@ -191,7 +191,7 @@ async function runBoundedLiveProof() {
   if (!process.env.OPENROUTER_API_KEY) {
     return { success: false, status: "failed", reason: "OPENROUTER_API_KEY is not set." };
   }
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-review-live-proof-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-review-live-proof-"));
   const runtimeRoot = join(sandbox, "runtime");
   const home = join(sandbox, "home");
   const model = process.env.OPENROUTER_MODEL ?? "google/gemini-3-flash-preview";
@@ -277,7 +277,7 @@ async function runBoundedLiveProof() {
 }
 
 async function seedFixtureRuntime({ home, runtimeRoot, sessionName }) {
-  const cursorProject = join(home, ".cursor", "projects", "agent-session-distillery");
+  const cursorProject = join(home, ".cursor", "projects", "marrow");
   await mkdir(join(cursorProject, "agent-transcripts"), { recursive: true });
   await writeFile(join(cursorProject, "workspace-path.txt"), `${projectRoot}\n`, "utf8");
   await cp(
@@ -347,7 +347,7 @@ function runCliAllowFailure(commandArgs, runtimeRoot, extraEnv = {}) {
     env: {
       ...process.env,
       ...extraEnv,
-      AGENT_SESSION_DISTILLERY_ROOT: runtimeRoot,
+      MARROW_ROOT: runtimeRoot,
     },
   });
   return {

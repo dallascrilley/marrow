@@ -18,6 +18,6 @@ const child = spawn(
 
 child.once("exit", (code) => process.exit(code ?? 1));
 child.once("error", (error) => {
-  console.error(`Failed to launch the distillery CLI: ${error.message}`);
+  console.error(`Failed to launch the marrow CLI: ${error.message}`);
   process.exit(1);
 });

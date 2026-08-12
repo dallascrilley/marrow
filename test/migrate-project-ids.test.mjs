@@ -13,10 +13,10 @@ import { hashToProjectId } from "../dist/v2/project/resolve.js";
 const testDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = dirname(testDir);
 const cliPath = join(projectRoot, "dist", "cli.js");
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntime(run) {
-  const root = await mkdtemp(join(tmpdir(), "asd-migrate-project-ids-"));
+  const root = await mkdtemp(join(tmpdir(), "marrow-migrate-project-ids-"));
   const prior = process.env[runtimeOverrideEnvVar];
   process.env[runtimeOverrideEnvVar] = root;
 
@@ -69,7 +69,7 @@ test("migrate project-ids dry-run reports the legacy-to-ADR-0002 mapping without
   await withRuntime(async (root) => {
     // A real (non-git) workspace dir so resolveProjectId deterministically
     // falls through to the path-hash branch instead of a git-remote lookup.
-    const workspace = await mkdtemp(join(tmpdir(), "asd-migrate-workspace-"));
+    const workspace = await mkdtemp(join(tmpdir(), "marrow-migrate-workspace-"));
     const legacyKey = "demo-legacy";
     const expectedNewId = hashToProjectId(workspace);
 
@@ -119,7 +119,7 @@ test("migrate project-ids dry-run reports the legacy-to-ADR-0002 mapping without
 
 test("migrate project-ids --apply copies knowledge/projects/<old> to knowledge/projects/<new> and is idempotent on rerun", async () => {
   await withRuntime(async (root) => {
-    const workspace = await mkdtemp(join(tmpdir(), "asd-migrate-workspace-"));
+    const workspace = await mkdtemp(join(tmpdir(), "marrow-migrate-workspace-"));
     const legacyKey = "demo-legacy-apply";
     const expectedNewId = hashToProjectId(workspace);
 

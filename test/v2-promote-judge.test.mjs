@@ -133,9 +133,9 @@ test("judgeCacheKey separates by content, model, and prompt version", () => {
 });
 
 test("judge cache round-trips verdicts and a re-load sees them", async () => {
-  const previousRoot = process.env.AGENT_SESSION_DISTILLERY_ROOT;
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-jcache-"));
-  process.env.AGENT_SESSION_DISTILLERY_ROOT = join(sandbox, "runtime");
+  const previousRoot = process.env.MARROW_ROOT;
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-jcache-"));
+  process.env.MARROW_ROOT = join(sandbox, "runtime");
   try {
     const cache = await loadJudgeCache();
     assert.equal(cache.size, 0, "fresh cache is empty");
@@ -162,16 +162,16 @@ test("judge cache round-trips verdicts and a re-load sees them", async () => {
     assert.equal(entry.verdict.confidence, 0.9);
     assert.equal(entry.prompt_version, JUDGE_PROMPT_VERSION);
   } finally {
-    if (previousRoot === undefined) delete process.env.AGENT_SESSION_DISTILLERY_ROOT;
-    else process.env.AGENT_SESSION_DISTILLERY_ROOT = previousRoot;
+    if (previousRoot === undefined) delete process.env.MARROW_ROOT;
+    else process.env.MARROW_ROOT = previousRoot;
     await rm(sandbox, { recursive: true, force: true });
   }
 });
 
 test("detectGlobalJudgeCandidates returns high-confidence instincts, deduped and filtered", async () => {
-  const previousRoot = process.env.AGENT_SESSION_DISTILLERY_ROOT;
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-judge-"));
-  process.env.AGENT_SESSION_DISTILLERY_ROOT = join(sandbox, "runtime");
+  const previousRoot = process.env.MARROW_ROOT;
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-judge-"));
+  process.env.MARROW_ROOT = join(sandbox, "runtime");
   try {
     // High-confidence in two projects (same id) → deduped to one, project_count 2.
     await saveInstinct("projaaaaaaaa01", instinct({ confidence: 0.74 }));
@@ -217,16 +217,16 @@ test("detectGlobalJudgeCandidates returns high-confidence instincts, deduped and
     );
     assert.ok(!filtered.map((c) => c.instinct_id).includes("always-run-lint-before-push-99999999"));
   } finally {
-    if (previousRoot === undefined) delete process.env.AGENT_SESSION_DISTILLERY_ROOT;
-    else process.env.AGENT_SESSION_DISTILLERY_ROOT = previousRoot;
+    if (previousRoot === undefined) delete process.env.MARROW_ROOT;
+    else process.env.MARROW_ROOT = previousRoot;
     await rm(sandbox, { recursive: true, force: true });
   }
 });
 
 test("saveGlobalInstinct round-trips and rejects non-global scope", async () => {
-  const previousRoot = process.env.AGENT_SESSION_DISTILLERY_ROOT;
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-gstore-"));
-  process.env.AGENT_SESSION_DISTILLERY_ROOT = join(sandbox, "runtime");
+  const previousRoot = process.env.MARROW_ROOT;
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-gstore-"));
+  process.env.MARROW_ROOT = join(sandbox, "runtime");
   try {
     await assert.rejects(() => saveGlobalInstinct(instinct({ scope: "project" })));
 
@@ -239,8 +239,8 @@ test("saveGlobalInstinct round-trips and rejects non-global scope", async () => 
     const ids = await loadGlobalInstinctIds();
     assert.deepEqual(ids, ["always-run-lint-before-push-99999999"]);
   } finally {
-    if (previousRoot === undefined) delete process.env.AGENT_SESSION_DISTILLERY_ROOT;
-    else process.env.AGENT_SESSION_DISTILLERY_ROOT = previousRoot;
+    if (previousRoot === undefined) delete process.env.MARROW_ROOT;
+    else process.env.MARROW_ROOT = previousRoot;
     await rm(sandbox, { recursive: true, force: true });
   }
 });

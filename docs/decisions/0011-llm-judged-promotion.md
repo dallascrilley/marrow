@@ -4,8 +4,7 @@
 - Status: accepted (2026-06-30)
 - Deciders: operator
 - Related: [ADR-0006](0006-promotion-thresholds.md) (supplements),
-  [ADR-0005](0005-mcp-surface.md), [ADR-0010](0010-recall-read-back.md),
-  [td-fa381c](#)
+  [ADR-0005](0005-mcp-surface.md), [ADR-0010](0010-recall-read-back.md)
 
 ## Context
 
@@ -44,7 +43,7 @@ one. The question itself is answerable directly.
 |---|---|---|---|
 | Fires on real data | Yes, but indiscriminately | Only if overlap exists | Yes |
 | Precision (rejects project-specific) | Weak — count is a poor proxy | Medium | Strong — judges applicability directly |
-| Matches asd's LLM-gated review culture | Weak | Weak | Strong |
+| Matches marrow's LLM-gated review culture | Weak | Weak | Strong |
 | Cost | Free | Free | Cheap (deepseek-v4-flash ≈ $0.00008/instinct) |
 | Feasibility | Trivial | Spike found ~0 overlap (rejected in U5) | Reuses existing OpenRouter harness |
 

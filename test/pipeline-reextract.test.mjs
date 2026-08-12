@@ -26,10 +26,10 @@ import { getParsedArtifactPath } from "../dist/pipeline/parse.js";
 import { getReducedArtifactPath } from "../dist/pipeline/reduce.js";
 import { getSessionSummaryJsonPath } from "../dist/writers/summary-writer.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntimeRoot(run) {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-reextract-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-reextract-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
   process.env[runtimeOverrideEnvVar] = runtimeRoot;

@@ -30,7 +30,7 @@ test("walks the date-partitioned sessions tree and attributes the workspace", as
 });
 
 test("returns an empty list when the codex home is missing", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-codex-empty-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-codex-empty-"));
   try {
     const result = await discoverCodexCliInputs({ codexHome: join(dir, "no-such-codex") });
     assert.deepEqual(result.transcripts, []);

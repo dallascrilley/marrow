@@ -11,7 +11,7 @@ const pipelineScript = join(projectRoot, "scripts", "scheduled-memory-pipeline.s
 const pipelineRecipe = join(projectRoot, "docs", "recipes", "scheduled-memory-pipeline.md");
 
 async function runPipeline(reviewOutput, options = {}) {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-scheduled-pipeline-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-scheduled-pipeline-"));
   const binDir = join(sandbox, "bin");
   const commandLog = join(sandbox, "commands.log");
   const fakeNode = join(binDir, "node");
@@ -40,7 +40,7 @@ printf '{}\\n'
     encoding: "utf8",
     env: {
       ...process.env,
-      AGENT_SESSION_DISTILLERY_ROOT: join(sandbox, "runtime"),
+      MARROW_ROOT: join(sandbox, "runtime"),
       COMMAND_LOG: commandLog,
       MOCK_REVIEW_OUTPUT: JSON.stringify(reviewOutput),
       OPENROUTER_API_KEY: options.apiKey === false ? "" : "test-key",

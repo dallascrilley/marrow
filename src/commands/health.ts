@@ -31,7 +31,7 @@ export async function executeHealth(context: CommandContext): Promise<number> {
     context.output.info(
       options.json
         ? JSON.stringify({ error: message, status: "unverifiable" }, null, 2)
-        : ["System health: unverifiable", `Reason: ${message}`, "Next: asd check"].join("\n"),
+        : ["System health: unverifiable", `Reason: ${message}`, "Next: marrow check"].join("\n"),
     );
     return healthExitCode("unverifiable");
   }
@@ -82,7 +82,7 @@ function parseHealthOptions(args: readonly string[]): HealthOptions {
 
 function formatProviderStatus(report: OperatorHealthModel): string {
   if (report.provider === null) {
-    return "not checked (optional; run `asd doctor provider`)";
+    return "not checked (optional; run `marrow doctor provider`)";
   }
 
   return report.provider.ok ? "ready" : `unavailable (${report.provider.summary})`;

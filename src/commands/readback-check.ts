@@ -32,7 +32,7 @@ export async function executeReadbackCheck(context: CommandContext): Promise<num
   const projectRoot = process.cwd();
   const vaultRoot = process.env.ASD_VAULT_ROOT?.trim() || join(homedir(), "vault");
   const report = await assessReadbackSetup({
-    hookPath: join(projectRoot, ".claude", "hooks", "asd-session-start-recall.sh"),
+    hookPath: join(projectRoot, ".claude", "hooks", "marrow-session-start-recall.sh"),
     mcpConfigPath: join(homedir(), ".claude.json"),
     settingsPath: join(projectRoot, ".claude", "settings.json"),
     vaultRoot,
@@ -74,7 +74,7 @@ async function verifyBoundedRecall(
   const payload = output.join("\n");
   return {
     bytes: Buffer.byteLength(payload, "utf8"),
-    command: `asd recall --cwd ${cwd} --vault-root ${vaultRoot}`,
+    command: `marrow recall --cwd ${cwd} --vault-root ${vaultRoot}`,
     status: payload.length > 0 ? "delivered" : "missing",
   };
 }
@@ -82,7 +82,7 @@ async function verifyBoundedRecall(
 async function inspectHook(settingsPath: string, hookPath: string): Promise<ReadbackCheckSurface> {
   const settings = await readJson(settingsPath);
   if (settings.status === "missing") {
-    return missing("SessionStart hook is not registered.", "asd hooks install --events start");
+    return missing("SessionStart hook is not registered.", "marrow hooks install --events start");
   }
   if (settings.status === "unverifiable") return settings.surface;
   const registered = containsSessionStartRecall(settings.value);
@@ -92,21 +92,25 @@ async function inspectHook(settingsPath: string, hookPath: string): Promise<Read
   if (registered || scriptPresent) {
     return drifted(
       "SessionStart recall registration and hook script do not agree.",
-      "asd hooks install --events start",
+      "marrow hooks install --events start",
     );
   }
-  return missing("SessionStart hook is not registered.", "asd hooks install --events start");
+  return missing("SessionStart hook is not registered.", "marrow hooks install --events start");
 }
 
 async function inspectMcp(configPath: string): Promise<ReadbackCheckSurface> {
   const config = await readJson(configPath);
   if (config.status === "missing")
-    return missing("ASD MCP server is not registered.", "asd mcp install");
+    return missing("Marrow MCP server is not registered.", "marrow mcp install");
   if (config.status === "unverifiable") return config.surface;
-  const server = getRecord(getRecord(config.value).mcpServers).asd;
-  if (server === undefined) return missing("ASD MCP server is not registered.", "asd mcp install");
-  if (isAsdMcpServer(server)) return installed("ASD MCP server uses stdio and `mcp serve`.");
-  return drifted("ASD MCP server registration does not use stdio `mcp serve`.", "asd mcp install");
+  const server = getRecord(getRecord(config.value).mcpServers).marrow;
+  if (server === undefined)
+    return missing("Marrow MCP server is not registered.", "marrow mcp install");
+  if (isAsdMcpServer(server)) return installed("Marrow MCP server uses stdio and `mcp serve`.");
+  return drifted(
+    "Marrow MCP server registration does not use stdio `mcp serve`.",
+    "marrow mcp install",
+  );
 }
 
 async function inspectVault(vaultRoot: string): Promise<ReadbackCheckSurface> {
@@ -118,7 +122,7 @@ async function inspectVault(vaultRoot: string): Promise<ReadbackCheckSurface> {
     };
   }
   return missing(
-    "Vault is reachable; run `asd recall --cwd <project>` to verify project and global memory.",
+    "Vault is reachable; run `marrow recall --cwd <project>` to verify project and global memory.",
     null,
   );
 }
@@ -126,7 +130,7 @@ async function inspectVault(vaultRoot: string): Promise<ReadbackCheckSurface> {
 function containsSessionStartRecall(value: unknown): boolean {
   const hooks = getRecord(getRecord(value).hooks).SessionStart;
   if (!Array.isArray(hooks)) return false;
-  return JSON.stringify(hooks).includes("asd-session-start-recall");
+  return JSON.stringify(hooks).includes("marrow-session-start-recall");
 }
 
 function isAsdMcpServer(value: unknown): boolean {

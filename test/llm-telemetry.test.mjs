@@ -24,7 +24,7 @@ function usage(overrides = {}) {
   };
 }
 
-test("buildLlmTelemetryRecord maps usage to OTel GenAI + asd fields", () => {
+test("buildLlmTelemetryRecord maps usage to OTel GenAI + marrow fields", () => {
   const record = buildLlmTelemetryRecord({
     usage: usage(),
     operation: "learning_review",
@@ -60,7 +60,7 @@ test("buildLlmTelemetryRecord preserves unknown cost (fail-closed)", () => {
 });
 
 test("appendLlmTelemetry appends JSONL receipts without clobbering", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-telemetry-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-telemetry-"));
   const path = join(dir, "nested", "llm-telemetry.jsonl");
   const costs = [0.0001, 0.0002, 0.0003];
   try {
@@ -91,7 +91,7 @@ test("appendLlmTelemetry appends JSONL receipts without clobbering", async () =>
 });
 
 test("appendLlmTelemetry swallows write errors so the pipeline is unaffected", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "asd-telemetry-fail-"));
+  const dir = await mkdtemp(join(tmpdir(), "marrow-telemetry-fail-"));
   // Make a regular file where a directory is expected so mkdir/append fails.
   const blocker = join(dir, "blocker");
   await writeFile(blocker, "x", "utf8");

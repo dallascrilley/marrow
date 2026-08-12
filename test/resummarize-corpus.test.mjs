@@ -9,10 +9,10 @@ import { fileURLToPath } from "node:url";
 const testDir = fileURLToPath(new URL(".", import.meta.url));
 const projectRoot = resolve(testDir, "..");
 const scriptPath = join(projectRoot, "scripts", "resummarize-corpus.mjs");
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 test("resummarize-corpus script dry-run exits 0 and writes report", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-corpus-script-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-corpus-script-"));
   const runtimeRoot = join(sandbox, "runtime-root");
 
   try {
@@ -50,7 +50,7 @@ test("resummarize-corpus --help exits 0 without touching runtime store", async (
 });
 
 test("resummarize-corpus write sweep requires --confirm", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-corpus-script-confirm-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-corpus-script-confirm-"));
   const runtimeRoot = join(sandbox, "runtime-root");
 
   try {
@@ -71,7 +71,7 @@ test("resummarize-corpus write sweep requires --confirm", async () => {
 });
 
 test("resummarize-corpus write sweep backs up summaries before resummarize", async () => {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-corpus-script-backup-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-corpus-script-backup-"));
   const runtimeRoot = join(sandbox, "runtime-root");
   const summariesPath = join(runtimeRoot, "summaries", "fixture-session");
   await mkdir(summariesPath, { recursive: true });

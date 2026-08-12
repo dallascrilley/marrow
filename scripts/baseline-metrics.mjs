@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Capture baseline metrics for v1 asd state so the v2 refactor has
+// Capture baseline metrics for v1 marrow state so the v2 refactor has
 // concrete before/after numbers.
 //
 // Read-only. Idempotent. Safe to run anytime.
 //
 // Usage:
 //   node scripts/baseline-metrics.mjs
-//   node scripts/baseline-metrics.mjs --root /tmp/asd-demo
+//   node scripts/baseline-metrics.mjs --root /tmp/marrow-demo
 //   node scripts/baseline-metrics.mjs --json > baseline.json
 
 import { readdir, stat } from "node:fs/promises";
@@ -15,10 +15,7 @@ import { join } from "node:path";
 const args = process.argv.slice(2);
 const wantJson = args.includes("--json");
 const rootArg = parseOption("--root");
-const runtimeRoot =
-  rootArg ??
-  process.env.AGENT_SESSION_DISTILLERY_ROOT ??
-  join(process.env.HOME ?? "", ".agent-session-distillery");
+const runtimeRoot = rootArg ?? process.env.MARROW_ROOT ?? join(process.env.HOME ?? "", ".marrow");
 
 const vaultRoot = process.env.ASD_VAULT_ROOT ?? join(process.env.HOME ?? "", "vault");
 
@@ -81,7 +78,7 @@ async function measureVault(root) {
   const projects = entries.filter((e) => e.isDirectory()).map((e) => e.name);
   const learnings = [];
   for (const p of projects) {
-    const learningsDir = join(projectsDir, p, "asd-learnings");
+    const learningsDir = join(projectsDir, p, "marrow-learnings");
     if (!(await exists(learningsDir))) continue;
     const m = await measureDir(learningsDir);
     learnings.push({ project: p, ...m });
@@ -145,7 +142,7 @@ async function collectFileStems(path, set) {
 
 function prettyPrint(o) {
   const lines = [];
-  lines.push("agent-session-distillery — baseline metrics");
+  lines.push("marrow — baseline metrics");
   lines.push(`captured: ${o.captured_at}`);
   lines.push("");
   lines.push(`runtime root: ${o.runtime_root}`);
@@ -180,7 +177,7 @@ function prettyPrint(o) {
   if (!o.vault.present) {
     lines.push("  (no projects/ dir)");
   } else {
-    lines.push(`  projects with asd-learnings: ${o.vault.projects_with_learnings}`);
+    lines.push(`  projects with marrow-learnings: ${o.vault.projects_with_learnings}`);
     for (const p of o.vault.learnings_per_project) {
       lines.push(
         `    ${p.project.padEnd(40)} files=${String(p.file_count).padStart(4)} total=${formatBytes(p.total_bytes)}`,

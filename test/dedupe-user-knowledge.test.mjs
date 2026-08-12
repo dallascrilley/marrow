@@ -19,7 +19,7 @@ function userLearning(statement, learningId) {
 }
 
 async function writeFixtureRuntime() {
-  const sandbox = await mkdtemp(join(tmpdir(), "asd-user-dedupe-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "marrow-user-dedupe-"));
   const scopeRoot = join(sandbox, "knowledge", "user", "operator");
   await mkdir(scopeRoot, { recursive: true });
   const firstPath = join(scopeRoot, "a.jsonl");

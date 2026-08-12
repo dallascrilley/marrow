@@ -18,10 +18,10 @@ import {
   listReviewItems,
 } from "../dist/read/operations.js";
 
-const runtimeOverrideEnvVar = "AGENT_SESSION_DISTILLERY_ROOT";
+const runtimeOverrideEnvVar = "MARROW_ROOT";
 
 async function withRuntime(run) {
-  const sandboxBase = await mkdtemp(join(tmpdir(), "asd-read-ops-"));
+  const sandboxBase = await mkdtemp(join(tmpdir(), "marrow-read-ops-"));
   const runtimeRoot = join(sandboxBase, "runtime-root");
   const previousOverride = process.env[runtimeOverrideEnvVar];
 
