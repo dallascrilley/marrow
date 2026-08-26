@@ -32,8 +32,13 @@ where documented, but the current `MARROW_*` names win when both are set.
 
 1. **Local by default:** ingest, indexing, deterministic extraction, workflow mining, storage
    inventory, and reports are local. `workflow judge` is the optional remote-LLM boundary.
-2. **Runtime-scoped mining:** `workflow mine` scans the selected Marrow runtime. Filter evidence
-   with `--days` and `--source`; `--limit` truncates the final candidate list, not scan work.
+2. **Runtime-scoped mining:** `workflow mine` scans the selected Marrow runtime. `--days` and
+   `--source` filter indexed session records, but global workflow instincts are appended from
+   the global store and are not constrained by those filters; treat `source_tier: instinct`
+   candidates as outside the requested session window/source unless their evidence says
+   otherwise. `--cluster` and `--recommendation` filter the merged candidate list, then
+   `--limit` truncates that list rather than scan work. Use `--include-decided` to include
+   candidates with prior decisions, and `--json` for machine-readable output.
    Marrow has no `td` project-init or byte-budget contract.
 3. **Source selection is explicit:** refresh only the requested adapter: `cursor`,
    `claude-code`, `codex-cli`, `kimi`, or `pi`. For OMP transcripts, point `ASD_PI_SESSIONS_ROOT`
@@ -90,8 +95,8 @@ Do not ingest every adapter by default. A mining-only request may use the existi
 npm run marrow -- workflow mine --days 7 --limit 20
 npm run marrow -- workflow mine --days 30 --limit 20 --json
 npm run marrow -- workflow mine --days 30 --source pi --limit 20 --json
-npm run marrow -- workflow mine --days 30 --cluster validation \
-  --recommendation adopt --limit 20 --json
+npm run marrow -- workflow mine --days 30 --source pi --cluster validation \
+  --recommendation adopt --include-decided --limit 20 --json
 ```
 
 Each candidate includes a stable `candidate_id`, cluster, proposed artifact kind, confidence,
