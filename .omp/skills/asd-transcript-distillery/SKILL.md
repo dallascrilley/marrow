@@ -106,9 +106,13 @@ capped sanitized excerpts.
 ### 4. Triage candidates
 
 ```bash
-npm run marrow -- workflow review --days 30 --limit 20
-npm run marrow -- workflow show <candidate-id> --days 30
+npm run marrow -- workflow review --days 30 --source pi --limit 20
+npm run marrow -- workflow show <candidate-id> --days 30 --source pi
 ```
+
+When the mine command uses `--source`, carry the same `--source` value through `review`, `show`,
+`adopt`, `defer`, `dismiss`, and `apply`; otherwise those commands recompute the candidate from
+every indexed adapter. If mining without `--source`, omit it consistently downstream.
 
 Use this disposition:
 
@@ -121,20 +125,20 @@ Use this disposition:
 Record a reviewed decision when the task includes triage:
 
 ```bash
-npm run marrow -- workflow adopt <candidate-id> --note "<evidence-backed reason>" --days 30
-npm run marrow -- workflow defer <candidate-id> --note "<missing evidence>" --days 30
-npm run marrow -- workflow dismiss <candidate-id> --note "<why this is not durable>" --days 30
+npm run marrow -- workflow adopt <candidate-id> --note "<evidence-backed reason>" --days 30 --source pi
+npm run marrow -- workflow defer <candidate-id> --note "<missing evidence>" --days 30 --source pi
+npm run marrow -- workflow dismiss <candidate-id> --note "<why this is not durable>" --days 30 --source pi
 ```
 
-Use the same `--days` value for `mine`, `review`, `show`, and the decision command so the
-candidate resolves against the same evidence set.
+Use the same `--days` value, and the same `--source` when present, for `mine`, `review`, `show`,
+the decision command, and `apply` so the candidate resolves against the same evidence set.
 
 ### 5. Draft, then author deliberately
 
 For an uncovered, adopted candidate:
 
 ```bash
-npm run marrow -- workflow apply <candidate-id> --target skill --dry-run --days 30
+npm run marrow -- workflow apply <candidate-id> --target skill --dry-run --days 30 --source pi
 ```
 
 Valid targets are `skill`, `rule`, and `doc`. Read the generated Markdown and JSON apply report.
