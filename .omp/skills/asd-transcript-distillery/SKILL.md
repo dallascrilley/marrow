@@ -182,6 +182,28 @@ npm run marrow -- skill report asd-transcript-distillery \
 Treat adherence scores and suggestions as heuristics. Verify low-scoring checklist items against
 reduced-session evidence before changing the skill.
 
+## CLI verification
+
+When verifying this skill against the current checkout, use an isolated runtime and exercise
+every `workflow mine` option in one read-only invocation:
+
+```bash
+MARROW_ROOT="${TMPDIR:-/tmp}/marrow-cli-proof" \
+  npm run --silent marrow -- workflow mine --days 30 --source pi --cluster validation \
+  --recommendation adopt --include-decided --limit 20 --json
+```
+
+The command should exit successfully and emit JSON containing the requested `days` and `source`.
+When a corpus refresh is in scope, verify the selected local adapter and index separately before
+mining it:
+
+```bash
+ASD_PI_SESSIONS_ROOT="$HOME/.omp/agent/sessions" \
+  npm run marrow -- ingest sync --source pi --resume
+npm run marrow -- export-index
+npm run marrow -- workflow mine --days 30 --source pi --limit 20 --json
+```
+
 ## Optional LLM judging
 
 Only when remote judging is explicitly in scope:
